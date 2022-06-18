@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Diagnostics;
 using System.Linq;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,13 +15,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Hubs
 {
-    public class User : Hub
+    public class User : BaseHub
     {
-        private readonly MareDbContext _dbContext;
-
-        public User(MareDbContext dbContext)
+        public User(MareDbContext dbContext) : base(dbContext)
         {
-            _dbContext = dbContext;
         }
 
         public async Task<string> Register()
@@ -39,119 +35,269 @@ namespace MareSynchronosServer.Hubs
             while (!hasValidUid)
             {
                 var uid = GenerateRandomString(10);
-                if (_dbContext.Users.Any(u => u.UID == uid)) continue;
+                if (DbContext.Users.Any(u => u.UID == uid)) continue;
                 user.UID = uid;
                 hasValidUid = true;
             }
-            _dbContext.Users.Add(user);
+            DbContext.Users.Add(user);
 
-            await _dbContext.SaveChangesAsync();
+            await DbContext.SaveChangesAsync();
             return computedHash;
         }
+
+        private Whitelist OppositeEntry(string otherUID) =>
+            DbContext.Whitelists.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
         public string GetUID()
         {
-            return Context.User!.Claims.Single(c => c.Type == ClaimTypes.NameIdentifier).Value;
+            return AuthenticatedUserId;
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task SendWhitelist(List<WhitelistDto> whiteListEntries)
+        public async Task SendVisibilityList(List<string> currentVisibilityList)
         {
-            var currentUserId = Context.User!.Claims.Single(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            var user = _dbContext.Users.Single(u => u.UID == currentUserId);
-            var userWhitelists = _dbContext.Whitelists
+            Stopwatch st = Stopwatch.StartNew();
+            var cid = DbContext.Users.Single(u => u.UID == AuthenticatedUserId).CharacterIdentification;
+            var visibilities = DbContext.Visibilities.Where(v => v.CID == cid).ToList();
+            foreach (var visibility in currentVisibilityList.Where(visibility => visibilities.All(v => v.OtherCID != visibility)))
+            {
+                await DbContext.Visibilities.AddAsync(new Visibility { CID = cid, OtherCID = visibility });
+            }
+
+            foreach (var visibility in visibilities.Where(v => currentVisibilityList.Contains(v.OtherCID)))
+            {
+                DbContext.Visibilities.Remove(visibility);
+            }
+
+            await DbContext.SaveChangesAsync();
+            st.Stop();
+            Debug.WriteLine("Visibility update took " + st.Elapsed);
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task GetCharacterData(Dictionary<string, int> visibleCharacterWithJobs)
+        {
+            var uid = AuthenticatedUserId;
+            Dictionary<string, CharacterCacheDto> ret = new();
+            var whitelistEntriesHavingThisUser = DbContext.Whitelists
                 .Include(w => w.User)
                 .Include(w => w.OtherUser)
-                .Where(w => w.User.UID == currentUserId)
+                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
+                                                   && visibleCharacterWithJobs.Keys.Contains(w.User.CharacterIdentification))
                 .ToList();
-            foreach (var whitelist in whiteListEntries)
+            foreach (var whiteListEntry in whitelistEntriesHavingThisUser)
             {
-                var otherEntry = _dbContext.Whitelists.SingleOrDefault(w =>
-                    w.User.UID == whitelist.OtherUID && w.OtherUser.UID == user.UID);
+                bool isNotPaused = await DbContext.Whitelists.AnyAsync(w =>
+                    !w.IsPaused && w.User.UID == uid && w.OtherUser.UID == whiteListEntry.User.UID);
+                if (!isNotPaused) continue;
+                var dictEntry = visibleCharacterWithJobs[whiteListEntry.User.CharacterIdentification];
 
-                var prevEntry = userWhitelists.SingleOrDefault(w => w.OtherUser.UID == whitelist.OtherUID);
-                if (prevEntry != null)
+                var cachedChar = await
+                    DbContext.CharacterData.SingleOrDefaultAsync(c => c.UserId == whiteListEntry.User.UID && c.JobId == dictEntry);
+                if (cachedChar != null)
                 {
-                    prevEntry.IsPaused = whitelist.IsPaused;
+                    await Clients.User(uid).SendAsync("ReceiveCharacterData", cachedChar,
+                        whiteListEntry.User.CharacterIdentification);
                 }
-                else
+            }
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task PushCharacterData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
+        {
+            var uid = AuthenticatedUserId;
+            var whitelistEntriesHavingThisUser = DbContext.Whitelists
+                .Include(w => w.User)
+                .Include(w => w.OtherUser)
+                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
+                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
+            var existingCharacterData =
+                await DbContext.CharacterData.SingleOrDefaultAsync(s =>
+                    s.UserId == uid && s.JobId == characterCache.JobId);
+            if (existingCharacterData != null && existingCharacterData.Hash != characterCache.Hash)
+            {
+                existingCharacterData.EquipmentData =
+                    characterCache.FileReplacements;
+                existingCharacterData.Hash = characterCache.Hash;
+                existingCharacterData.GlamourerData = characterCache.GlamourerData;
+                DbContext.CharacterData.Update(existingCharacterData);
+            }
+            else if (existingCharacterData == null)
+            {
+                CharacterData data = new CharacterData
                 {
-                    var otherUser = _dbContext.Users.SingleOrDefault(u => u.UID == whitelist.OtherUID);
-                    if (otherUser != null)
+                    UserId = AuthenticatedUserId,
+                    EquipmentData = characterCache.FileReplacements,
+                    Hash = characterCache.Hash,
+                    GlamourerData = characterCache.GlamourerData,
+                    JobId = characterCache.JobId
+                };
+                await DbContext.CharacterData.AddAsync(data);
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            foreach (var whitelistEntry in whitelistEntriesHavingThisUser)
+            {
+                var ownEntry = DbContext.Whitelists.SingleOrDefault(w =>
+                    w.User.UID == uid && w.OtherUser.UID == whitelistEntry.User.UID);
+                if (ownEntry == null || ownEntry.IsPaused) continue;
+                await Clients.User(whitelistEntry.User.UID).SendAsync("ReceiveCharacterData", characterCache, whitelistEntry.OtherUser.CharacterIdentification);
+            }
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task SendCharacterNameHash(string characterNameHash)
+        {
+            DbContext.Users.Single(u => u.UID == AuthenticatedUserId).CharacterIdentification = characterNameHash;
+            await DbContext.SaveChangesAsync();
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task SendWhitelistAddition(string uid)
+        {
+            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+            var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            if (otherUser == null) return;
+            Whitelist wl = new Whitelist()
+            {
+                IsPaused = false,
+                OtherUser = otherUser,
+                User = user
+            };
+            await DbContext.Whitelists.AddAsync(wl);
+            await DbContext.SaveChangesAsync();
+            var otherEntry = OppositeEntry(uid);
+            await Clients.User(user.UID)
+                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                {
+                    OtherUID = otherUser.UID,
+                    IsPaused = false,
+                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                    IsSynced = otherEntry != null
+                }, otherUser.CharacterIdentification);
+            if (otherEntry != null)
+            {
+                await Clients.User(uid).SendAsync("UpdateWhitelist",
+                    new WhitelistDto()
                     {
-                        Whitelist wl = new Whitelist
-                        {
-                            User = user,
-                            OtherUser = otherUser,
-                            IsPaused = whitelist.IsPaused
-                        };
-                        otherEntry = wl;
-                        await _dbContext.Whitelists.AddAsync(wl);
-                    }
-                }
-
-                if (otherEntry != null)
-                {
-                    await Clients.User(whitelist.OtherUID).SendAsync("UpdateWhitelist", currentUserId, true,
-                        whitelist.IsPaused);
-                }
-
-                await _dbContext.SaveChangesAsync();
+                        OtherUID = user.UID,
+                        IsPaused = otherEntry.IsPaused,
+                        IsPausedFromOthers = false,
+                        IsSynced = true
+                    }, user.CharacterIdentification);
             }
+        }
 
-            foreach (var deletedEntry in userWhitelists.Where(u => whiteListEntries.All(e => e.OtherUID != u.OtherUser.UID)).ToList())
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task SendWhitelistRemoval(string uid)
+        {
+            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+            var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            if (otherUser == null) return;
+            Whitelist wl =
+                await DbContext.Whitelists.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+            DbContext.Whitelists.Remove(wl);
+            await DbContext.SaveChangesAsync();
+            var otherEntry = OppositeEntry(uid);
+            await Clients.User(user.UID)
+                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                {
+                    OtherUID = otherUser.UID,
+                    IsPaused = false,
+                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                    IsSynced = otherEntry != null
+                }, otherUser.CharacterIdentification);
+            if (otherEntry != null)
             {
-                var otherEntry = _dbContext.Whitelists.SingleOrDefault(w =>
-                    w.User.UID == deletedEntry.OtherUser.UID && w.OtherUser.UID == user.UID);
-                if (otherEntry != null)
+                await Clients.User(uid).SendAsync("UpdateWhitelist", new WhitelistDto()
                 {
-                    await Clients.User(otherEntry.User.UID).SendAsync("UpdateWhitelist", currentUserId, false, false);
-                }
-
-                _dbContext.Whitelists.Remove(deletedEntry);
+                    OtherUID = user.UID,
+                    IsPaused = otherEntry.IsPaused,
+                    IsPausedFromOthers = false,
+                    IsSynced = false
+                }, user.CharacterIdentification);
             }
-            _dbContext.Whitelists.RemoveRange();
-            await _dbContext.SaveChangesAsync();
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        public async Task SendWhitelistPauseChange(string uid, bool isPaused)
+        {
+            var user = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
+            var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            if (otherUser == null) return;
+            Whitelist wl =
+                await DbContext.Whitelists.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+            wl.IsPaused = isPaused;
+            DbContext.Update(wl);
+            await DbContext.SaveChangesAsync();
+            var otherEntry = OppositeEntry(uid);
+            await Clients.User(user.UID)
+                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                {
+                    OtherUID = otherUser.UID,
+                    IsPaused = isPaused,
+                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                    IsSynced = otherEntry != null
+                }, otherUser.CharacterIdentification);
+            if (otherEntry != null)
+            {
+                await Clients.User(uid).SendAsync("UpdateWhitelist", new WhitelistDto()
+                {
+                    OtherUID = user.UID,
+                    IsPaused = otherEntry.IsPaused,
+                    IsPausedFromOthers = isPaused,
+                    IsSynced = true
+                }, user.CharacterIdentification);
+            }
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
         public async Task<List<WhitelistDto>> GetWhitelist()
         {
-            string userid = Context.User!.Claims.Single(c => c.Type == ClaimTypes.NameIdentifier).Value;
-            return _dbContext.Whitelists.Include(u => u.OtherUser).Include(u => u.User).Where(w => w.User.UID == userid)
+            string userid = AuthenticatedUserId;
+            var user = GetAuthenticatedUser();
+            return DbContext.Whitelists
+                .Include(u => u.OtherUser)
+                .Include(u => u.User)
+                .Where(w => w.User.UID == userid)
                 .ToList()
                 .Select(w =>
                 {
-                    var otherEntry = _dbContext.Whitelists.SingleOrDefault(a => a.User.UID == w.OtherUser.UID && a.OtherUser.UID == userid);
+                    var otherEntry = OppositeEntry(w.OtherUser.UID);
+                    var otherUser = GetUserFromUID(w.OtherUser.UID);
+                    var seesYou = false;
+                    if (otherEntry != null)
+                    {
+                        seesYou = DbContext.Visibilities.Any(v =>
+                            v.CID == otherUser.CharacterIdentification && v.OtherCID == user.CharacterIdentification);
+                    }
                     return new WhitelistDto
                     {
                         IsPaused = w.IsPaused,
                         OtherUID = w.OtherUser.UID,
                         IsSynced = otherEntry != null,
-                        IsPausedFromOthers = otherEntry?.IsPaused ?? false
+                        IsPausedFromOthers = otherEntry?.IsPaused ?? false,
                     };
                 }).ToList();
         }
 
-        public static string GenerateRandomString(int length, string allowableChars = null)
+
+        public override Task OnDisconnectedAsync(Exception exception)
         {
-            if (string.IsNullOrEmpty(allowableChars))
-                allowableChars = @"ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
+            var user = DbContext.Users.SingleOrDefault(u => u.UID == AuthenticatedUserId);
+            if (user != null)
+            {
+                var outdatedVisibilities = DbContext.Visibilities.Where(v => v.CID == user.CharacterIdentification);
+                DbContext.RemoveRange(outdatedVisibilities);
+                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
+                DbContext.RemoveRange(outdatedCharacterData);
+                user.CharacterIdentification = null;
+                DbContext.SaveChanges();
+            }
 
-            // Generate random data
-            var rnd = new byte[length];
-            using (var rng = new RNGCryptoServiceProvider())
-                rng.GetBytes(rnd);
-
-            // Generate the output string
-            var allowable = allowableChars.ToCharArray();
-            var l = allowable.Length;
-            var chars = new char[length];
-            for (var i = 0; i < length; i++)
-                chars[i] = allowable[rnd[i] % l];
-
-            return new string(chars);
+            return base.OnDisconnectedAsync(exception);
         }
     }
 }
