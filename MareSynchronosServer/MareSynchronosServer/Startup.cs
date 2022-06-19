@@ -49,7 +49,9 @@ namespace MareSynchronosServer
                 opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/octet-stream" });
             });
             services.AddDbContext<MareDbContext>(options =>
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
+            {
+                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));
+            });
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options => options.DefaultScheme = SecretKeyAuthenticationHandler.AUTH_SCHEME)
                 .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AUTH_SCHEME, options => { });
