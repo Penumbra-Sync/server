@@ -14,7 +14,7 @@ namespace MareSynchronosServer.Data
 
         public DbSet<User> Users { get; set; }
         public DbSet<FileCache> Files { get; set; }
-        public DbSet<Whitelist> Whitelists { get; set; }
+        public DbSet<ClientPair> ClientPairs { get; set; }
         public DbSet<Visibility> Visibilities { get; set; }
         public DbSet<CharacterData> CharacterData { get; set; }
 
@@ -22,7 +22,7 @@ namespace MareSynchronosServer.Data
         {
             modelBuilder.Entity<User>().ToTable("Users");
             modelBuilder.Entity<FileCache>().ToTable("FileCaches");
-            modelBuilder.Entity<Whitelist>().ToTable("Whitelists");
+            modelBuilder.Entity<ClientPair>().ToTable("ClientPairs");
             modelBuilder.Entity<Visibility>().ToTable("Visibility")
                 .HasKey(k => new { k.CID, k.OtherCID });
             modelBuilder.Entity<CharacterData>()

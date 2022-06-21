@@ -2,7 +2,7 @@
 
 namespace MareSynchronosServer.Models
 {
-    public class Whitelist
+    public class ClientPair
     {
         public int Id { get; set; }
         public User User { get; set; }

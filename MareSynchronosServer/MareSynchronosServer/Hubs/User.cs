@@ -45,8 +45,8 @@ namespace MareSynchronosServer.Hubs
             return computedHash;
         }
 
-        private Whitelist OppositeEntry(string otherUID) =>
-            DbContext.Whitelists.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
+        private ClientPair OppositeEntry(string otherUID) =>
+            DbContext.ClientPairs.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
         public string GetUID()
@@ -80,20 +80,20 @@ namespace MareSynchronosServer.Hubs
         {
             var uid = AuthenticatedUserId;
             Dictionary<string, CharacterCacheDto> ret = new();
-            var whitelistEntriesHavingThisUser = DbContext.Whitelists
+            var entriesHavingThisUser = DbContext.ClientPairs
                 .Include(w => w.User)
                 .Include(w => w.OtherUser)
                 .Where(w => w.OtherUser.UID == uid && !w.IsPaused && visibleCharacterWithJobs.Keys.Contains(w.User.CharacterIdentification))
                 .ToList();
-            foreach (var whiteListEntry in whitelistEntriesHavingThisUser)
+            foreach (var pair in entriesHavingThisUser)
             {
-                bool isNotPaused = await DbContext.Whitelists.AnyAsync(w =>
-                    !w.IsPaused && w.User.UID == uid && w.OtherUser.UID == whiteListEntry.User.UID);
+                bool isNotPaused = await DbContext.ClientPairs.AnyAsync(w =>
+                    !w.IsPaused && w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
                 if (!isNotPaused) continue;
-                var dictEntry = visibleCharacterWithJobs[whiteListEntry.User.CharacterIdentification];
+                var dictEntry = visibleCharacterWithJobs[pair.User.CharacterIdentification];
 
                 var cachedChar = await
-                    DbContext.CharacterData.SingleOrDefaultAsync(c => c.UserId == whiteListEntry.User.UID && c.JobId == dictEntry);
+                    DbContext.CharacterData.SingleOrDefaultAsync(c => c.UserId == pair.User.UID && c.JobId == dictEntry);
                 if (cachedChar != null)
                 {
                     await Clients.User(uid).SendAsync("ReceiveCharacterData", new CharacterCacheDto()
@@ -103,7 +103,7 @@ namespace MareSynchronosServer.Hubs
                         JobId = cachedChar.JobId,
                         GlamourerData = cachedChar.GlamourerData
                     },
-                        whiteListEntry.User.CharacterIdentification);
+                        pair.User.CharacterIdentification);
                 }
             }
         }
@@ -112,7 +112,7 @@ namespace MareSynchronosServer.Hubs
         public async Task PushCharacterData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
         {
             var uid = AuthenticatedUserId;
-            var whitelistEntriesHavingThisUser = DbContext.Whitelists
+            var entriesHavingThisUser = DbContext.ClientPairs
                 .Include(w => w.User)
                 .Include(w => w.OtherUser)
                 .Where(w => w.OtherUser.UID == uid && !w.IsPaused
@@ -144,13 +144,13 @@ namespace MareSynchronosServer.Hubs
 
             if ((existingCharacterData != null && existingCharacterData.Hash != characterCache.Hash) || existingCharacterData == null)
             {
-                foreach (var whitelistEntry in whitelistEntriesHavingThisUser)
+                foreach (var pair in entriesHavingThisUser)
                 {
-                    var ownEntry = DbContext.Whitelists.SingleOrDefault(w =>
-                        w.User.UID == uid && w.OtherUser.UID == whitelistEntry.User.UID);
+                    var ownEntry = DbContext.ClientPairs.SingleOrDefault(w =>
+                        w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
                     if (ownEntry == null || ownEntry.IsPaused) continue;
-                    await Clients.User(whitelistEntry.User.UID).SendAsync("ReceiveCharacterData", characterCache,
-                        whitelistEntry.OtherUser.CharacterIdentification);
+                    await Clients.User(pair.User.UID).SendAsync("ReceiveCharacterData", characterCache,
+                        pair.OtherUser.CharacterIdentification);
                 }
             }
         }
@@ -161,36 +161,36 @@ namespace MareSynchronosServer.Hubs
             var ownUser = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
             ownUser.CharacterIdentification = characterNameHash;
             await DbContext.SaveChangesAsync();
-            var otherUsers = await DbContext.Whitelists
+            var otherUsers = await DbContext.ClientPairs
                 .Include(u => u.User)
                 .Include(u => u.OtherUser)
                 .Where(w => w.User == ownUser)
                 .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
                 .Select(e => e.OtherUser).ToListAsync();
-            var otherEntries = await DbContext.Whitelists.Include(u => u.User)
+            var otherEntries = await DbContext.ClientPairs.Include(u => u.User)
                 .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser).ToListAsync();
 
-            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlineWhitelistedPlayer", characterNameHash);
+            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlinePairedPlayer", characterNameHash);
             return otherEntries.Select(e => e.User.CharacterIdentification).ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task SendWhitelistAddition(string uid)
+        public async Task SendPairedClientAddition(string uid)
         {
             var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;
-            Whitelist wl = new Whitelist()
+            ClientPair wl = new ClientPair()
             {
                 IsPaused = false,
                 OtherUser = otherUser,
                 User = user
             };
-            await DbContext.Whitelists.AddAsync(wl);
+            await DbContext.ClientPairs.AddAsync(wl);
             await DbContext.SaveChangesAsync();
             var otherEntry = OppositeEntry(uid);
             await Clients.User(user.UID)
-                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                .SendAsync("UpdateClientPairs", new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = false,
@@ -202,13 +202,13 @@ namespace MareSynchronosServer.Hubs
                 if (string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
                     await Clients.User(user.UID)
-                        .SendAsync("AddOnlineWhitelistedPlayer", otherUser.CharacterIdentification);
+                        .SendAsync("AddOnlinePairedPlayer", otherUser.CharacterIdentification);
                     await Clients.User(otherUser.UID)
-                        .SendAsync("AddOnlineWhitelistedPlayer", user.CharacterIdentification);
+                        .SendAsync("AddOnlinePairedPlayer", user.CharacterIdentification);
                 }
 
-                await Clients.User(uid).SendAsync("UpdateWhitelist",
-                    new WhitelistDto()
+                await Clients.User(uid).SendAsync("UpdateClientPairs",
+                    new ClientPairDto()
                     {
                         OtherUID = user.UID,
                         IsPaused = otherEntry.IsPaused,
@@ -219,18 +219,18 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task SendWhitelistRemoval(string uid)
+        public async Task SendPairedClientRemoval(string uid)
         {
             var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;
-            Whitelist wl =
-                await DbContext.Whitelists.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
-            DbContext.Whitelists.Remove(wl);
+            ClientPair wl =
+                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+            DbContext.ClientPairs.Remove(wl);
             await DbContext.SaveChangesAsync();
             var otherEntry = OppositeEntry(uid);
             await Clients.User(user.UID)
-                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                .SendAsync("UpdateClientPairs", new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = false,
@@ -242,11 +242,11 @@ namespace MareSynchronosServer.Hubs
                 if (string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
                     await Clients.User(user.UID)
-                        .SendAsync("RemoveOnlineWhitelistedPlayer", otherUser.CharacterIdentification);
+                        .SendAsync("RemoveOnlinePairedPlayer", otherUser.CharacterIdentification);
                     await Clients.User(otherUser.UID)
-                        .SendAsync("RemoveOnlineWhitelistedPlayer", user.CharacterIdentification);
+                        .SendAsync("RemoveOnlinePairedPlayer", user.CharacterIdentification);
                 }
-                await Clients.User(uid).SendAsync("UpdateWhitelist", new WhitelistDto()
+                await Clients.User(uid).SendAsync("UpdateClientPairs", new ClientPairDto()
                 {
                     OtherUID = user.UID,
                     IsPaused = otherEntry.IsPaused,
@@ -257,20 +257,20 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task SendWhitelistPauseChange(string uid, bool isPaused)
+        public async Task SendPairedClientPauseChange(string uid, bool isPaused)
         {
             var user = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;
-            Whitelist wl =
-                await DbContext.Whitelists.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+            ClientPair wl =
+                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
             wl.IsPaused = isPaused;
             DbContext.Update(wl);
             await DbContext.SaveChangesAsync();
             var otherEntry = OppositeEntry(uid);
 
             await Clients.User(user.UID)
-                .SendAsync("UpdateWhitelist", new WhitelistDto()
+                .SendAsync("UpdateClientPairs", new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = isPaused,
@@ -279,7 +279,7 @@ namespace MareSynchronosServer.Hubs
                 }, otherUser.CharacterIdentification);
             if (otherEntry != null)
             {
-                await Clients.User(uid).SendAsync("UpdateWhitelist", new WhitelistDto()
+                await Clients.User(uid).SendAsync("UpdateClientPairs", new ClientPairDto()
                 {
                     OtherUID = user.UID,
                     IsPaused = otherEntry.IsPaused,
@@ -290,11 +290,11 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task<List<WhitelistDto>> GetWhitelist()
+        public async Task<List<ClientPairDto>> GetPairedClients()
         {
             string userid = AuthenticatedUserId;
             var user = GetAuthenticatedUser();
-            return DbContext.Whitelists
+            return DbContext.ClientPairs
                 .Include(u => u.OtherUser)
                 .Include(u => u.User)
                 .Where(w => w.User.UID == userid)
@@ -302,7 +302,7 @@ namespace MareSynchronosServer.Hubs
                 .Select(w =>
                 {
                     var otherEntry = OppositeEntry(w.OtherUser.UID);
-                    return new WhitelistDto
+                    return new ClientPairDto
                     {
                         IsPaused = w.IsPaused,
                         OtherUID = w.OtherUser.UID,
@@ -318,15 +318,15 @@ namespace MareSynchronosServer.Hubs
             var user = DbContext.Users.SingleOrDefault(u => u.UID == AuthenticatedUserId);
             if (user != null)
             {
-                var otherUsers = DbContext.Whitelists
+                var otherUsers = DbContext.ClientPairs
                     .Include(u => u.User)
                     .Include(u => u.OtherUser)
                     .Where(w => w.User == user)
                     .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
                     .Select(e => e.OtherUser).ToList();
-                var otherEntries = DbContext.Whitelists.Include(u => u.User)
+                var otherEntries = DbContext.ClientPairs.Include(u => u.User)
                     .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == user).ToList();
-                _ = Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("RemoveOnlineWhitelistedPlayer", user.CharacterIdentification);
+                _ = Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("RemoveOnlinePairedPlayer", user.CharacterIdentification);
 
                 var outdatedVisibilities = DbContext.Visibilities.Where(v => v.CID == user.CharacterIdentification);
                 DbContext.RemoveRange(outdatedVisibilities);
