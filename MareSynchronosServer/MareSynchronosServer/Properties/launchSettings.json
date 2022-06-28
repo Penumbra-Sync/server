@@ -1,18 +1,11 @@
 {
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iisExpress": {
-      "applicationUrl": "http://localhost:43136",
-      "sslPort": 44364
-    }
-  },
   "profiles": {
     "MareSynchronosServer": {
       "commandName": "Project",
       "dotnetRunMessages": "true",
       "launchBrowser": false,
-      "applicationUrl": "https://localhost:5001;http://localhost:5000;https://darkarchon.internet-box.ch:5001;http://darkarchon.internet-box.ch:5000",
+      //"applicationUrl": "https://localhost:5001;http://localhost:5000;https://192.168.1.124:5001;http://192.168.1.124:5000",
+      "applicationUrl": "http://localhost:5000;https://localhost:5001;https://darkarchon.internet-box.ch:5001",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

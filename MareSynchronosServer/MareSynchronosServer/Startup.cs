@@ -1,26 +1,17 @@
+using System;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.UI;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Bazinga.AspNetCore.Authentication.Basic;
 using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
+using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 
 namespace MareSynchronosServer
 {
@@ -41,19 +32,26 @@ namespace MareSynchronosServer
             services.AddSignalR(hubOptions =>
             {
                 hubOptions.MaximumReceiveMessageSize = long.MaxValue;
+                hubOptions.EnableDetailedErrors = true;
+                hubOptions.MaximumParallelInvocationsPerClient = 10;
+                hubOptions.StreamBufferCapacity = 200;
             });
+
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
 
-            services.AddResponseCompression(opts =>
-            {
-                opts.MimeTypes = ResponseCompressionDefaults.MimeTypes.Concat(new[] { "application/octet-stream" });
-            });
+
             services.AddDbContext<MareDbContext>(options =>
             {
                 options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));
             });
+
+            services.AddHostedService<FileCleanupService>();
+
             services.AddDatabaseDeveloperPageExceptionFilter();
-            services.AddAuthentication(options => options.DefaultScheme = SecretKeyAuthenticationHandler.AUTH_SCHEME)
+            services.AddAuthentication(options =>
+                {
+                    options.DefaultScheme = SecretKeyAuthenticationHandler.AUTH_SCHEME;
+                })
                 .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AUTH_SCHEME, options => { });
         }
 
@@ -76,18 +74,31 @@ namespace MareSynchronosServer
             app.UseStaticFiles();
 
             app.UseRouting();
+            var webSocketOptions = new WebSocketOptions
+            {
+                KeepAliveInterval = TimeSpan.FromSeconds(10),
+            };
+
+            app.UseWebSockets(webSocketOptions);
 
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<Connection>("/heartbeat");
-                endpoints.MapHub<User>("/user");
-                endpoints.MapHub<Files>("/files", options =>
+                endpoints.MapHub<ConnectionHub>("/heartbeat", options =>
+                {
+                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                });
+                endpoints.MapHub<UserHub>("/user", options =>
+                {
+                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                });
+                endpoints.MapHub<FilesHub>("/files", options =>
                 {
                     options.ApplicationMaxBufferSize = long.MaxValue;
                     options.TransportMaxBufferSize = long.MaxValue;
+                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
                 });
             });
         }

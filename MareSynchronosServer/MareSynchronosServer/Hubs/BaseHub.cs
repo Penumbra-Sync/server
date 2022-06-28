@@ -3,15 +3,18 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
-    public abstract class BaseHub : Hub
+    public abstract class BaseHub<T> : Hub
     {
+        protected readonly ILogger<T> Logger;
         protected MareDbContext DbContext { get; init; }
 
-        protected BaseHub(MareDbContext context)
+        protected BaseHub(MareDbContext context, ILogger<T> logger)
         {
+            Logger = logger;
             DbContext = context;
         }
 

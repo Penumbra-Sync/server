@@ -11,6 +11,7 @@ namespace MareSynchronos.API
     {
         public List<FileReplacementDto> FileReplacements { get; set; } = new();
         public string GlamourerData { get; set; }
+        public string ManipulationData { get; set; }
         public string Hash { get; set; }
         public int JobId { get; set; }
     }
@@ -19,6 +20,5 @@ namespace MareSynchronos.API
     {
         public string[] GamePaths { get; set; } = Array.Empty<string>();
         public string Hash { get; set; }
-        public string ImcData { get; set; }
     }
 }

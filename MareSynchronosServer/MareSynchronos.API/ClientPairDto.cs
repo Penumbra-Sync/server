@@ -6,5 +6,6 @@
         public bool IsPaused { get; set; }
         public bool IsSynced { get; set; }
         public bool IsPausedFromOthers { get; set; }
+        public bool IsRemoved { get; set; }
     }
 }

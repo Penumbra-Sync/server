@@ -1,11 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using MareSynchronosServer.Data;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,15 +17,23 @@ namespace MareSynchronosServer
                 var services = scope.ServiceProvider;
                 var context = services.GetRequiredService<MareDbContext>();
                 context.Database.EnsureCreated();
+                var users = context.Users.Where(u => u.CharacterIdentification != null);
+                foreach (var user in users)
+                {
+                    user.CharacterIdentification = string.Empty;
+                }
+                context.CharacterData.RemoveRange(context.CharacterData);
+                var looseFiles = context.Files.Where(f => f.Uploaded == false);
+                context.RemoveRange(looseFiles);
+                context.SaveChanges();
             }
 
             host.Run();
         }
 
-        // Server=localhost\SQLEXPRESS;Database=master;Trusted_Connection=True;
-
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .UseConsoleLifetime()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();

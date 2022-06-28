@@ -7,8 +7,7 @@ namespace MareSynchronosServer.Models
     {
         public string UserId { get; set; }
         public int JobId { get; set; }
-        public List<FileReplacementDto> EquipmentData { get; set; }
-        public string GlamourerData { get; set; }
+        public CharacterCacheDto CharacterCache { get; set; }
         public string Hash { get; set; }
     }
 }
