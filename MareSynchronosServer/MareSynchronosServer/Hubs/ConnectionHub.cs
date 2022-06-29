@@ -1,26 +1,35 @@
-﻿using System.Diagnostics;
-using System.Linq;
+﻿using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
+using MareSynchronos.API;
+using MareSynchronosServer.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
-    public class ConnectionHub : Hub
+    public class ConnectionHub : BaseHub<ConnectionHub>
     {
-        private readonly ILogger<ConnectionHub> _logger;
-
-        public ConnectionHub(ILogger<ConnectionHub> logger)
+        public ConnectionHub(MareDbContext mareDbContext, ILogger<ConnectionHub> logger) : base(mareDbContext, logger)
         {
-            _logger = logger;
         }
 
-        public string Heartbeat()
+        public async Task<UserDto> Heartbeat()
         {
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            _logger.LogInformation("Heartbeat from " + (userId ?? "Unknown user"));
-            return userId ?? string.Empty;
+            Logger.LogInformation("Heartbeat from " + (userId ?? "Unknown user"));
+
+            if (userId != null)
+            {
+                var isAdmin = (await DbContext.Users.SingleOrDefaultAsync(u => u.UID == userId))?.IsAdmin ?? false;
+                return new UserDto
+                {
+                    UID = userId,
+                    IsAdmin = isAdmin
+                };
+            }
+
+            return new UserDto();
         }
     }
 }
