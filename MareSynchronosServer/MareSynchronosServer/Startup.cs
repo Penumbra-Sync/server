@@ -94,6 +94,7 @@ namespace MareSynchronosServer
                 {
                     options.Transports = HttpTransportType.WebSockets;
                 });
+                endpoints.MapHub<AdminHub>("/admin", options => options.Transports = HttpTransportType.WebSockets);
                 endpoints.MapHub<FilesHub>("/files", options =>
                 {
                     options.ApplicationMaxBufferSize = long.MaxValue;

@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace MareSynchronos.API
 {
-    public class UserDto
+    public class BannedUserDto
     {
-        public bool IsAdmin { get; set; }
-        public string UID { get; set; }
+        public string CharacterHash { get; set; }
+        public string Reason { get; set; }
     }
 }

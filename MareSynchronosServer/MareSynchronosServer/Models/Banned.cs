@@ -6,5 +6,6 @@ namespace MareSynchronosServer.Models
     {
         [Key]
         public string CharacterIdentification { get; set; }
+        public string Reason { get; set; }
     }
 }

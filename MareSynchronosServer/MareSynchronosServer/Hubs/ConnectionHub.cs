@@ -14,22 +14,23 @@ namespace MareSynchronosServer.Hubs
         {
         }
 
-        public async Task<UserDto> Heartbeat()
+        public async Task<LoggedInUserDto> Heartbeat()
         {
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
             Logger.LogInformation("Heartbeat from " + (userId ?? "Unknown user"));
 
             if (userId != null)
             {
-                var isAdmin = (await DbContext.Users.SingleOrDefaultAsync(u => u.UID == userId))?.IsAdmin ?? false;
-                return new UserDto
+                var user = (await DbContext.Users.SingleAsync(u => u.UID == userId));
+                return new LoggedInUserDto
                 {
                     UID = userId,
-                    IsAdmin = isAdmin
+                    IsModerator = user.IsModerator,
+                    IsAdmin = user.IsAdmin
                 };
             }
 
-            return new UserDto();
+            return new LoggedInUserDto();
         }
     }
 }

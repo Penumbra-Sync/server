@@ -12,6 +12,8 @@ namespace MareSynchronosServer.Models
         [Timestamp]
         public byte[] Timestamp { get; set; }
 
+        public bool IsModerator { get; set; } = false;
+
         public bool IsAdmin { get; set; } = false;
     }
 }
