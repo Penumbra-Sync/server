@@ -56,13 +56,13 @@ namespace MareSynchronosServer.Hubs
         private ClientPair OppositeEntry(string otherUID) =>
             DbContext.ClientPairs.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public string GetUID()
         {
             return AuthenticatedUserId;
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task GetCharacterData(Dictionary<string, int> visibleCharacterWithJobs)
         {
             var uid = AuthenticatedUserId;
@@ -89,7 +89,7 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task PushCharacterData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data");
@@ -134,14 +134,12 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task<List<string>> SendCharacterNameHash(string characterNameHash)
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        public async Task<List<string>> GetOnlineCharacters()
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " sent character hash");
 
             var ownUser = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
-            ownUser.CharacterIdentification = characterNameHash;
-            await DbContext.SaveChangesAsync();
             var otherUsers = await DbContext.ClientPairs
                 .Include(u => u.User)
                 .Include(u => u.OtherUser)
@@ -151,13 +149,13 @@ namespace MareSynchronosServer.Hubs
             var otherEntries = await DbContext.ClientPairs.Include(u => u.User)
                 .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync();
 
-            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlinePairedPlayer", characterNameHash);
+            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlinePairedPlayer", ownUser.CharacterIdentification);
             await Clients.All.SendAsync("UsersOnline",
                 await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             return otherEntries.Select(e => e.User.CharacterIdentification).ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task SendPairedClientAddition(string uid)
         {
             if (uid == AuthenticatedUserId) return;
@@ -207,7 +205,7 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task SendPairedClientRemoval(string uid)
         {
             if (uid == AuthenticatedUserId) return;
@@ -247,7 +245,7 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task SendPairedClientPauseChange(string uid, bool isPaused)
         {
             if (uid == AuthenticatedUserId) return;
@@ -282,7 +280,7 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task<List<ClientPairDto>> GetPairedClients()
         {
             string userid = AuthenticatedUserId;
@@ -305,7 +303,7 @@ namespace MareSynchronosServer.Hubs
                 }).ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task DeleteAccount()
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " deleted their account");

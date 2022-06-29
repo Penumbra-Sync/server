@@ -7,5 +7,6 @@
         public bool IsSynced { get; set; }
         public bool IsPausedFromOthers { get; set; }
         public bool IsRemoved { get; set; }
+        public bool AllowReceiveMessages { get; set; }
     }
 }

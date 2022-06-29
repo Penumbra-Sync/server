@@ -8,26 +8,26 @@ using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 namespace MareSynchronosServer.Authentication
 {
     public class SecretKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
         private readonly MareDbContext _mareDbContext;
-        public const string AUTH_SCHEME = "SecretKeyAuth";
+        public const string AuthScheme = "SecretKeyAuth";
 
-        protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.ContainsKey("Authorization"))
-                return Task.FromResult(AuthenticateResult.Fail("Failed Authorization"));
+                return AuthenticateResult.Fail("Failed Authorization");
 
             var authHeader = Request.Headers["Authorization"].ToString();
 
             if (string.IsNullOrEmpty(authHeader))
-                return Task.FromResult(AuthenticateResult.Fail("Failed Authorization"));
+                return AuthenticateResult.Fail("Failed Authorization");
 
             using var sha256 = SHA256.Create();
             var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(authHeader))).Replace("-", "");
@@ -35,11 +35,27 @@ namespace MareSynchronosServer.Authentication
 
             if (user == null)
             {
-                return Task.FromResult(AuthenticateResult.Fail("Failed Authorization"));
+                return AuthenticateResult.Fail("Failed Authorization");
             }
 
+            var charNameHeader = Request.Headers["CharacterNameHash"].ToString();
+
+            if (string.IsNullOrEmpty(charNameHeader) || charNameHeader == "--")
+                return AuthenticateResult.Fail("Requires CharacterNameHash");
+
+            var isBanned = await _mareDbContext.BannedUsers.AnyAsync(u => u.CharacterIdentification == charNameHeader);
+
+            if (isBanned)
+            {
+                return AuthenticateResult.Fail("Banned");
+            }
+
+            user.CharacterIdentification = charNameHeader;
+            _mareDbContext.Users.Update(user);
+            await _mareDbContext.SaveChangesAsync();
+
             var claims = new List<Claim> {
-                new Claim(ClaimTypes.Name, user.CharacterIdentification ?? "Unknown"),
+                new Claim(ClaimTypes.Name, user.CharacterIdentification),
                 new Claim(ClaimTypes.NameIdentifier, user.UID)
             };
 
@@ -47,7 +63,7 @@ namespace MareSynchronosServer.Authentication
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, this.Scheme.Name);
 
-            return Task.FromResult(AuthenticateResult.Success(ticket));
+            return AuthenticateResult.Success(ticket);
         }
 
         public SecretKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock, MareDbContext mareDbContext) : base(options, logger, encoder, clock)

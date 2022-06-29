@@ -11,5 +11,7 @@ namespace MareSynchronosServer.Models
         public string CharacterIdentification { get; set; }
         [Timestamp]
         public byte[] Timestamp { get; set; }
+
+        public bool IsAdmin { get; set; } = false;
     }
 }

@@ -1,15 +1,13 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
+using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Models;
@@ -30,8 +28,8 @@ namespace MareSynchronosServer.Hubs
         }
 
         private string BasePath => _configuration["CacheDirectory"];
-        
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task AbortUpload()
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " aborted upload");
@@ -41,15 +39,22 @@ namespace MareSynchronosServer.Hubs
             await DbContext.SaveChangesAsync();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task<List<string>> SendFiles(List<string> fileListHashes)
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " sending files");
-            List<string> filesToUpload = new List<string>();
-            var existingFiles = DbContext.Files.Where(f => fileListHashes.Contains(f.Hash)).ToList();
-            foreach (var file in fileListHashes.Where(f => existingFiles.All(e => e.Hash != f)))
+            var forbiddenFiles = DbContext.ForbiddenUploadEntries.Where(f => fileListHashes.Contains(f.Hash));
+            var filesToUpload = new List<UploadFileDto>();
+            filesToUpload.AddRange(forbiddenFiles.Select(f => new UploadFileDto()
             {
-                Debug.WriteLine("File: " + file);
+                ForbiddenBy = f.ForbiddenBy,
+                Hash = f.Hash,
+                IsForbidden = true
+            }));
+            var existingFiles = DbContext.Files.Where(f => fileListHashes.Contains(f.Hash)).ToList();
+            foreach (var file in fileListHashes.Where(f => existingFiles.All(e => e.Hash != f) && filesToUpload.All(u => u.Hash != f)))
+            {
+                Logger.LogInformation("Needs upload: " + file);
                 var userId = AuthenticatedUserId;
                 await DbContext.Files.AddAsync(new FileCache()
                 {
@@ -59,26 +64,31 @@ namespace MareSynchronosServer.Hubs
                     Uploader = DbContext.Users.Single(u => u.UID == userId)
                 });
                 await DbContext.SaveChangesAsync();
-                filesToUpload.Add(file);
+                filesToUpload.Add(new UploadFileDto
+                {
+                    Hash = file
+                });
             }
 
             return filesToUpload;
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task<bool> IsUploadFinished()
         {
             var userUid = AuthenticatedUserId;
             return await DbContext.Files.AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task UploadFileStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " uploading file: " + hash);
 
             var relatedFile = DbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && f.Uploaded == false);
             if (relatedFile == null) return;
+            var forbiddenFile = DbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
+            if (forbiddenFile != null) return;
             var uploadedFile = new List<byte>();
             await foreach (var chunk in fileContent)
             {
@@ -113,20 +123,33 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
-        public async Task<long> GetFileSize(string hash)
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        public async Task<DownloadFileDto> GetFileSize(string hash)
         {
             var file = await DbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
-            if (file == null) return -1;
+            var forbidden = DbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
             var fileInfo = new FileInfo(Path.Combine(BasePath, hash));
-            if (fileInfo.Exists) return fileInfo.Length;
-            DbContext.Files.Remove(file);
-            await DbContext.SaveChangesAsync();
-            return -1;
+
+            var response = new DownloadFileDto
+            {
+                FileExists = file != null,
+                ForbiddenBy = forbidden?.ForbiddenBy ?? string.Empty,
+                IsForbidden = forbidden != null,
+                Hash = hash,
+                Size = fileInfo.Length
+            };
+
+            if (!fileInfo.Exists && file != null)
+            {
+                DbContext.Files.Remove(file);
+                await DbContext.SaveChangesAsync();
+            }
+
+            return response;
 
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async IAsyncEnumerable<byte[]> DownloadFileAsync(string hash, [EnumeratorCancellation] CancellationToken ct)
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " downloading file: " + hash);
@@ -149,8 +172,8 @@ namespace MareSynchronosServer.Hubs
 
             Logger.LogInformation("User " + AuthenticatedUserId + " finished downloading file: " + hash);
         }
-        
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AUTH_SCHEME)]
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task DeleteAllFiles()
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " deleted all their files");
@@ -160,7 +183,7 @@ namespace MareSynchronosServer.Hubs
             var ownFiles = await DbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync();
             foreach (var file in ownFiles)
             {
-                File.Delete(Path.Combine(BasePath,  file.Hash));
+                File.Delete(Path.Combine(BasePath, file.Hash));
             }
             DbContext.Files.RemoveRange(ownFiles);
             await DbContext.SaveChangesAsync();

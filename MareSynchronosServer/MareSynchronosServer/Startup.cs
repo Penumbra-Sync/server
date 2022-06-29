@@ -50,9 +50,9 @@ namespace MareSynchronosServer
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>
                 {
-                    options.DefaultScheme = SecretKeyAuthenticationHandler.AUTH_SCHEME;
+                    options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
                 })
-                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AUTH_SCHEME, options => { });
+                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -88,17 +88,17 @@ namespace MareSynchronosServer
             {
                 endpoints.MapHub<ConnectionHub>("/heartbeat", options =>
                 {
-                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                    options.Transports = HttpTransportType.WebSockets;
                 });
                 endpoints.MapHub<UserHub>("/user", options =>
                 {
-                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                    options.Transports = HttpTransportType.WebSockets;
                 });
                 endpoints.MapHub<FilesHub>("/files", options =>
                 {
                     options.ApplicationMaxBufferSize = long.MaxValue;
                     options.TransportMaxBufferSize = long.MaxValue;
-                    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+                    options.Transports = HttpTransportType.WebSockets;
                 });
             });
         }

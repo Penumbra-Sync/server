@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 
 namespace MareSynchronosServer.Data
 {
-    public class MareDbContext : Microsoft.EntityFrameworkCore.DbContext
+    public class MareDbContext : DbContext
     {
         public MareDbContext(DbContextOptions<MareDbContext> options) : base(options)
         {
@@ -16,6 +16,9 @@ namespace MareSynchronosServer.Data
         public DbSet<FileCache> Files { get; set; }
         public DbSet<ClientPair> ClientPairs { get; set; }
         public DbSet<CharacterData> CharacterData { get; set; }
+        public DbSet<ForbiddenUploadEntry> ForbiddenUploadEntries { get; set; }
+        public DbSet<Banned> BannedUsers { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -30,6 +33,8 @@ namespace MareSynchronosServer.Data
             modelBuilder.Entity<CharacterData>()
                 .ToTable("CharacterData")
                 .HasKey(k => new { k.UserId, k.JobId });
+            modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("ForbiddenUploadEntries");
+            modelBuilder.Entity<Banned>().ToTable("BannedUsers");
         }
     }
 }
