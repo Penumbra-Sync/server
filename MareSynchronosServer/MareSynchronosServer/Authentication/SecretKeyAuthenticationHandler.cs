@@ -21,13 +21,20 @@ namespace MareSynchronosServer.Authentication
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            if (!Request.Headers.ContainsKey("Authorization"))
+            if (!Request.Headers.ContainsKey("Authorization") || !Request.Headers.ContainsKey("CharacterNameHash"))
                 return AuthenticateResult.Fail("Failed Authorization");
 
             var authHeader = Request.Headers["Authorization"].ToString();
+            var charNameHeader = Request.Headers["CharacterNameHash"].ToString();
 
-            if (string.IsNullOrEmpty(authHeader))
+            if (string.IsNullOrEmpty(authHeader) || string.IsNullOrEmpty(charNameHeader) || charNameHeader == "--")
                 return AuthenticateResult.Fail("Failed Authorization");
+
+            var isBanned = await _mareDbContext.BannedUsers.AnyAsync(u => u.CharacterIdentification == charNameHeader);
+            if (isBanned)
+            {
+                return AuthenticateResult.Fail("Banned");
+            }
 
             using var sha256 = SHA256.Create();
             var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(authHeader))).Replace("-", "");
@@ -36,18 +43,6 @@ namespace MareSynchronosServer.Authentication
             if (user == null)
             {
                 return AuthenticateResult.Fail("Failed Authorization");
-            }
-
-            var charNameHeader = Request.Headers["CharacterNameHash"].ToString();
-
-            if (string.IsNullOrEmpty(charNameHeader) || charNameHeader == "--")
-                return AuthenticateResult.Fail("Requires CharacterNameHash");
-
-            var isBanned = await _mareDbContext.BannedUsers.AnyAsync(u => u.CharacterIdentification == charNameHeader);
-
-            if (isBanned)
-            {
-                return AuthenticateResult.Fail("Banned");
             }
 
             user.CharacterIdentification = charNameHeader;
