@@ -45,6 +45,13 @@ namespace MareSynchronosServer.Hubs
                 user.UID = uid;
                 hasValidUid = true;
             }
+
+            // make the first registered user on the service to admin
+            if (!await DbContext.Users.AnyAsync())
+            {
+                user.IsAdmin = true;
+            }
+
             DbContext.Users.Add(user);
 
             Logger.LogInformation("User registered: " + user.UID);
@@ -86,6 +93,28 @@ namespace MareSynchronosServer.Hubs
                     await Clients.User(uid).SendAsync("ReceiveCharacterData", cachedChar.CharacterCache,
                         pair.User.CharacterIdentification);
                 }
+            }
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
+        {
+            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to visible clients");
+
+            var uid = AuthenticatedUserId;
+            var entriesHavingThisUser = DbContext.ClientPairs
+                .Include(w => w.User)
+                .Include(w => w.OtherUser)
+                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
+                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
+
+            foreach (var pair in entriesHavingThisUser)
+            {
+                var ownEntry = DbContext.ClientPairs.SingleOrDefault(w =>
+                    w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
+                if (ownEntry == null || ownEntry.IsPaused) continue;
+                await Clients.User(pair.User.UID).SendAsync("ReceiveCharacterData", characterCache,
+                    pair.OtherUser.CharacterIdentification);
             }
         }
 
@@ -152,7 +181,7 @@ namespace MareSynchronosServer.Hubs
             await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlinePairedPlayer", ownUser.CharacterIdentification);
             await Clients.All.SendAsync("UsersOnline",
                 await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
-            return otherEntries.Select(e => e.User.CharacterIdentification).ToList();
+            return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
@@ -340,11 +369,6 @@ namespace MareSynchronosServer.Hubs
             {
                 Logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
-                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
-                DbContext.RemoveRange(outdatedCharacterData);
-                user.CharacterIdentification = null;
-                await DbContext.SaveChangesAsync();
-
                 var otherUsers = DbContext.ClientPairs
                     .Include(u => u.User)
                     .Include(u => u.OtherUser)
@@ -354,6 +378,12 @@ namespace MareSynchronosServer.Hubs
                 var otherEntries = DbContext.ClientPairs.Include(u => u.User)
                     .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == user && !u.IsPaused).ToList();
                 await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("RemoveOnlinePairedPlayer", user.CharacterIdentification);
+
+                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
+                DbContext.RemoveRange(outdatedCharacterData);
+                user.CharacterIdentification = null;
+                await DbContext.SaveChangesAsync();
+
                 await Clients.All.SendAsync("UsersOnline",
                     await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             }

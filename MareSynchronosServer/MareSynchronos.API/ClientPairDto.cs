@@ -1,6 +1,6 @@
 ﻿namespace MareSynchronos.API
 {
-    public class ClientPairDto
+    public record ClientPairDto
     {
         public string OtherUID { get; set; }
         public bool IsPaused { get; set; }

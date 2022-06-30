@@ -45,9 +45,16 @@ namespace MareSynchronosServer.Authentication
                 return AuthenticateResult.Fail("Failed Authorization");
             }
 
-            user.CharacterIdentification = charNameHeader;
-            _mareDbContext.Users.Update(user);
-            await _mareDbContext.SaveChangesAsync();
+            if (user.CharacterIdentification != charNameHeader)
+            {
+                try
+                {
+                    user.CharacterIdentification = charNameHeader;
+                    _mareDbContext.Users.Update(user);
+                    await _mareDbContext.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException) { }
+            }
 
             var claims = new List<Claim> {
                 new Claim(ClaimTypes.Name, user.CharacterIdentification),

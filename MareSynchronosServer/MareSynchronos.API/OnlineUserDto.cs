@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MareSynchronos.API
+﻿namespace MareSynchronos.API
 {
-    public class OnlineUserDto
+    public record OnlineUserDto
     {
         public string UID { get; set; }
         public string CharacterNameHash { get; set; }

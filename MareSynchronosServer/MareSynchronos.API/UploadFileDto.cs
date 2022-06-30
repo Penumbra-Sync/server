@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MareSynchronos.API
+﻿namespace MareSynchronos.API
 {
-    public class UploadFileDto
+    public record UploadFileDto : ITransferFileDto
     {
         public string Hash { get; set; } = string.Empty;
         public bool IsForbidden { get; set; } = false;

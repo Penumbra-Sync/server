@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MareSynchronos.API
+﻿namespace MareSynchronos.API
 {
-    public class ForbiddenFileDto
+    public record ForbiddenFileDto
     {
         public string Hash { get; set; }
         public string ForbiddenBy { get; set; }

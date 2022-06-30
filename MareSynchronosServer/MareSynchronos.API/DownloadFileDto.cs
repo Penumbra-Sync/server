@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MareSynchronos.API
+﻿namespace MareSynchronos.API
 {
-    public class DownloadFileDto
+    public record DownloadFileDto : ITransferFileDto
     {
         public bool FileExists { get; set; } = true;
         public string Hash { get; set; } = string.Empty;
