@@ -69,37 +69,11 @@ namespace MareSynchronosServer.Hubs
             return AuthenticatedUserId;
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task GetCharacterData(Dictionary<string, int> visibleCharacterWithJobs)
-        {
-            var uid = AuthenticatedUserId;
-            Dictionary<string, CharacterCacheDto> ret = new();
-            var entriesHavingThisUser = DbContext.ClientPairs
-                .Include(w => w.User)
-                .Include(w => w.OtherUser)
-                .Where(w => w.OtherUser.UID == uid && !w.IsPaused && visibleCharacterWithJobs.Keys.Contains(w.User.CharacterIdentification))
-                .ToList();
-            foreach (var pair in entriesHavingThisUser)
-            {
-                bool isNotPaused = await DbContext.ClientPairs.AnyAsync(w =>
-                    !w.IsPaused && w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
-                if (!isNotPaused) continue;
-                var dictEntry = visibleCharacterWithJobs[pair.User.CharacterIdentification];
-
-                var cachedChar = await
-                    DbContext.CharacterData.SingleOrDefaultAsync(c => c.UserId == pair.User.UID && c.JobId == dictEntry);
-                if (cachedChar != null)
-                {
-                    await Clients.User(uid).SendAsync("ReceiveCharacterData", cachedChar.CharacterCache,
-                        pair.User.CharacterIdentification);
-                }
-            }
-        }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
         {
-            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to visible clients");
+            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
 
             var uid = AuthenticatedUserId;
             var entriesHavingThisUser = DbContext.ClientPairs
@@ -166,7 +140,7 @@ namespace MareSynchronosServer.Hubs
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task<List<string>> GetOnlineCharacters()
         {
-            Logger.LogInformation("User " + AuthenticatedUserId + " sent character hash");
+            Logger.LogInformation("User " + AuthenticatedUserId + " requested online characters");
 
             var ownUser = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
             var otherUsers = await DbContext.ClientPairs

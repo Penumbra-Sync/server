@@ -21,7 +21,7 @@ namespace MareSynchronosServer.Hubs
 
             if (userId != null)
             {
-                Logger.LogInformation("Heartbeat from " + userId);
+                Logger.LogInformation("Connection from " + userId);
                 var user = (await DbContext.Users.SingleAsync(u => u.UID == userId));
                 return new LoggedInUserDto
                 {

@@ -44,12 +44,13 @@ namespace MareSynchronosServer
             _logger.LogInformation($"Cleaning up files older than {filesOlderThanDays} days");
 
             using var scope = _services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetService<MareDbContext>();
+            var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
             var filesToDelete =
                 dbContext.Files.Where(f => f.LastAccessTime < prevTime);
             dbContext.RemoveRange(filesToDelete);
+            dbContext.SaveChanges();
             foreach (var file in filesToDelete)
             {
                 var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
@@ -59,9 +60,6 @@ namespace MareSynchronosServer
                     File.Delete(fileName);
                 }
             }
-
-            dbContext.SaveChanges();
-
             var allFiles = dbContext.Files;
             foreach (var file in allFiles)
             {

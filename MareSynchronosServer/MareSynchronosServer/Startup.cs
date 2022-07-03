@@ -39,7 +39,6 @@ namespace MareSynchronosServer
 
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
 
-
             services.AddDbContext<MareDbContext>(options =>
             {
                 options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));

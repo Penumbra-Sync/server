@@ -1,8 +1,12 @@
+using System;
+using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
+using System.Reflection;
 using MareSynchronosServer.Data;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer
 {
@@ -36,6 +40,17 @@ namespace MareSynchronosServer
                 .UseConsoleLifetime()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
+                    webBuilder.UseContentRoot(AppContext.BaseDirectory);
+                    webBuilder.ConfigureLogging((ctx, builder) =>
+                    {
+                        builder.AddSimpleConsole(options =>
+                        {
+                            options.SingleLine = true;
+                            options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
+                        });
+                        builder.AddConfiguration(ctx.Configuration.GetSection("Logging"));
+                        builder.AddFile(o => o.RootPath = AppContext.BaseDirectory);
+                    });
                     webBuilder.UseStartup<Startup>();
                 });
     }

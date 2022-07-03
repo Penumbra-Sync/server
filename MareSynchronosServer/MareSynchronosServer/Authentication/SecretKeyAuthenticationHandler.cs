@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -16,6 +17,7 @@ namespace MareSynchronosServer.Authentication
 {
     public class SecretKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
+        public static ConcurrentDictionary<string, object> IdentificationLocks = new();
         private readonly MareDbContext _mareDbContext;
         public const string AuthScheme = "SecretKeyAuth";
 
@@ -45,15 +47,26 @@ namespace MareSynchronosServer.Authentication
                 return AuthenticateResult.Fail("Failed Authorization");
             }
 
+            if (!IdentificationLocks.TryGetValue(charNameHeader, out var lockObject))
+            {
+                lockObject = new();
+                IdentificationLocks[charNameHeader] = lockObject;
+            }
+
             if (user.CharacterIdentification != charNameHeader)
             {
-                try
+                lock (lockObject)
                 {
-                    user.CharacterIdentification = charNameHeader;
-                    _mareDbContext.Users.Update(user);
-                    await _mareDbContext.SaveChangesAsync();
+                    try
+                    {
+                        user.CharacterIdentification = charNameHeader;
+                        _mareDbContext.Users.Update(user);
+                        _mareDbContext.SaveChanges();
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                    }
                 }
-                catch (DbUpdateConcurrencyException) { }
             }
 
             var claims = new List<Claim> {
