@@ -1,10 +1,9 @@
 using System;
-using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
-using System.Reflection;
 using MareSynchronosServer.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -20,7 +19,10 @@ namespace MareSynchronosServer
             {
                 var services = scope.ServiceProvider;
                 var context = services.GetRequiredService<MareDbContext>();
-                context.Database.EnsureCreated();
+                context.Database.Migrate();
+                context.SaveChanges();
+
+                // clean up residuals
                 var users = context.Users.Where(u => u.CharacterIdentification != null);
                 foreach (var user in users)
                 {
@@ -37,6 +39,7 @@ namespace MareSynchronosServer
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .UseSystemd()
                 .UseConsoleLifetime()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
