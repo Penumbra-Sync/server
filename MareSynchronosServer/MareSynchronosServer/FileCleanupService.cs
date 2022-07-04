@@ -60,7 +60,7 @@ namespace MareSynchronosServer
                     File.Delete(fileName);
                 }
             }
-            var allFiles = dbContext.Files;
+            var allFiles = dbContext.Files.Where(f => f.Uploaded);
             foreach (var file in allFiles)
             {
                 var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
