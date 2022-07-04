@@ -1,4 +1,5 @@
 using System;
+using MareSynchronos.API;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -85,16 +86,16 @@ namespace MareSynchronosServer
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<ConnectionHub>("/heartbeat", options =>
+                endpoints.MapHub<ConnectionHub>(ConnectionHubAPI.Path, options =>
                 {
                     options.Transports = HttpTransportType.WebSockets;
                 });
-                endpoints.MapHub<UserHub>("/user", options =>
+                endpoints.MapHub<UserHub>(UserHubAPI.Path, options =>
                 {
                     options.Transports = HttpTransportType.WebSockets;
                 });
-                endpoints.MapHub<AdminHub>("/admin", options => options.Transports = HttpTransportType.WebSockets);
-                endpoints.MapHub<FilesHub>("/files", options =>
+                endpoints.MapHub<AdminHub>(AdminHubAPI.Path, options => options.Transports = HttpTransportType.WebSockets);
+                endpoints.MapHub<FilesHub>(FilesHubAPI.Path, options =>
                 {
                     options.ApplicationMaxBufferSize = long.MaxValue;
                     options.TransportMaxBufferSize = long.MaxValue;

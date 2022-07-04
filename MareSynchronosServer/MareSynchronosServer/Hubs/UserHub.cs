@@ -22,11 +22,142 @@ namespace MareSynchronosServer.Hubs
         {
         }
 
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.SendDeleteAccount)]
+        public async Task DeleteAccount()
+        {
+            Logger.LogInformation("User " + AuthenticatedUserId + " deleted their account");
+
+            string userid = AuthenticatedUserId;
+            var userEntry = await DbContext.Users.SingleAsync(u => u.UID == userid);
+            var charData = DbContext.CharacterData.Where(u => u.UserId == userid);
+            DbContext.RemoveRange(charData);
+            await DbContext.SaveChangesAsync();
+            var ownPairData = DbContext.ClientPairs.Where(u => u.User.UID == userid);
+            DbContext.RemoveRange(ownPairData);
+            await DbContext.SaveChangesAsync();
+            var otherPairData = DbContext.ClientPairs.Include(u => u.User).Where(u => u.OtherUser.UID == userid);
+            foreach (var pair in otherPairData)
+            {
+                await Clients.User(pair.User.UID)
+                    .SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
+                    {
+                        OtherUID = userid,
+                        IsRemoved = true
+                    }, userEntry.CharacterIdentification);
+            }
+
+            DbContext.RemoveRange(otherPairData);
+            DbContext.Remove(userEntry);
+            await DbContext.SaveChangesAsync();
+
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.InvokeGetOnlineCharacters)]
+        public async Task<List<string>> GetOnlineCharacters()
+        {
+            Logger.LogInformation("User " + AuthenticatedUserId + " requested online characters");
+
+            var ownUser = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
+            var otherUsers = await DbContext.ClientPairs
+                .Include(u => u.User)
+                .Include(u => u.OtherUser)
+                .Where(w => w.User == ownUser && !w.IsPaused)
+                .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
+                .Select(e => e.OtherUser).ToListAsync();
+            var otherEntries = await DbContext.ClientPairs.Include(u => u.User)
+                .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync();
+
+            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, ownUser.CharacterIdentification);
+            await Clients.All.SendAsync(UserHubAPI.OnUsersOnline,
+                await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
+            return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
+        }
+
+        [HubMethodName(UserHubAPI.InvokeGetOnlineUsers)]
         public async Task<int> GetOnlineUsers()
         {
             return await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification));
         }
 
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.InvokeGetPairedClients)]
+        public async Task<List<ClientPairDto>> GetPairedClients()
+        {
+            string userid = AuthenticatedUserId;
+            var user = GetAuthenticatedUser();
+            return DbContext.ClientPairs
+                .Include(u => u.OtherUser)
+                .Include(u => u.User)
+                .Where(w => w.User.UID == userid)
+                .ToList()
+                .Select(w =>
+                {
+                    var otherEntry = OppositeEntry(w.OtherUser.UID);
+                    return new ClientPairDto
+                    {
+                        IsPaused = w.IsPaused,
+                        OtherUID = w.OtherUser.UID,
+                        IsSynced = otherEntry != null,
+                        IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                    };
+                }).ToList();
+        }
+
+        public override async Task OnDisconnectedAsync(Exception exception)
+        {
+            var user = DbContext.Users.SingleOrDefault(u => u.UID == AuthenticatedUserId);
+            if (user != null)
+            {
+                Logger.LogInformation("Disconnect from " + AuthenticatedUserId);
+
+                var otherUsers = DbContext.ClientPairs
+                    .Include(u => u.User)
+                    .Include(u => u.OtherUser)
+                    .Where(w => w.User == user && !w.IsPaused)
+                    .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
+                    .Select(e => e.OtherUser).ToList();
+                var otherEntries = DbContext.ClientPairs.Include(u => u.User)
+                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == user && !u.IsPaused).ToList();
+                await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, user.CharacterIdentification);
+
+                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
+                DbContext.RemoveRange(outdatedCharacterData);
+                user.CharacterIdentification = null;
+                await DbContext.SaveChangesAsync();
+
+                await Clients.All.SendAsync("UsersOnline",
+                    await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
+            }
+
+            await base.OnDisconnectedAsync(exception);
+        }
+
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.InvokePushCharacterDataToVisibleClients)]
+        public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
+        {
+            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
+
+            var uid = AuthenticatedUserId;
+            var entriesHavingThisUser = DbContext.ClientPairs
+                .Include(w => w.User)
+                .Include(w => w.OtherUser)
+                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
+                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
+
+            foreach (var pair in entriesHavingThisUser)
+            {
+                var ownEntry = DbContext.ClientPairs.SingleOrDefault(w =>
+                    w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
+                if (ownEntry == null || ownEntry.IsPaused) continue;
+                await Clients.User(pair.User.UID).SendAsync(UserHubAPI.OnReceiveCharacterData, characterCache,
+                    pair.OtherUser.CharacterIdentification);
+            }
+        }
+
+        [HubMethodName(UserHubAPI.InvokeRegister)]
         public async Task<string> Register()
         {
             using var sha256 = SHA256.Create();
@@ -60,110 +191,14 @@ namespace MareSynchronosServer.Hubs
             return computedHash;
         }
 
-        private ClientPair OppositeEntry(string otherUID) =>
-            DbContext.ClientPairs.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public string GetUID()
-        {
-            return AuthenticatedUserId;
-        }
-
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
-        {
-            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
-
-            var uid = AuthenticatedUserId;
-            var entriesHavingThisUser = DbContext.ClientPairs
-                .Include(w => w.User)
-                .Include(w => w.OtherUser)
-                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
-                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
-
-            foreach (var pair in entriesHavingThisUser)
-            {
-                var ownEntry = DbContext.ClientPairs.SingleOrDefault(w =>
-                    w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
-                if (ownEntry == null || ownEntry.IsPaused) continue;
-                await Clients.User(pair.User.UID).SendAsync("ReceiveCharacterData", characterCache,
-                    pair.OtherUser.CharacterIdentification);
-            }
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task PushCharacterData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
-        {
-            Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data");
-
-            var uid = AuthenticatedUserId;
-            var entriesHavingThisUser = DbContext.ClientPairs
-                .Include(w => w.User)
-                .Include(w => w.OtherUser)
-                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
-                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
-            var existingCharacterData =
-                await DbContext.CharacterData.SingleOrDefaultAsync(s =>
-                    s.UserId == uid && s.JobId == characterCache.JobId);
-
-            if (existingCharacterData != null && existingCharacterData.Hash != characterCache.Hash)
-            {
-                existingCharacterData.CharacterCache = characterCache;
-                existingCharacterData.Hash = characterCache.Hash;
-                DbContext.CharacterData.Update(existingCharacterData);
-                await DbContext.SaveChangesAsync();
-            }
-            else if (existingCharacterData == null)
-            {
-                CharacterData data = new CharacterData
-                {
-                    UserId = AuthenticatedUserId,
-                    CharacterCache = characterCache,
-                    Hash = characterCache.Hash,
-                    JobId = characterCache.JobId
-                };
-                await DbContext.CharacterData.AddAsync(data);
-                await DbContext.SaveChangesAsync();
-            }
-
-            foreach (var pair in entriesHavingThisUser)
-            {
-                var ownEntry = DbContext.ClientPairs.SingleOrDefault(w =>
-                    w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
-                if (ownEntry == null || ownEntry.IsPaused) continue;
-                await Clients.User(pair.User.UID).SendAsync("ReceiveCharacterData", characterCache,
-                    pair.OtherUser.CharacterIdentification);
-            }
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task<List<string>> GetOnlineCharacters()
-        {
-            Logger.LogInformation("User " + AuthenticatedUserId + " requested online characters");
-
-            var ownUser = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
-            var otherUsers = await DbContext.ClientPairs
-                .Include(u => u.User)
-                .Include(u => u.OtherUser)
-                .Where(w => w.User == ownUser && !w.IsPaused)
-                .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                .Select(e => e.OtherUser).ToListAsync();
-            var otherEntries = await DbContext.ClientPairs.Include(u => u.User)
-                .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync();
-
-            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("AddOnlinePairedPlayer", ownUser.CharacterIdentification);
-            await Clients.All.SendAsync("UsersOnline",
-                await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
-            return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.SendPairedClientAddition)]
         public async Task SendPairedClientAddition(string uid)
         {
             if (uid == AuthenticatedUserId) return;
-
-            Logger.LogInformation("User " + AuthenticatedUserId + " added " + uid + " to whitelist");
+            uid = uid.Trim();
+            Logger.LogInformation("User " + AuthenticatedUserId + " adding " + uid + " to whitelist");
             var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             var existingEntry =
@@ -180,7 +215,7 @@ namespace MareSynchronosServer.Hubs
             await DbContext.SaveChangesAsync();
             var otherEntry = OppositeEntry(uid);
             await Clients.User(user.UID)
-                .SendAsync("UpdateClientPairs", new ClientPairDto()
+                .SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = false,
@@ -192,12 +227,12 @@ namespace MareSynchronosServer.Hubs
                 if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
                     await Clients.User(user.UID)
-                        .SendAsync("AddOnlinePairedPlayer", otherUser.CharacterIdentification);
+                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, otherUser.CharacterIdentification);
                     await Clients.User(otherUser.UID)
-                        .SendAsync("AddOnlinePairedPlayer", user.CharacterIdentification);
+                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, user.CharacterIdentification);
                 }
 
-                await Clients.User(uid).SendAsync("UpdateClientPairs",
+                await Clients.User(uid).SendAsync(UserHubAPI.OnUpdateClientPairs,
                     new ClientPairDto()
                     {
                         OtherUID = user.UID,
@@ -209,46 +244,7 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task SendPairedClientRemoval(string uid)
-        {
-            if (uid == AuthenticatedUserId) return;
-
-            Logger.LogInformation("User " + AuthenticatedUserId + " removed " + uid + " from whitelist");
-            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
-            var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
-            if (otherUser == null) return;
-            ClientPair wl =
-                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
-            if (wl == null) return;
-            DbContext.ClientPairs.Remove(wl);
-            await DbContext.SaveChangesAsync();
-            var otherEntry = OppositeEntry(uid);
-            await Clients.User(user.UID)
-                .SendAsync("UpdateClientPairs", new ClientPairDto()
-                {
-                    OtherUID = otherUser.UID,
-                    IsRemoved = true
-                }, otherUser.CharacterIdentification);
-            if (otherEntry != null)
-            {
-                if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
-                {
-                    await Clients.User(user.UID)
-                        .SendAsync("RemoveOnlinePairedPlayer", otherUser.CharacterIdentification);
-                    await Clients.User(otherUser.UID)
-                        .SendAsync("RemoveOnlinePairedPlayer", user.CharacterIdentification);
-                }
-                await Clients.User(uid).SendAsync("UpdateClientPairs", new ClientPairDto()
-                {
-                    OtherUID = user.UID,
-                    IsPaused = otherEntry.IsPaused,
-                    IsPausedFromOthers = false,
-                    IsSynced = false
-                }, user.CharacterIdentification);
-            }
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [HubMethodName(UserHubAPI.SendPairedClientPauseChange)]
         public async Task SendPairedClientPauseChange(string uid, bool isPaused)
         {
             if (uid == AuthenticatedUserId) return;
@@ -264,7 +260,7 @@ namespace MareSynchronosServer.Hubs
             var otherEntry = OppositeEntry(uid);
 
             await Clients.User(user.UID)
-                .SendAsync("UpdateClientPairs", new ClientPairDto()
+                .SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = isPaused,
@@ -273,7 +269,7 @@ namespace MareSynchronosServer.Hubs
                 }, otherUser.CharacterIdentification);
             if (otherEntry != null)
             {
-                await Clients.User(uid).SendAsync("UpdateClientPairs", new ClientPairDto()
+                await Clients.User(uid).SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
                 {
                     OtherUID = user.UID,
                     IsPaused = otherEntry.IsPaused,
@@ -284,85 +280,47 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task<List<ClientPairDto>> GetPairedClients()
+        [HubMethodName(UserHubAPI.SendPairedClientRemoval)]
+        public async Task SendPairedClientRemoval(string uid)
         {
-            string userid = AuthenticatedUserId;
-            var user = GetAuthenticatedUser();
-            return DbContext.ClientPairs
-                .Include(u => u.OtherUser)
-                .Include(u => u.User)
-                .Where(w => w.User.UID == userid)
-                .ToList()
-                .Select(w =>
+            if (uid == AuthenticatedUserId) return;
+
+            Logger.LogInformation("User " + AuthenticatedUserId + " removed " + uid + " from whitelist");
+            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+            var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            if (otherUser == null) return;
+            ClientPair wl =
+                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+            if (wl == null) return;
+            DbContext.ClientPairs.Remove(wl);
+            await DbContext.SaveChangesAsync();
+            var otherEntry = OppositeEntry(uid);
+            await Clients.User(user.UID)
+                .SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
                 {
-                    var otherEntry = OppositeEntry(w.OtherUser.UID);
-                    return new ClientPairDto
-                    {
-                        IsPaused = w.IsPaused,
-                        OtherUID = w.OtherUser.UID,
-                        IsSynced = otherEntry != null,
-                        IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                    };
-                }).ToList();
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        public async Task DeleteAccount()
-        {
-            Logger.LogInformation("User " + AuthenticatedUserId + " deleted their account");
-
-            string userid = AuthenticatedUserId;
-            var userEntry = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == userid);
-            var charData = DbContext.CharacterData.Where(u => u.UserId == userid);
-            DbContext.RemoveRange(charData);
-            await DbContext.SaveChangesAsync();
-            var ownPairData = DbContext.ClientPairs.Where(u => u.User.UID == userid);
-            DbContext.RemoveRange(ownPairData);
-            await DbContext.SaveChangesAsync();
-            var otherPairData = DbContext.ClientPairs.Include(u => u.User).Where(u => u.OtherUser.UID == userid);
-            foreach (var pair in otherPairData)
+                    OtherUID = otherUser.UID,
+                    IsRemoved = true
+                }, otherUser.CharacterIdentification);
+            if (otherEntry != null)
             {
-                await Clients.User(pair.User.UID)
-                    .SendAsync("UpdateClientPairs", new ClientPairDto()
-                    {
-                        OtherUID = userid,
-                        IsRemoved = true
-                    }, userEntry.CharacterIdentification);
+                if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
+                {
+                    await Clients.User(user.UID)
+                        .SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, otherUser.CharacterIdentification);
+                    await Clients.User(otherUser.UID)
+                        .SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, user.CharacterIdentification);
+                }
+                await Clients.User(uid).SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
+                {
+                    OtherUID = user.UID,
+                    IsPaused = otherEntry.IsPaused,
+                    IsPausedFromOthers = false,
+                    IsSynced = false
+                }, user.CharacterIdentification);
             }
-
-            DbContext.RemoveRange(otherPairData);
-            DbContext.Remove(userEntry);
-            await DbContext.SaveChangesAsync();
-
         }
 
-        public override async Task OnDisconnectedAsync(Exception exception)
-        {
-            var user = DbContext.Users.SingleOrDefault(u => u.UID == AuthenticatedUserId);
-            if (user != null)
-            {
-                Logger.LogInformation("Disconnect from " + AuthenticatedUserId);
-
-                var otherUsers = DbContext.ClientPairs
-                    .Include(u => u.User)
-                    .Include(u => u.OtherUser)
-                    .Where(w => w.User == user && !w.IsPaused)
-                    .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                    .Select(e => e.OtherUser).ToList();
-                var otherEntries = DbContext.ClientPairs.Include(u => u.User)
-                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == user && !u.IsPaused).ToList();
-                await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync("RemoveOnlinePairedPlayer", user.CharacterIdentification);
-
-                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
-                DbContext.RemoveRange(outdatedCharacterData);
-                user.CharacterIdentification = null;
-                await DbContext.SaveChangesAsync();
-
-                await Clients.All.SendAsync("UsersOnline",
-                    await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
-            }
-
-            await base.OnDisconnectedAsync(exception);
-        }
+        private ClientPair OppositeEntry(string otherUID) =>
+                                    DbContext.ClientPairs.SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
     }
 }
