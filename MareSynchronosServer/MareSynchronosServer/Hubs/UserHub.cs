@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -30,9 +29,6 @@ namespace MareSynchronosServer.Hubs
 
             string userid = AuthenticatedUserId;
             var userEntry = await DbContext.Users.SingleAsync(u => u.UID == userid);
-            var charData = DbContext.CharacterData.Where(u => u.UserId == userid);
-            DbContext.RemoveRange(charData);
-            await DbContext.SaveChangesAsync();
             var ownPairData = DbContext.ClientPairs.Where(u => u.User.UID == userid);
             DbContext.RemoveRange(ownPairData);
             await DbContext.SaveChangesAsync();
@@ -50,7 +46,6 @@ namespace MareSynchronosServer.Hubs
             DbContext.RemoveRange(otherPairData);
             DbContext.Remove(userEntry);
             await DbContext.SaveChangesAsync();
-
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
@@ -122,8 +117,6 @@ namespace MareSynchronosServer.Hubs
                     .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == user && !u.IsPaused).ToList();
                 await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, user.CharacterIdentification);
 
-                var outdatedCharacterData = DbContext.CharacterData.Where(v => v.UserId == user.UID);
-                DbContext.RemoveRange(outdatedCharacterData);
                 user.CharacterIdentification = null;
                 await DbContext.SaveChangesAsync();
 
@@ -198,13 +191,13 @@ namespace MareSynchronosServer.Hubs
         {
             if (uid == AuthenticatedUserId) return;
             uid = uid.Trim();
-            Logger.LogInformation("User " + AuthenticatedUserId + " adding " + uid + " to whitelist");
             var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             var existingEntry =
                 await DbContext.ClientPairs.SingleOrDefaultAsync(p =>
                     p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid);
             if (otherUser == null || existingEntry != null) return;
+            Logger.LogInformation("User " + AuthenticatedUserId + " adding " + uid + " to whitelist");
             ClientPair wl = new ClientPair()
             {
                 IsPaused = false,
@@ -248,10 +241,10 @@ namespace MareSynchronosServer.Hubs
         public async Task SendPairedClientPauseChange(string uid, bool isPaused)
         {
             if (uid == AuthenticatedUserId) return;
-            Logger.LogInformation("User " + AuthenticatedUserId + " changed pause status with " + uid + " to " + isPaused);
             var user = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;
+            Logger.LogInformation("User " + AuthenticatedUserId + " changed pause status with " + uid + " to " + isPaused);
             ClientPair wl =
                 await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
             wl.IsPaused = isPaused;
@@ -285,17 +278,17 @@ namespace MareSynchronosServer.Hubs
         {
             if (uid == AuthenticatedUserId) return;
 
-            Logger.LogInformation("User " + AuthenticatedUserId + " removed " + uid + " from whitelist");
-            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+            var sender = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;
+            Logger.LogInformation("User " + AuthenticatedUserId + " removed " + uid + " from whitelist");
             ClientPair wl =
-                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
+                await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == sender && w.OtherUser == otherUser);
             if (wl == null) return;
             DbContext.ClientPairs.Remove(wl);
             await DbContext.SaveChangesAsync();
             var otherEntry = OppositeEntry(uid);
-            await Clients.User(user.UID)
+            await Clients.User(sender.UID)
                 .SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
@@ -305,18 +298,18 @@ namespace MareSynchronosServer.Hubs
             {
                 if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
-                    await Clients.User(user.UID)
+                    await Clients.User(sender.UID)
                         .SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, otherUser.CharacterIdentification);
                     await Clients.User(otherUser.UID)
-                        .SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, user.CharacterIdentification);
+                        .SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, sender.CharacterIdentification);
+                    await Clients.User(otherUser.UID).SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
+                    {
+                        OtherUID = sender.UID,
+                        IsPaused = otherEntry.IsPaused,
+                        IsPausedFromOthers = false,
+                        IsSynced = false
+                    }, sender.CharacterIdentification);
                 }
-                await Clients.User(uid).SendAsync(UserHubAPI.OnUpdateClientPairs, new ClientPairDto()
-                {
-                    OtherUID = user.UID,
-                    IsPaused = otherEntry.IsPaused,
-                    IsPausedFromOthers = false,
-                    IsSynced = false
-                }, user.CharacterIdentification);
             }
         }
 

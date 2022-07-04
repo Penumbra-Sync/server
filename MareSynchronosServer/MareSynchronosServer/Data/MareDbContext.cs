@@ -15,7 +15,6 @@ namespace MareSynchronosServer.Data
         public DbSet<User> Users { get; set; }
         public DbSet<FileCache> Files { get; set; }
         public DbSet<ClientPair> ClientPairs { get; set; }
-        public DbSet<CharacterData> CharacterData { get; set; }
         public DbSet<ForbiddenUploadEntry> ForbiddenUploadEntries { get; set; }
         public DbSet<Banned> BannedUsers { get; set; }
 
@@ -25,14 +24,6 @@ namespace MareSynchronosServer.Data
             modelBuilder.Entity<User>().ToTable("Users");
             modelBuilder.Entity<FileCache>().ToTable("FileCaches");
             modelBuilder.Entity<ClientPair>().ToTable("ClientPairs");
-            modelBuilder.Entity<CharacterData>()
-                .Property(b => b.CharacterCache)
-                .HasConversion(
-                    v => JsonConvert.SerializeObject(v),
-                    v => JsonConvert.DeserializeObject<CharacterCacheDto>(v));
-            modelBuilder.Entity<CharacterData>()
-                .ToTable("CharacterData")
-                .HasKey(k => new { k.UserId, k.JobId });
             modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("ForbiddenUploadEntries");
             modelBuilder.Entity<Banned>().ToTable("BannedUsers");
         }

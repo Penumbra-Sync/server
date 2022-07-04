@@ -47,7 +47,6 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " deleted all their files");
 
-            DbContext.CharacterData.RemoveRange(DbContext.CharacterData.Where(c => c.UserId == AuthenticatedUserId));
             await DbContext.SaveChangesAsync();
             var ownFiles = await DbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync();
             foreach (var file in ownFiles)
@@ -140,7 +139,7 @@ namespace MareSynchronosServer.Hubs
         [HubMethodName(FilesHubAPI.InvokeSendFiles)]
         public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
         {
-            fileListHashes = fileListHashes.Distinct().ToList();
+            fileListHashes = fileListHashes.Where(f => !string.IsNullOrEmpty(f)).Distinct().ToList();
             Logger.LogInformation("User " + AuthenticatedUserId + " sending files");
             var forbiddenFiles = DbContext.ForbiddenUploadEntries.Where(f => fileListHashes.Contains(f.Hash));
             var filesToUpload = new List<UploadFileDto>();

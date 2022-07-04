@@ -28,7 +28,6 @@ namespace MareSynchronosServer
                 {
                     user.CharacterIdentification = string.Empty;
                 }
-                context.CharacterData.RemoveRange(context.CharacterData);
                 var looseFiles = context.Files.Where(f => f.Uploaded == false);
                 context.RemoveRange(looseFiles);
                 context.SaveChanges();
