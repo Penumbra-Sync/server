@@ -8,6 +8,5 @@ namespace MareSynchronos.API
         public string GlamourerData { get; set; }
         public string ManipulationData { get; set; }
         public string Hash { get; set; }
-        public int JobId { get; set; }
     }
 }

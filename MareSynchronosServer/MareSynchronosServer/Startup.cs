@@ -38,6 +38,7 @@ namespace MareSynchronosServer
                 hubOptions.StreamBufferCapacity = 200;
             });
 
+            services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
 
             services.AddDbContext<MareDbContext>(options =>
@@ -46,6 +47,7 @@ namespace MareSynchronosServer
             });
 
             services.AddHostedService<FileCleanupService>();
+            services.AddHostedService(provider => provider.GetService<SystemInfoService>());
 
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>

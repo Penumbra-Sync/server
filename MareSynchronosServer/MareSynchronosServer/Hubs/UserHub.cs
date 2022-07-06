@@ -65,8 +65,6 @@ namespace MareSynchronosServer.Hubs
                 .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync();
 
             await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, ownUser.CharacterIdentification);
-            await Clients.All.SendAsync(UserHubAPI.OnUsersOnline,
-                await DbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
@@ -82,22 +80,22 @@ namespace MareSynchronosServer.Hubs
         {
             string userid = AuthenticatedUserId;
             var user = GetAuthenticatedUser();
-            return DbContext.ClientPairs
+            var pairs = await DbContext.ClientPairs
                 .Include(u => u.OtherUser)
                 .Include(u => u.User)
                 .Where(w => w.User.UID == userid)
-                .ToList()
-                .Select(w =>
+                .ToListAsync();
+            return pairs.Select(w =>
+            {
+                var otherEntry = OppositeEntry(w.OtherUser.UID);
+                return new ClientPairDto
                 {
-                    var otherEntry = OppositeEntry(w.OtherUser.UID);
-                    return new ClientPairDto
-                    {
-                        IsPaused = w.IsPaused,
-                        OtherUID = w.OtherUser.UID,
-                        IsSynced = otherEntry != null,
-                        IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                    };
-                }).ToList();
+                    IsPaused = w.IsPaused,
+                    OtherUID = w.OtherUser.UID,
+                    IsSynced = otherEntry != null,
+                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                };
+            }).ToList();
         }
 
         public override async Task OnDisconnectedAsync(Exception exception)

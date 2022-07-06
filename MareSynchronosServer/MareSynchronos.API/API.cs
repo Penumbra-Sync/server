@@ -8,7 +8,7 @@ namespace MareSynchronos.API
 {
     public class API
     {
-        public const int Version = 2;
+        public const int Version = 3;
     }
 
     public class FilesHubAPI
@@ -28,6 +28,8 @@ namespace MareSynchronos.API
     {
         public const string Path = "/heartbeat";
         public const string InvokeHeartbeat = "Heartbeat";
+        public const string InvokeGetSystemInfo = "GetSystemInfo";
+        public const string OnUpdateSystemInfo = "OnUpdateSystemInfo";
     }
 
     public class AdminHubAPI
@@ -64,7 +66,6 @@ namespace MareSynchronos.API
         public const string InvokeGetPairedClients = "GetPairedClients";
         public const string SendDeleteAccount = "DeleteAccount";
 
-        public const string OnUsersOnline = "UsersOnline";
         public const string OnUpdateClientPairs = "UpdateClientPairs";
         public const string OnReceiveCharacterData = "ReceiveCharacterData";
         public const string OnRemoveOnlinePairedPlayer = "RemoveOnlinePairedPlayer";
