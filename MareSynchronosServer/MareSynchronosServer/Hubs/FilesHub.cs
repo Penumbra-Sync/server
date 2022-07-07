@@ -47,7 +47,6 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " deleted all their files");
 
-            await DbContext.SaveChangesAsync();
             var ownFiles = await DbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync();
             foreach (var file in ownFiles)
             {

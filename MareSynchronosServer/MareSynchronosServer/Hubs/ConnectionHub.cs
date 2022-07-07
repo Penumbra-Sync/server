@@ -41,7 +41,10 @@ namespace MareSynchronosServer.Hubs
                 };
             }
 
-            return new ConnectionDto();
+            return new ConnectionDto()
+            {
+                ServerVersion = API.Version
+            };
         }
 
         [HubMethodName(ConnectionHubAPI.InvokeGetSystemInfo)]
