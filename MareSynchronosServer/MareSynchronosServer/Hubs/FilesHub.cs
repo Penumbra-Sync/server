@@ -71,7 +71,7 @@ namespace MareSynchronosServer.Hubs
             int readByteCount;
             var buffer = new byte[chunkSize];
 
-            await using var fs = File.Open(Path.Combine(BasePath, hash), FileMode.Open, FileAccess.Read);
+            await using var fs = File.Open(Path.Combine(BasePath, hash), FileMode.Open, FileAccess.Read, FileShare.Read);
             while ((readByteCount = await fs.ReadAsync(buffer, 0, chunkSize, ct)) > 0)
             {
                 await Task.Delay(10, ct);
