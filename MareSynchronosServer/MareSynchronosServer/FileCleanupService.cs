@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronosServer.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -43,35 +45,38 @@ namespace MareSynchronosServer
 
             _logger.LogInformation($"Cleaning up files older than {filesOlderThanDays} days");
 
-            using var scope = _services.CreateScope();
-            var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
-
-            var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
-            var filesToDelete =
-                dbContext.Files.Where(f => f.LastAccessTime < prevTime);
-            dbContext.RemoveRange(filesToDelete);
-            dbContext.SaveChanges();
-            foreach (var file in filesToDelete)
+            try
             {
-                var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
-                if (File.Exists(fileName))
-                {
-                    _logger.LogInformation("Deleting: " + fileName);
-                    File.Delete(fileName);
-                }
-            }
-            var allFiles = dbContext.Files.Where(f => f.Uploaded);
-            foreach (var file in allFiles)
-            {
-                var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
-                if (!File.Exists(fileName))
-                {
-                    _logger.LogInformation("File does not exist anymore: " + fileName);
-                    dbContext.Files.Remove(file);
-                }
-            }
+                using var scope = _services.CreateScope();
+                var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            dbContext.SaveChanges();
+                var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
+
+                dbContext.Database.BeginTransaction(IsolationLevel.Snapshot);
+                var allFiles = dbContext.Files.Where(f => f.Uploaded);
+                foreach (var file in allFiles)
+                {
+                    var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
+                    if (!File.Exists(fileName))
+                    {
+                        _logger.LogInformation("File does not exist anymore: " + fileName);
+                        dbContext.Files.Remove(file);
+                    } else if (new FileInfo(fileName).LastAccessTime < prevTime)
+                    {
+                        _logger.LogInformation("File outdated: " + fileName);
+                        dbContext.Files.Remove(file);
+                        File.Delete(fileName);
+                    }
+                }
+
+                _logger.LogInformation($"Cleanup complete");
+
+                dbContext.SaveChanges();
+                dbContext.Database.CommitTransaction();
+            }
+            catch
+            {
+            }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

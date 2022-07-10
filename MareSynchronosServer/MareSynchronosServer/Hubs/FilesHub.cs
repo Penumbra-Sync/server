@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -62,11 +63,9 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " downloading file: " + hash);
 
-            var file = DbContext.Files.SingleOrDefault(f => f.Hash == hash);
+            var file = DbContext.Files.AsNoTracking()
+                .SingleOrDefault(f => f.Hash == hash);
             if (file == null) yield break;
-            file.LastAccessTime = DateTime.Now;
-            DbContext.Update(file);
-            await DbContext.SaveChangesAsync(ct);
             var chunkSize = 1024 * 512; // 512kb
             int readByteCount;
             var buffer = new byte[chunkSize];
@@ -85,8 +84,9 @@ namespace MareSynchronosServer.Hubs
         [HubMethodName(FilesHubAPI.InvokeGetFileSize)]
         public async Task<DownloadFileDto> GetFileSize(string hash)
         {
-            var file = await DbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
-            var forbidden = DbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
+            var file = await DbContext.Files.AsNoTracking().SingleOrDefaultAsync(f => f.Hash == hash);
+            var forbidden = DbContext.ForbiddenUploadEntries.AsNoTracking().
+                SingleOrDefault(f => f.Hash == hash);
             var fileInfo = new FileInfo(Path.Combine(BasePath, hash));
             long fileSize = 0;
             try
@@ -122,7 +122,8 @@ namespace MareSynchronosServer.Hubs
         public async Task<bool> IsUploadFinished()
         {
             var userUid = AuthenticatedUserId;
-            return await DbContext.Files.AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded);
+            return await DbContext.Files.AsNoTracking()
+                .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded);
         }
 
         public override Task OnDisconnectedAsync(Exception exception)
@@ -140,7 +141,7 @@ namespace MareSynchronosServer.Hubs
         {
             fileListHashes = fileListHashes.Where(f => !string.IsNullOrEmpty(f)).Distinct().ToList();
             Logger.LogInformation("User " + AuthenticatedUserId + " sending files");
-            var forbiddenFiles = DbContext.ForbiddenUploadEntries.Where(f => fileListHashes.Contains(f.Hash));
+            var forbiddenFiles = DbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash));
             var filesToUpload = new List<UploadFileDto>();
             filesToUpload.AddRange(forbiddenFiles.Select(f => new UploadFileDto()
             {
@@ -217,6 +218,7 @@ namespace MareSynchronosServer.Hubs
                     Logger.LogWarning($"Computed file hash was not expected file hash. Computed: {computedHashString}, Expected {hash}");
                     DbContext.Remove(relatedFile);
                     await DbContext.SaveChangesAsync();
+
                     return;
                 }
 
@@ -233,6 +235,7 @@ namespace MareSynchronosServer.Hubs
                 DbContext.Remove(relatedFile);
                 await DbContext.SaveChangesAsync();
             }
+
         }
     }
 }

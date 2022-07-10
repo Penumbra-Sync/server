@@ -41,10 +41,12 @@ namespace MareSynchronosServer
             services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
 
-            services.AddDbContext<MareDbContext>(options =>
+            services.AddDbContextPool<MareDbContext>(options =>
             {
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));
-            });
+                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"), builder =>
+                {
+                });
+            }, 32000);
 
             services.AddHostedService<FileCleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());

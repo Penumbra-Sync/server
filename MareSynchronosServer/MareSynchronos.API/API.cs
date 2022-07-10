@@ -8,7 +8,7 @@ namespace MareSynchronos.API
 {
     public class API
     {
-        public const int Version = 3;
+        public const int Version = 4;
     }
 
     public class FilesHubAPI

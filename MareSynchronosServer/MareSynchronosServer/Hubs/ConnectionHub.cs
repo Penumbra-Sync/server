@@ -22,16 +22,22 @@ namespace MareSynchronosServer.Hubs
         }
 
         [HubMethodName(ConnectionHubAPI.InvokeHeartbeat)]
-        public async Task<ConnectionDto> Heartbeat()
+        public async Task<ConnectionDto> Heartbeat(string? characterIdentification)
         {
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
+            Logger.LogInformation("Connection from " + userId + ", CI: " + characterIdentification);
+
             await Clients.Caller.SendAsync(ConnectionHubAPI.OnUpdateSystemInfo, _systemInfoService.SystemInfoDto);
 
-            if (userId != null)
+            var isBanned = await DbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == characterIdentification);
+
+            if (userId != null && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
                 Logger.LogInformation("Connection from " + userId);
                 var user = (await DbContext.Users.SingleAsync(u => u.UID == userId));
+                user.CharacterIdentification = characterIdentification;
+                await DbContext.SaveChangesAsync();
                 return new ConnectionDto
                 {
                     ServerVersion = API.Version,

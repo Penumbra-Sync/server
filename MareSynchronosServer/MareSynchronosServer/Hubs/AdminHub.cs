@@ -81,7 +81,7 @@ namespace MareSynchronosServer.Hubs
         {
             if (!IsModerator) return null;
 
-            return await DbContext.BannedUsers.Select(b => new BannedUserDto()
+            return await DbContext.BannedUsers.AsNoTracking().Select(b => new BannedUserDto()
             {
                 CharacterHash = b.CharacterIdentification,
                 Reason = b.Reason
@@ -94,7 +94,7 @@ namespace MareSynchronosServer.Hubs
         {
             if (!IsModerator) return null;
 
-            return await DbContext.ForbiddenUploadEntries.Select(b => new ForbiddenFileDto()
+            return await DbContext.ForbiddenUploadEntries.AsNoTracking().Select(b => new ForbiddenFileDto()
             {
                 Hash = b.Hash,
                 ForbiddenBy = b.ForbiddenBy
@@ -107,7 +107,7 @@ namespace MareSynchronosServer.Hubs
         {
             if (!IsModerator) return null;
 
-            return await DbContext.Users.Where(b => !string.IsNullOrEmpty(b.CharacterIdentification)).Select(b => new OnlineUserDto
+            return await DbContext.Users.AsNoTracking().Where(b => !string.IsNullOrEmpty(b.CharacterIdentification)).Select(b => new OnlineUserDto
             {
                 CharacterNameHash = b.CharacterIdentification,
                 UID = b.UID,

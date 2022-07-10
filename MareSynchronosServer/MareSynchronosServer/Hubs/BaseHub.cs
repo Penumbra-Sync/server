@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
@@ -20,9 +21,9 @@ namespace MareSynchronosServer.Hubs
 
         protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
 
-        protected Models.User? GetAuthenticatedUser()
+        protected Models.User GetAuthenticatedUserUntracked()
         {
-            return DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
+            return DbContext.Users.AsNoTrackingWithIdentityResolution().Single(u => u.UID == AuthenticatedUserId);
         }
 
         protected Models.User? GetUserFromCID(string cid)
