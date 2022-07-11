@@ -141,7 +141,7 @@ namespace MareSynchronosServer.Hubs
         {
             fileListHashes = fileListHashes.Where(f => !string.IsNullOrEmpty(f)).Distinct().ToList();
             Logger.LogInformation("User " + AuthenticatedUserId + " sending files");
-            var forbiddenFiles = DbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash));
+            var forbiddenFiles = await DbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash)).ToListAsync();
             var filesToUpload = new List<UploadFileDto>();
             filesToUpload.AddRange(forbiddenFiles.Select(f => new UploadFileDto()
             {
@@ -150,7 +150,7 @@ namespace MareSynchronosServer.Hubs
                 IsForbidden = true
             }));
             fileListHashes.RemoveAll(f => filesToUpload.Any(u => u.Hash == f));
-            var existingFiles = DbContext.Files.Where(f => fileListHashes.Contains(f.Hash));
+            var existingFiles = await DbContext.Files.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash)).ToListAsync();
             foreach (var file in fileListHashes.Where(f => existingFiles.All(e => e.Hash != f) && filesToUpload.All(u => u.Hash != f)))
             {
                 Logger.LogInformation("User " + AuthenticatedUserId + " needs upload: " + file);

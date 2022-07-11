@@ -32,15 +32,15 @@ namespace MareSynchronosServer.Authentication
 
             using var sha256 = SHA256.Create();
             var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(authHeader))).Replace("-", "");
-            var user = await _mareDbContext.Users.AsNoTracking().SingleOrDefaultAsync(m => m.SecretKey == hashedHeader);
+            var uid = (await _mareDbContext.Users.AsNoTracking().FirstOrDefaultAsync(m => m.SecretKey == hashedHeader))?.UID;
 
-            if (user == null)
+            if (uid == null)
             {
                 return AuthenticateResult.Fail("Failed Authorization");
             }
 
             var claims = new List<Claim> {
-                new Claim(ClaimTypes.NameIdentifier, user.UID)
+                new Claim(ClaimTypes.NameIdentifier, uid)
             };
 
             var identity = new ClaimsIdentity(claims, nameof(SecretKeyAuthenticationHandler));

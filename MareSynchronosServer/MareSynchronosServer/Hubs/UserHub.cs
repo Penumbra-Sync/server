@@ -134,21 +134,22 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
 
-            var uid = AuthenticatedUserId;
-            var entriesHavingThisUser = DbContext.ClientPairs.AsNoTracking()
+            var user = GetAuthenticatedUserUntracked();
+            var senderPairedUsers = DbContext.ClientPairs.AsNoTracking()
                 .Include(w => w.User)
                 .Include(w => w.OtherUser)
-                .Where(w => w.OtherUser.UID == uid && !w.IsPaused
-                    && visibleCharacterIds.Contains(w.User.CharacterIdentification)).ToList();
+                .Where(w => w.User.UID == user.UID && !w.IsPaused
+                    && visibleCharacterIds.Contains(w.OtherUser.CharacterIdentification))
+                .Select(u => u.OtherUser).ToList();
 
-            foreach (var pair in entriesHavingThisUser)
+            foreach (var pairedUser in senderPairedUsers)
             {
-                var ownEntry = DbContext.ClientPairs.AsNoTracking()
-                    .SingleOrDefault(w =>
-                    w.User.UID == uid && w.OtherUser.UID == pair.User.UID);
-                if (ownEntry == null || ownEntry.IsPaused) continue;
-                await Clients.User(pair.User.UID).SendAsync(UserHubAPI.OnReceiveCharacterData, characterCache,
-                    pair.OtherUser.CharacterIdentification);
+                var isPaused = DbContext.ClientPairs.AsNoTracking()
+                    .FirstOrDefault(w =>
+                    w.User.UID == pairedUser.UID && w.OtherUser.UID == user.UID)?.IsPaused ?? true;
+                if (isPaused) continue;
+                await Clients.User(pairedUser.UID).SendAsync(UserHubAPI.OnReceiveCharacterData, characterCache,
+                    user.CharacterIdentification);
             }
         }
 
