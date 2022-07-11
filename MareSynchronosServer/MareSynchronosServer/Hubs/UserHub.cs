@@ -55,7 +55,7 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " requested online characters");
 
-            var ownUser = GetAuthenticatedUserUntracked();
+            var ownUser = await GetAuthenticatedUserUntrackedAsync();
 
             var otherUsers = await DbContext.ClientPairs.AsNoTracking()
             .Include(u => u.User)
@@ -102,23 +102,23 @@ namespace MareSynchronosServer.Hubs
 
         public override async Task OnDisconnectedAsync(Exception exception)
         {
-            var user = DbContext.Users.AsNoTracking().SingleOrDefault(u => u.UID == AuthenticatedUserId);
+            var user = await DbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
                 Logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
-                var otherUsers = DbContext.ClientPairs.AsNoTracking()
+                var otherUsers = await DbContext.ClientPairs.AsNoTracking()
                     .Include(u => u.User)
                     .Include(u => u.OtherUser)
                     .Where(w => w.User.UID == user.UID && !w.IsPaused)
                     .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                    .Select(e => e.OtherUser).ToList();
-                var otherEntries = DbContext.ClientPairs.AsNoTracking().Include(u => u.User)
-                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser.UID == user.UID && !u.IsPaused).ToList();
+                    .Select(e => e.OtherUser).ToListAsync();
+                var otherEntries = await DbContext.ClientPairs.AsNoTracking().Include(u => u.User)
+                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser.UID == user.UID && !u.IsPaused).ToListAsync();
                 await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(UserHubAPI.OnRemoveOnlinePairedPlayer, user.CharacterIdentification);
 
 
-                DbContext.Users.Single(u => u.UID == AuthenticatedUserId).CharacterIdentification = null;
+                (await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification = null;
                 await DbContext.SaveChangesAsync();
 
                 await Clients.All.SendAsync("UsersOnline",
@@ -134,19 +134,19 @@ namespace MareSynchronosServer.Hubs
         {
             Logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
 
-            var user = GetAuthenticatedUserUntracked();
-            var senderPairedUsers = DbContext.ClientPairs.AsNoTracking()
+            var user = await GetAuthenticatedUserUntrackedAsync();
+            var senderPairedUsers = await DbContext.ClientPairs.AsNoTracking()
                 .Include(w => w.User)
                 .Include(w => w.OtherUser)
                 .Where(w => w.User.UID == user.UID && !w.IsPaused
                     && visibleCharacterIds.Contains(w.OtherUser.CharacterIdentification))
-                .Select(u => u.OtherUser).ToList();
+                .Select(u => u.OtherUser).ToListAsync();
 
             foreach (var pairedUser in senderPairedUsers)
             {
-                var isPaused = DbContext.ClientPairs.AsNoTracking()
-                    .FirstOrDefault(w =>
-                    w.User.UID == pairedUser.UID && w.OtherUser.UID == user.UID)?.IsPaused ?? true;
+                var isPaused = (await DbContext.ClientPairs.AsNoTracking()
+                    .FirstOrDefaultAsync(w =>
+                    w.User.UID == pairedUser.UID && w.OtherUser.UID == user.UID))?.IsPaused ?? true;
                 if (isPaused) continue;
                 await Clients.User(pairedUser.UID).SendAsync(UserHubAPI.OnReceiveCharacterData, characterCache,
                     user.CharacterIdentification);
@@ -194,13 +194,13 @@ namespace MareSynchronosServer.Hubs
         {
             if (uid == AuthenticatedUserId) return;
             uid = uid.Trim();
-            var user = DbContext.Users.Single(u => u.UID == AuthenticatedUserId);
+            var user = await DbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
 
             var otherUser = await DbContext.Users
                 .SingleOrDefaultAsync(u => u.UID == uid);
             var existingEntry =
                 await DbContext.ClientPairs.AsNoTracking()
-                    .SingleOrDefaultAsync(p =>
+                    .FirstOrDefaultAsync(p =>
                     p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid);
             if (otherUser == null || existingEntry != null) return;
             Logger.LogInformation("User " + AuthenticatedUserId + " adding " + uid + " to whitelist");
@@ -218,19 +218,11 @@ namespace MareSynchronosServer.Hubs
                 {
                     OtherUID = otherUser.UID,
                     IsPaused = false,
-                    IsPausedFromOthers = false,
+                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
                     IsSynced = otherEntry != null
                 }, string.Empty);
             if (otherEntry != null)
             {
-                if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
-                {
-                    await Clients.User(user.UID)
-                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, otherUser.CharacterIdentification);
-                    await Clients.User(otherUser.UID)
-                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, user.CharacterIdentification);
-                }
-
                 await Clients.User(uid).SendAsync(UserHubAPI.OnUpdateClientPairs,
                     new ClientPairDto()
                     {
@@ -239,6 +231,14 @@ namespace MareSynchronosServer.Hubs
                         IsPausedFromOthers = false,
                         IsSynced = true
                     }, user.CharacterIdentification);
+
+                if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
+                {
+                    await Clients.User(user.UID)
+                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, otherUser.CharacterIdentification);
+                    await Clients.User(otherUser.UID)
+                        .SendAsync(UserHubAPI.OnAddOnlinePairedPlayer, user.CharacterIdentification);
+                }
             }
         }
 
@@ -247,8 +247,8 @@ namespace MareSynchronosServer.Hubs
         public async Task SendPairedClientPauseChange(string uid, bool isPaused)
         {
             if (uid == AuthenticatedUserId) return;
-            var user = DbContext.Users.AsNoTracking()
-                .Single(u => u.UID == AuthenticatedUserId);
+            var user = await DbContext.Users.AsNoTracking()
+                .SingleAsync(u => u.UID == AuthenticatedUserId);
             var otherUser = await DbContext.Users.AsNoTracking()
                 .SingleOrDefaultAsync(u => u.UID == uid);
             if (otherUser == null) return;

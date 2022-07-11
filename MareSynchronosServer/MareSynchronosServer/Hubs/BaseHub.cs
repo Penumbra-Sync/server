@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Threading.Tasks;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -21,26 +22,11 @@ namespace MareSynchronosServer.Hubs
 
         protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
 
-        protected Models.User GetAuthenticatedUserUntracked()
+        protected async Task<Models.User> GetAuthenticatedUserUntrackedAsync()
         {
-            return DbContext.Users.AsNoTrackingWithIdentityResolution().Single(u => u.UID == AuthenticatedUserId);
+            return await DbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId);
         }
-
-        protected Models.User? GetUserFromCID(string cid)
-        {
-            return DbContext.Users.SingleOrDefault(c => c.CharacterIdentification == cid);
-        }
-
-        protected Models.User? GetUserFromUID(string uid)
-        {
-            return DbContext.Users.SingleOrDefault(c => c.UID == uid);
-        }
-
-        protected bool IsUserOnline(string uid)
-        {
-            return DbContext.Users.Any(c => c.UID == uid && !string.IsNullOrEmpty(c.CharacterIdentification));
-        }
-
+        
         public static string GenerateRandomString(int length, string allowableChars = null)
         {
             if (string.IsNullOrEmpty(allowableChars))
