@@ -158,7 +158,6 @@ namespace MareSynchronosServer.Hubs
                 await DbContext.Files.AddAsync(new FileCache()
                 {
                     Hash = file,
-                    LastAccessTime = DateTime.Now,
                     Uploaded = false,
                     Uploader = DbContext.Users.Single(u => u.UID == userId)
                 });
@@ -225,7 +224,6 @@ namespace MareSynchronosServer.Hubs
                 await File.WriteAllBytesAsync(Path.Combine(BasePath, hash), uploadedFile.ToArray());
                 relatedFile = DbContext.Files.Single(f => f.Hash == hash);
                 relatedFile.Uploaded = true;
-                relatedFile.LastAccessTime = DateTime.Now;
                 await DbContext.SaveChangesAsync();
                 Logger.LogInformation("File " + hash + " added to DB");
             }

@@ -7,10 +7,10 @@ namespace MareSynchronosServer.Models
     public class FileCache
     {
         [Key]
+        [MaxLength(40)]
         public string Hash { get; set; }
         public User Uploader { get; set; }
         public bool Uploaded { get; set; }
-        public DateTime LastAccessTime { get; set; }
         [Timestamp]
         public byte[] Timestamp { get; set; }
     }

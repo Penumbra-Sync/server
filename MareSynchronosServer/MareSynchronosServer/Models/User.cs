@@ -6,6 +6,7 @@ namespace MareSynchronosServer.Models
     public class User
     {
         [Key]
+        [MaxLength(10)]
         public string UID { get; set; }
         public string SecretKey { get; set; }
         public string CharacterIdentification { get; set; }
