@@ -92,10 +92,17 @@ public class SystemInfoService : IHostedService, IDisposable
         int uploadedFiles = 0;
         var loggedInUsers = dbContext.Users.Count(u => !string.IsNullOrEmpty(u.CharacterIdentification));
         var localCacheSize = Directory.EnumerateFiles(_configuration["CacheDirectory"])
-            .Sum(f =>
+            .ToList().Sum(f =>
             {
                 uploadedFiles++;
-                return new FileInfo(f).Length;
+                try
+                {
+                    return new FileInfo(f).Length;
+                }
+                catch
+                {
+                    return 0;
+                }
             });
 
         var totalNetworkOut = bytesSent / totalSPassed;
