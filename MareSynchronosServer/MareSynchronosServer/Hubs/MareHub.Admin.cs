@@ -3,85 +3,79 @@ using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
-    public class AdminHub : BaseHub<AdminHub>
+    public partial class MareHub
     {
-        public AdminHub(MareDbContext context, ILogger<AdminHub> logger) : base(context, logger)
-        {
-        }
+        private bool IsAdmin => _dbContext.Users.Single(b => b.UID == AuthenticatedUserId).IsAdmin;
 
-        private bool IsAdmin => DbContext.Users.Single(b => b.UID == AuthenticatedUserId).IsAdmin;
+        private bool IsModerator => _dbContext.Users.Single(b => b.UID == AuthenticatedUserId).IsModerator || IsAdmin;
 
-        private bool IsModerator => DbContext.Users.Single(b => b.UID == AuthenticatedUserId).IsModerator || IsAdmin;
-
-        private List<string> OnlineAdmins => DbContext.Users.Where(u => !string.IsNullOrEmpty(u.CharacterIdentification) && (u.IsModerator || u.IsAdmin))
+        private List<string> OnlineAdmins => _dbContext.Users.Where(u => !string.IsNullOrEmpty(u.CharacterIdentification) && (u.IsModerator || u.IsAdmin))
                                 .Select(u => u.UID).ToList();
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.SendChangeModeratorStatus)]
+        [HubMethodName(Api.SendAdminChangeModeratorStatus)]
         public async Task ChangeModeratorStatus(string uid, bool isModerator)
         {
             if (!IsAdmin) return;
-            var user = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
 
             if (user == null) return;
 
             user.IsModerator = isModerator;
-            DbContext.Update(user);
-            await DbContext.SaveChangesAsync();
-            await Clients.Users(user.UID).SendAsync(AdminHubAPI.OnForcedReconnect);
+            _dbContext.Update(user);
+            await _dbContext.SaveChangesAsync();
+            await Clients.Users(user.UID).SendAsync(Api.OnAdminForcedReconnect);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.SendDeleteBannedUser)]
+        [HubMethodName(Api.SendAdminDeleteBannedUser)]
         public async Task DeleteBannedUser(BannedUserDto dto)
         {
             if (!IsModerator || string.IsNullOrEmpty(dto.CharacterHash)) return;
 
             var existingUser =
-                await DbContext.BannedUsers.SingleOrDefaultAsync(b => b.CharacterIdentification == dto.CharacterHash);
+                await _dbContext.BannedUsers.SingleOrDefaultAsync(b => b.CharacterIdentification == dto.CharacterHash);
             if (existingUser == null)
             {
                 return;
             }
 
-            DbContext.Remove(existingUser);
-            await DbContext.SaveChangesAsync();
-            await Clients.Users(OnlineAdmins).SendAsync(AdminHubAPI.OnDeleteBannedUser, dto);
+            _dbContext.Remove(existingUser);
+            await _dbContext.SaveChangesAsync();
+            await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminDeleteBannedUser, dto);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.SendDeleteForbiddenFile)]
+        [HubMethodName(Api.SendAdminDeleteForbiddenFile)]
         public async Task DeleteForbiddenFile(ForbiddenFileDto dto)
         {
             if (!IsAdmin || string.IsNullOrEmpty(dto.Hash)) return;
 
             var existingFile =
-                await DbContext.ForbiddenUploadEntries.SingleOrDefaultAsync(b => b.Hash == dto.Hash);
+                await _dbContext.ForbiddenUploadEntries.SingleOrDefaultAsync(b => b.Hash == dto.Hash);
             if (existingFile == null)
             {
                 return;
             }
 
-            DbContext.Remove(existingFile);
-            await DbContext.SaveChangesAsync();
-            await Clients.Users(OnlineAdmins).SendAsync(AdminHubAPI.OnDeleteForbiddenFile, dto);
+            _dbContext.Remove(existingFile);
+            await _dbContext.SaveChangesAsync();
+            await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminDeleteForbiddenFile, dto);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.InvokeGetBannedUsers)]
+        [HubMethodName(Api.InvokeAdminGetBannedUsers)]
         public async Task<List<BannedUserDto>> GetBannedUsers()
         {
             if (!IsModerator) return null;
 
-            return await DbContext.BannedUsers.AsNoTracking().Select(b => new BannedUserDto()
+            return await _dbContext.BannedUsers.AsNoTracking().Select(b => new BannedUserDto()
             {
                 CharacterHash = b.CharacterIdentification,
                 Reason = b.Reason
@@ -89,12 +83,12 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.InvokeGetForbiddenFiles)]
+        [HubMethodName(Api.InvokeAdminGetForbiddenFiles)]
         public async Task<List<ForbiddenFileDto>> GetForbiddenFiles()
         {
             if (!IsModerator) return null;
 
-            return await DbContext.ForbiddenUploadEntries.AsNoTracking().Select(b => new ForbiddenFileDto()
+            return await _dbContext.ForbiddenUploadEntries.AsNoTracking().Select(b => new ForbiddenFileDto()
             {
                 Hash = b.Hash,
                 ForbiddenBy = b.ForbiddenBy
@@ -102,12 +96,12 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.InvokeGetOnlineUsers)]
-        public async Task<List<OnlineUserDto>> GetOnlineUsers()
+        [HubMethodName(Api.InvokeUserGetOnlineUsers)]
+        public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
         {
             if (!IsModerator) return null;
 
-            return await DbContext.Users.AsNoTracking().Where(b => !string.IsNullOrEmpty(b.CharacterIdentification)).Select(b => new OnlineUserDto
+            return await _dbContext.Users.AsNoTracking().Where(b => !string.IsNullOrEmpty(b.CharacterIdentification)).Select(b => new OnlineUserDto
             {
                 CharacterNameHash = b.CharacterIdentification,
                 UID = b.UID,
@@ -117,62 +111,62 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.SendUpdateOrAddBannedUser)]
+        [HubMethodName(Api.SendAdminUpdateOrAddBannedUser)]
         public async Task UpdateOrAddBannedUser(BannedUserDto dto)
         {
             if (!IsModerator || string.IsNullOrEmpty(dto.CharacterHash)) return;
 
             var existingUser =
-                await DbContext.BannedUsers.SingleOrDefaultAsync(b => b.CharacterIdentification == dto.CharacterHash);
+                await _dbContext.BannedUsers.SingleOrDefaultAsync(b => b.CharacterIdentification == dto.CharacterHash);
             if (existingUser != null)
             {
                 existingUser.Reason = dto.Reason;
-                DbContext.Update(existingUser);
+                _dbContext.Update(existingUser);
             }
             else
             {
-                await DbContext.BannedUsers.AddAsync(new Banned
+                await _dbContext.BannedUsers.AddAsync(new Banned
                 {
                     CharacterIdentification = dto.CharacterHash,
                     Reason = dto.Reason
                 });
             }
 
-            await DbContext.SaveChangesAsync();
-            await Clients.Users(OnlineAdmins).SendAsync(AdminHubAPI.OnUpdateOrAddBannedUser, dto);
+            await _dbContext.SaveChangesAsync();
+            await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminUpdateOrAddBannedUser, dto);
             var bannedUser =
-                await DbContext.Users.SingleOrDefaultAsync(u => u.CharacterIdentification == dto.CharacterHash);
+                await _dbContext.Users.SingleOrDefaultAsync(u => u.CharacterIdentification == dto.CharacterHash);
             if (bannedUser != null)
             {
-                await Clients.User(bannedUser.UID).SendAsync(AdminHubAPI.OnForcedReconnect);
+                await Clients.User(bannedUser.UID).SendAsync(Api.OnAdminForcedReconnect);
             }
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(AdminHubAPI.SendUpdateOrAddForbiddenFile)]
+        [HubMethodName(Api.SendAdminUpdateOrAddForbiddenFile)]
         public async Task UpdateOrAddForbiddenFile(ForbiddenFileDto dto)
         {
             if (!IsAdmin || string.IsNullOrEmpty(dto.Hash)) return;
 
             var existingForbiddenFile =
-                await DbContext.ForbiddenUploadEntries.SingleOrDefaultAsync(b => b.Hash == dto.Hash);
+                await _dbContext.ForbiddenUploadEntries.SingleOrDefaultAsync(b => b.Hash == dto.Hash);
             if (existingForbiddenFile != null)
             {
                 existingForbiddenFile.ForbiddenBy = dto.ForbiddenBy;
-                DbContext.Update(existingForbiddenFile);
+                _dbContext.Update(existingForbiddenFile);
             }
             else
             {
-                await DbContext.ForbiddenUploadEntries.AddAsync(new ForbiddenUploadEntry
+                await _dbContext.ForbiddenUploadEntries.AddAsync(new ForbiddenUploadEntry
                 {
                     Hash = dto.Hash,
                     ForbiddenBy = dto.ForbiddenBy
                 });
             }
 
-            await DbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
 
-            await Clients.Users(OnlineAdmins).SendAsync(AdminHubAPI.OnUpdateOrAddForbiddenFile, dto);
+            await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminUpdateOrAddForbiddenFile, dto);
         }
     }
 }

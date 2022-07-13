@@ -90,19 +90,10 @@ namespace MareSynchronosServer
 
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapHub<ConnectionHub>(ConnectionHubAPI.Path, options =>
+                endpoints.MapHub<MareHub>(Api.Path, options =>
                 {
-                    options.Transports = HttpTransportType.WebSockets;
-                });
-                endpoints.MapHub<UserHub>(UserHubAPI.Path, options =>
-                {
-                    options.Transports = HttpTransportType.WebSockets;
-                });
-                endpoints.MapHub<AdminHub>(AdminHubAPI.Path, options => options.Transports = HttpTransportType.WebSockets);
-                endpoints.MapHub<FilesHub>(FilesHubAPI.Path, options =>
-                {
-                    options.ApplicationMaxBufferSize = long.MaxValue;
-                    options.TransportMaxBufferSize = long.MaxValue;
+                    options.ApplicationMaxBufferSize = 5242880;
+                    options.TransportMaxBufferSize = 5242880;
                     options.Transports = HttpTransportType.WebSockets;
                 });
             });

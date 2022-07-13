@@ -4,6 +4,7 @@ using MareSynchronosServer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20220713083057_MoveAuthToSeparateTable")]
+    partial class MoveAuthToSeparateTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -113,8 +115,7 @@ namespace MareSynchronosServer.Migrations
             modelBuilder.Entity("MareSynchronosServer.Models.ForbiddenUploadEntry", b =>
                 {
                     b.Property<string>("Hash")
-                        .HasMaxLength(40)
-                        .HasColumnType("nvarchar(40)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ForbiddenBy")
                         .HasColumnType("nvarchar(max)");
@@ -136,7 +137,7 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("CharacterIdentification")
-                        .HasColumnType("nvarchar(450)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsAdmin")
                         .HasColumnType("bit");
@@ -150,8 +151,6 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("rowversion");
 
                     b.HasKey("UID");
-
-                    b.HasIndex("CharacterIdentification");
 
                     b.ToTable("Users", (string)null);
                 });

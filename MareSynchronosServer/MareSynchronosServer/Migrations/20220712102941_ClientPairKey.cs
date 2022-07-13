@@ -24,7 +24,6 @@ namespace MareSynchronosServer.Migrations
                 name: "Id",
                 table: "ClientPairs");
 
-
             migrationBuilder.AlterColumn<string>(
                 name: "UserUID",
                 table: "ClientPairs",

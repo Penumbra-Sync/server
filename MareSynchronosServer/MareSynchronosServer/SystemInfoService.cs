@@ -21,12 +21,12 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IServiceProvider _services;
     private readonly IConfiguration _configuration;
-    private readonly IHubContext<ConnectionHub> _hubContext;
+    private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
     public SystemInfoService(ILogger<SystemInfoService> logger, IServiceProvider services,
-        IConfiguration configuration, IHubContext<ConnectionHub> hubContext)
+        IConfiguration configuration, IHubContext<MareHub> hubContext)
     {
         _logger = logger;
         _services = services;
@@ -114,7 +114,7 @@ public class SystemInfoService : IHostedService, IDisposable
             UploadedFiles = uploadedFiles
         };
 
-        _hubContext.Clients.All.SendAsync(ConnectionHubAPI.OnUpdateSystemInfo, SystemInfoDto);
+        _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
 
         _logger.LogInformation($"CPU:{cpuUsage:0.00}%, RAM Used:{(double)usedRAM / 1024 / 1024 / 1024:0.00}GB, Cache:{(double)localCacheSize / 1024 / 1024 / 1024:0.00}GB, Users:{loggedInUsers}, NetworkIn:{totalNetworkIn / 1024 / 1024:0.00}MB/s, NetworkOut:{totalNetworkOut / 1024 / 1024:0.00}MB/s");
     }

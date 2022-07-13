@@ -1,8 +1,5 @@
-﻿using System.Collections.Generic;
-using MareSynchronos.API;
-using MareSynchronosServer.Models;
+﻿using MareSynchronosServer.Models;
 using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json;
 
 namespace MareSynchronosServer.Data
 {
@@ -17,12 +14,16 @@ namespace MareSynchronosServer.Data
         public DbSet<ClientPair> ClientPairs { get; set; }
         public DbSet<ForbiddenUploadEntry> ForbiddenUploadEntries { get; set; }
         public DbSet<Banned> BannedUsers { get; set; }
+        public DbSet<Auth> Auth { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<Auth>().ToTable("Auth");
             modelBuilder.Entity<User>().ToTable("Users");
+            modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
             modelBuilder.Entity<FileCache>().ToTable("FileCaches");
+            modelBuilder.Entity<FileCache>().HasIndex(c => c.UploaderUID);
             modelBuilder.Entity<ClientPair>().ToTable("ClientPairs");
             modelBuilder.Entity<ClientPair>().HasKey(u => new { u.UserUID, u.OtherUserUID });
             modelBuilder.Entity<ClientPair>().HasIndex(c => c.UserUID);

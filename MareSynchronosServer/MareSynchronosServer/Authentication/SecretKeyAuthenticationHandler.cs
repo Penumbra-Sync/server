@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,7 +30,8 @@ namespace MareSynchronosServer.Authentication
 
             using var sha256 = SHA256.Create();
             var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(authHeader))).Replace("-", "");
-            var uid = (await _mareDbContext.Users.AsNoTracking().FirstOrDefaultAsync(m => m.SecretKey == hashedHeader))?.UID;
+            var uid = (await _mareDbContext.Auth.Include("User").AsNoTracking()
+                .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader))?.UserUID;
 
             if (uid == null)
             {
