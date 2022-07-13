@@ -4,6 +4,7 @@ using MareSynchronosServer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20220712102941_ClientPairKey")]
+    partial class ClientPairKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -145,13 +147,13 @@ namespace MareSynchronosServer.Migrations
                     b.HasOne("MareSynchronosServer.Models.User", "OtherUser")
                         .WithMany()
                         .HasForeignKey("OtherUserUID")
-                        .OnDelete(DeleteBehavior.NoAction)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("MareSynchronosServer.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
-                        .OnDelete(DeleteBehavior.NoAction)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("OtherUser");

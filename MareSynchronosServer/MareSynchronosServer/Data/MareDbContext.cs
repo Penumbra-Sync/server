@@ -24,6 +24,9 @@ namespace MareSynchronosServer.Data
             modelBuilder.Entity<User>().ToTable("Users");
             modelBuilder.Entity<FileCache>().ToTable("FileCaches");
             modelBuilder.Entity<ClientPair>().ToTable("ClientPairs");
+            modelBuilder.Entity<ClientPair>().HasKey(u => new { u.UserUID, u.OtherUserUID });
+            modelBuilder.Entity<ClientPair>().HasIndex(c => c.UserUID);
+            modelBuilder.Entity<ClientPair>().HasIndex(c => c.OtherUserUID);
             modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("ForbiddenUploadEntries");
             modelBuilder.Entity<Banned>().ToTable("BannedUsers");
         }
