@@ -86,44 +86,30 @@ public class SystemInfoService : IHostedService, IDisposable
         var bytesSent = endNetworkOut - networkOut;
         var bytesReceived = endNetworkIn - networkIn;
 
-        using var scope = _services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-        int uploadedFiles = 0;
-        var loggedInUsers = dbContext.Users.Count(u => !string.IsNullOrEmpty(u.CharacterIdentification));
-        var localCacheSize = Directory.EnumerateFiles(_configuration["CacheDirectory"])
-            .ToList().Sum(f =>
-            {
-                uploadedFiles++;
-                try
-                {
-                    return new FileInfo(f).Length;
-                }
-                catch
-                {
-                    return 0;
-                }
-            });
+        var usedRAM = Process.GetCurrentProcess().WorkingSet64 + Process.GetProcessesByName("sqlservr").FirstOrDefault()?.WorkingSet64 ?? 0;
 
+        var cpuUsage = cpuUsageTotal * 100;
         var totalNetworkOut = bytesSent / totalSPassed;
         var totalNetworkIn = bytesReceived / totalSPassed;
-        var cpuUsage = cpuUsageTotal * 100;
-        var usedRAM = Process.GetCurrentProcess().WorkingSet64 + Process.GetProcessesByName("sqlservr").FirstOrDefault()?.WorkingSet64 ?? 0;
+
+        MareMetrics.NetworkIn.Set(totalNetworkIn);
+        MareMetrics.NetworkOut.Set(totalNetworkOut);
+        MareMetrics.CPUUsage.Set(cpuUsage);
+        MareMetrics.RAMUsage.Set(usedRAM);
 
         SystemInfoDto = new SystemInfoDto()
         {
-            CacheUsage = localCacheSize,
+            CacheUsage = 0,
             CpuUsage = cpuUsage,
-            RAMUsage = usedRAM,
+            RAMUsage = 0,
             NetworkIn = totalNetworkIn,
             NetworkOut = totalNetworkOut,
-            OnlineUsers = loggedInUsers,
-            UploadedFiles = uploadedFiles
+            OnlineUsers = (int)MareMetrics.AuthorizedConnections.Value,
+            UploadedFiles = 0
         };
 
         _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
-
-        _logger.LogInformation($"CPU:{cpuUsage:0.00}%, RAM Used:{(double)usedRAM / 1024 / 1024 / 1024:0.00}GB, Cache:{(double)localCacheSize / 1024 / 1024 / 1024:0.00}GB, Users:{loggedInUsers}, NetworkIn:{totalNetworkIn / 1024 / 1024:0.00}MB/s, NetworkOut:{totalNetworkOut / 1024 / 1024:0.00}MB/s");
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

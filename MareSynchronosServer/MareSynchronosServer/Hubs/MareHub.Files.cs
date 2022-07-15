@@ -40,7 +40,13 @@ namespace MareSynchronosServer.Hubs
             var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync();
             foreach (var file in ownFiles)
             {
-                File.Delete(Path.Combine(BasePath, file.Hash));
+                var fi = new FileInfo(Path.Combine(BasePath, file.Hash));
+                if (fi.Exists)
+                {
+                    MareMetrics.FilesTotalSize.Dec(fi.Length);
+                    MareMetrics.FilesTotal.Dec();
+                    fi.Delete();
+                }
             }
             _dbContext.Files.RemoveRange(ownFiles);
             await _dbContext.SaveChangesAsync();
@@ -59,7 +65,8 @@ namespace MareSynchronosServer.Hubs
             int readByteCount;
             var buffer = new byte[chunkSize];
 
-            await using var fs = File.Open(Path.Combine(BasePath, hash), FileMode.Open, FileAccess.Read, FileShare.Read);
+            var path = Path.Combine(BasePath, hash);
+            await using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             while ((readByteCount = await fs.ReadAsync(buffer, 0, chunkSize, ct)) > 0)
             {
                 await Task.Delay(10, ct);
@@ -67,6 +74,9 @@ namespace MareSynchronosServer.Hubs
             }
 
             _logger.LogInformation("User " + AuthenticatedUserId + " finished downloading file: " + hash);
+
+            MareMetrics.UserDownloadedFiles.Inc();
+            MareMetrics.UserDownloadedFilesSize.Inc(new FileInfo(path).Length);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
@@ -114,7 +124,7 @@ namespace MareSynchronosServer.Hubs
             return await _dbContext.Files.AsNoTracking()
                 .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded);
         }
-        
+
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeFileSendFiles)]
         public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
@@ -204,6 +214,10 @@ namespace MareSynchronosServer.Hubs
                 await File.WriteAllBytesAsync(Path.Combine(BasePath, hash), uploadedFile.ToArray());
                 relatedFile = _dbContext.Files.Single(f => f.Hash == hash);
                 relatedFile.Uploaded = true;
+
+                MareMetrics.FilesTotal.Inc();
+                MareMetrics.FilesTotalSize.Inc(uploadedFile.Count);
+
                 await _dbContext.SaveChangesAsync();
                 _logger.LogInformation("File " + hash + " added to DB");
             }

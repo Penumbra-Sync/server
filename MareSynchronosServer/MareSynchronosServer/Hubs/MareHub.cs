@@ -30,6 +30,8 @@ namespace MareSynchronosServer.Hubs
         [HubMethodName(Api.InvokeHeartbeat)]
         public async Task<ConnectionDto> Heartbeat(string? characterIdentification)
         {
+            MareMetrics.InitializedConnections.Inc();
+
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
             _logger.LogInformation("Connection from " + userId + ", CI: " + characterIdentification);
@@ -40,6 +42,7 @@ namespace MareSynchronosServer.Hubs
 
             if (userId != null && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
+                MareMetrics.AuthorizedConnections.Inc();
                 _logger.LogInformation("Connection from " + userId);
                 var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
                 user.CharacterIdentification = characterIdentification;
@@ -51,6 +54,10 @@ namespace MareSynchronosServer.Hubs
                     IsModerator = user.IsModerator,
                     IsAdmin = user.IsAdmin
                 };
+            }
+            else
+            {
+                MareMetrics.UnauthorizedConnections.Inc();
             }
 
             return new ConnectionDto()
@@ -70,6 +77,7 @@ namespace MareSynchronosServer.Hubs
             var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
+                MareMetrics.AuthorizedConnections.Dec();
                 _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
                 var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
@@ -90,6 +98,10 @@ namespace MareSynchronosServer.Hubs
 
                 await Clients.All.SendAsync("UsersOnline",
                     await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
+            }
+            else
+            {
+                MareMetrics.UnauthorizedConnections.Dec();
             }
 
             await base.OnDisconnectedAsync(exception);

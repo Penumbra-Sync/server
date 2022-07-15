@@ -24,10 +24,15 @@ namespace MareSynchronosServer.Hubs
 
             string userid = AuthenticatedUserId;
             var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid);
-            var ownPairData = _dbContext.ClientPairs.Where(u => u.User.UID == userid);
+            var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
+
+            MareMetrics.Pairs.Dec(ownPairData.Count);
+            MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
+
             _dbContext.RemoveRange(ownPairData);
             await _dbContext.SaveChangesAsync();
-            var otherPairData = _dbContext.ClientPairs.Include(u => u.User).Where(u => u.OtherUser.UID == userid);
+            var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
+                .Where(u => u.OtherUser.UID == userid).ToListAsync();
             foreach (var pair in otherPairData)
             {
                 await Clients.User(pair.User.UID)
@@ -37,6 +42,10 @@ namespace MareSynchronosServer.Hubs
                         IsRemoved = true
                     }, userEntry.CharacterIdentification);
             }
+
+            MareMetrics.Pairs.Dec(otherPairData.Count());
+            MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
+            MareMetrics.UsersRegistered.Dec();
 
             _dbContext.RemoveRange(otherPairData);
             _dbContext.Remove(userEntry);
@@ -94,8 +103,6 @@ namespace MareSynchronosServer.Hubs
             }).ToList();
         }
 
-
-
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserPushCharacterDataToVisibleClients)]
         public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
@@ -119,6 +126,9 @@ namespace MareSynchronosServer.Hubs
                 await Clients.User(pairedUser.UID).SendAsync(Api.OnUserReceiveCharacterData, characterCache,
                     user.CharacterIdentification);
             }
+
+            MareMetrics.UserPushData.Inc();
+            MareMetrics.UserPushDataTo.Inc(visibleCharacterIds.Count);
         }
 
         [HubMethodName(Api.InvokeUserRegister)]
@@ -154,6 +164,8 @@ namespace MareSynchronosServer.Hubs
             _dbContext.Auth.Add(auth);
 
             _logger.LogInformation("User registered: " + user.UID);
+
+            MareMetrics.UsersRegistered.Inc();
 
             await _dbContext.SaveChangesAsync();
             return computedHash;
@@ -212,6 +224,8 @@ namespace MareSynchronosServer.Hubs
                         .SendAsync(Api.OnUserAddOnlinePairedPlayer, user.CharacterIdentification);
                 }
             }
+
+            MareMetrics.Pairs.Inc();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
@@ -249,6 +263,15 @@ namespace MareSynchronosServer.Hubs
                     IsPausedFromOthers = isPaused,
                     IsSynced = true
                 }, user.CharacterIdentification);
+            }
+
+            if (isPaused)
+            {
+                MareMetrics.PairsPaused.Inc();
+            }
+            else
+            {
+                MareMetrics.PairsPaused.Dec();
             }
         }
 
@@ -291,6 +314,8 @@ namespace MareSynchronosServer.Hubs
                     }, sender.CharacterIdentification);
                 }
             }
+
+            MareMetrics.Pairs.Dec();
         }
 
         private ClientPair OppositeEntry(string otherUID) =>

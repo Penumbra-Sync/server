@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronosServer.Data;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -52,17 +50,18 @@ namespace MareSynchronosServer
 
                 var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
 
-                dbContext.Database.BeginTransaction(IsolationLevel.Snapshot);
-                var allFiles = dbContext.Files.Where(f => f.Uploaded);
+                var allFiles = dbContext.Files.Where(f => f.Uploaded).ToList();
                 foreach (var file in allFiles)
                 {
                     var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
-                    if (!File.Exists(fileName))
+                    var fi = new FileInfo(fileName);
+                    if (!fi.Exists)
                     {
                         _logger.LogInformation("File does not exist anymore: " + fileName);
                         dbContext.Files.Remove(file);
-                    } else if (new FileInfo(fileName).LastAccessTime < prevTime)
+                    } else if (fi.LastAccessTime < prevTime)
                     {
+                        MareMetrics.FilesTotalSize.Dec(fi.Length);
                         _logger.LogInformation("File outdated: " + fileName);
                         dbContext.Files.Remove(file);
                         File.Delete(fileName);
@@ -72,7 +71,6 @@ namespace MareSynchronosServer
                 _logger.LogInformation($"Cleanup complete");
 
                 dbContext.SaveChanges();
-                dbContext.Database.CommitTransaction();
             }
             catch
             {

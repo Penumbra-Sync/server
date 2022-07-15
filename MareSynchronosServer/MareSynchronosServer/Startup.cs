@@ -12,6 +12,7 @@ using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
+using Prometheus;
 using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 
 namespace MareSynchronosServer
@@ -40,6 +41,7 @@ namespace MareSynchronosServer
 
             services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
+            services.AddScoped(_ => Configuration);
 
             services.AddDbContextPool<MareDbContext>(options =>
             {
@@ -62,6 +64,7 @@ namespace MareSynchronosServer
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
@@ -83,10 +86,12 @@ namespace MareSynchronosServer
                 KeepAliveInterval = TimeSpan.FromSeconds(10),
             };
 
+            app.UseHttpMetrics();
             app.UseWebSockets(webSocketOptions);
 
             app.UseAuthentication();
             app.UseAuthorization();
+
 
             app.UseEndpoints(endpoints =>
             {
@@ -96,6 +101,8 @@ namespace MareSynchronosServer
                     options.TransportMaxBufferSize = 5242880;
                     options.Transports = HttpTransportType.WebSockets;
                 });
+
+                endpoints.MapMetrics();
             });
         }
     }
