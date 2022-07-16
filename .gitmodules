@@ -1,0 +1,3 @@
+[submodule "MareAPI"]
+	path = MareAPI
+	url = https://github.com/Penumbra-Sync/api.git
