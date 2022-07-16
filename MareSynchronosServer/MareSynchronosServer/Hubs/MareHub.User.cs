@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
+using MareSynchronosServer.Metrics;
 using MareSynchronosServer.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;

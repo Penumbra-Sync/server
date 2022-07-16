@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Data;
+using MareSynchronosServer.Metrics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -55,10 +56,6 @@ namespace MareSynchronosServer.Hubs
                     IsAdmin = user.IsAdmin
                 };
             }
-            else
-            {
-                MareMetrics.UnauthorizedConnections.Inc();
-            }
 
             return new ConnectionDto()
             {
@@ -70,6 +67,12 @@ namespace MareSynchronosServer.Hubs
         public async Task<SystemInfoDto> GetSystemInfo()
         {
             return _systemInfoService.SystemInfoDto;
+        }
+
+        public override Task OnConnectedAsync()
+        {
+            MareMetrics.Connections.Inc();
+            return base.OnConnectedAsync();
         }
 
         public override async Task OnDisconnectedAsync(Exception exception)
@@ -99,10 +102,8 @@ namespace MareSynchronosServer.Hubs
                 await Clients.All.SendAsync("UsersOnline",
                     await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             }
-            else
-            {
-                MareMetrics.UnauthorizedConnections.Dec();
-            }
+
+            MareMetrics.Connections.Dec();
 
             await base.OnDisconnectedAsync(exception);
         }

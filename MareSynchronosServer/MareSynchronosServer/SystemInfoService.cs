@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
+using MareSynchronosServer.Metrics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
