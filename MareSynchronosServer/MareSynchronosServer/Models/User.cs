@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace MareSynchronosServer.Models
 {
@@ -14,5 +15,7 @@ namespace MareSynchronosServer.Models
         public bool IsModerator { get; set; } = false;
 
         public bool IsAdmin { get; set; } = false;
+
+        public DateTime LastLoggedIn { get; set; }
     }
 }

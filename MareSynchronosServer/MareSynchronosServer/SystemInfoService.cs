@@ -1,17 +1,13 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
 using MareSynchronosServer.Metrics;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -20,18 +16,13 @@ namespace MareSynchronosServer;
 public class SystemInfoService : IHostedService, IDisposable
 {
     private readonly ILogger<SystemInfoService> _logger;
-    private readonly IServiceProvider _services;
-    private readonly IConfiguration _configuration;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(ILogger<SystemInfoService> logger, IServiceProvider services,
-        IConfiguration configuration, IHubContext<MareHub> hubContext)
+    public SystemInfoService(ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
         _logger = logger;
-        _services = services;
-        _configuration = configuration;
         _hubContext = hubContext;
     }
 

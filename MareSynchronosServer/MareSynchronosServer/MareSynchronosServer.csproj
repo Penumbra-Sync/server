@@ -26,7 +26,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\MareAPI\MareSynchronosAPI\MareSynchronos.API.csproj" />
-    <ProjectReference Include="..\MareSynchronos.API\MareSynchronos.API.csproj" />
   </ItemGroup>
 
 </Project>

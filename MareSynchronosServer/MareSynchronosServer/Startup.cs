@@ -41,7 +41,7 @@ namespace MareSynchronosServer
 
             services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
-            services.AddScoped(_ => Configuration);
+            services.AddTransient(_ => Configuration);
 
             services.AddDbContextPool<MareDbContext>(options =>
             {

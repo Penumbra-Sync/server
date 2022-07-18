@@ -43,9 +43,18 @@ namespace MareSynchronosServer.Hubs
 
             if (userId != null && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
-                MareMetrics.AuthorizedConnections.Inc();
                 _logger.LogInformation("Connection from " + userId);
                 var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
+                if (!string.IsNullOrEmpty(user.CharacterIdentification))
+                {
+                    return new ConnectionDto()
+                    {
+                        ServerVersion = Api.Version
+                    };
+                }
+
+                MareMetrics.AuthorizedConnections.Inc();
+                user.LastLoggedIn = DateTime.UtcNow;
                 user.CharacterIdentification = characterIdentification;
                 await _dbContext.SaveChangesAsync();
                 return new ConnectionDto
