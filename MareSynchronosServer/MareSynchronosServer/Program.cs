@@ -18,6 +18,12 @@ namespace MareSynchronosServer
             var hostBuilder = CreateHostBuilder(args);
             var host = hostBuilder.Build();
 
+            System.Threading.ThreadPool.GetMaxThreads(out int worker, out int io);
+            Console.WriteLine($"Before: Worker threads {worker}, IO threads {io}");
+            System.Threading.ThreadPool.SetMaxThreads(worker, 10000);
+            System.Threading.ThreadPool.GetMaxThreads(out int workerNew, out int ioNew);
+            Console.WriteLine($"After: Worker threads {workerNew}, IO threads {ioNew}");
+
             using (var scope = host.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
