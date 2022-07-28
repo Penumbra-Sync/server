@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Prometheus;
 using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer
 {
@@ -78,12 +80,20 @@ namespace MareSynchronosServer
             }
 
             app.UseStaticFiles();
+            app.UseHttpLogging();
 
             app.UseRouting();
             var webSocketOptions = new WebSocketOptions
             {
                 KeepAliveInterval = TimeSpan.FromSeconds(10),
             };
+
+            app.UseStaticFiles(new StaticFileOptions()
+            {
+                FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
+                RequestPath = "/cache",
+                ServeUnknownFileTypes = true
+            });
 
             app.UseHttpMetrics();
             app.UseWebSockets(webSocketOptions);
