@@ -75,7 +75,7 @@ namespace MareSynchronosServer.Hubs
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
-        [HubMethodName(Api.InvokeAdminGetOnlineUsers)]
+        [HubMethodName(Api.InvokeUserGetOnlineUsers)]
         public async Task<int> GetOnlineUsers()
         {
             return await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification));
