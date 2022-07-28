@@ -96,7 +96,7 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(Api.InvokeUserGetOnlineUsers)]
+        [HubMethodName(Api.InvokeAdminGetOnlineUsers)]
         public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
         {
             if (!IsModerator) return null;
