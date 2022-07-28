@@ -45,7 +45,7 @@ namespace MareSynchronosServer.Hubs
             {
                 _logger.LogInformation("Connection from " + userId);
                 var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
-                if (!string.IsNullOrEmpty(user.CharacterIdentification))
+                if (!string.IsNullOrEmpty(user.CharacterIdentification) && characterIdentification != user.CharacterIdentification)
                 {
                     return new ConnectionDto()
                     {
@@ -86,6 +86,8 @@ namespace MareSynchronosServer.Hubs
 
         public override async Task OnDisconnectedAsync(Exception exception)
         {
+            MareMetrics.Connections.Dec();
+
             var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
@@ -111,8 +113,6 @@ namespace MareSynchronosServer.Hubs
                 await Clients.All.SendAsync("UsersOnline",
                     await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             }
-
-            MareMetrics.Connections.Dec();
 
             await base.OnDisconnectedAsync(exception);
         }

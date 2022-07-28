@@ -20,9 +20,6 @@ namespace MareSynchronosServer
 
             System.Threading.ThreadPool.GetMaxThreads(out int worker, out int io);
             Console.WriteLine($"Before: Worker threads {worker}, IO threads {io}");
-            System.Threading.ThreadPool.SetMaxThreads(worker, 10000);
-            System.Threading.ThreadPool.GetMaxThreads(out int workerNew, out int ioNew);
-            Console.WriteLine($"After: Worker threads {workerNew}, IO threads {ioNew}");
 
             using (var scope = host.Services.CreateScope())
             {
@@ -40,6 +37,10 @@ namespace MareSynchronosServer
                 var looseFiles = context.Files.Where(f => f.Uploaded == false);
                 context.RemoveRange(looseFiles);
                 context.SaveChanges();
+
+                System.Threading.ThreadPool.SetMaxThreads(worker, context.Users.Count() * 5);
+                System.Threading.ThreadPool.GetMaxThreads(out int workerNew, out int ioNew);
+                Console.WriteLine($"After: Worker threads {workerNew}, IO threads {ioNew}");
 
                 MareMetrics.InitializeMetrics(context, services.GetRequiredService<IConfiguration>());
             }
