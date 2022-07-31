@@ -54,32 +54,6 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(Api.StreamFileDownloadFileAsync)]
-        public async IAsyncEnumerable<byte[]> DownloadFileAsync(string hash, [EnumeratorCancellation] CancellationToken ct)
-        {
-            _logger.LogInformation("User " + AuthenticatedUserId + " downloading file: " + hash);
-
-            var file = _dbContext.Files.AsNoTracking()
-                .SingleOrDefault(f => f.Hash == hash);
-            if (file == null) yield break;
-            var chunkSize = 1024 * 512; // 512kb
-            int readByteCount;
-            var buffer = new byte[chunkSize];
-
-            var path = Path.Combine(BasePath, hash);
-            await using var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            while ((readByteCount = fs.Read(buffer, 0, chunkSize)) > 0)
-            {
-                yield return readByteCount == chunkSize ? buffer.ToArray() : buffer.Take(readByteCount).ToArray();
-            }
-
-            _logger.LogInformation("User " + AuthenticatedUserId + " finished downloading file: " + hash);
-
-            MareMetrics.UserDownloadedFiles.Inc();
-            MareMetrics.UserDownloadedFilesSize.Inc(new FileInfo(path).Length);
-        }
-
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeFileGetFileSize)]
         public async Task<DownloadFileDto> GetFileSize(string hash)
         {

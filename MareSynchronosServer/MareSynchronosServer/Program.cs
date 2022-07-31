@@ -8,6 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MareSynchronosServer.Metrics;
+using MareSynchronosServer.Models;
+using System.Collections.Generic;
 
 namespace MareSynchronosServer
 {
@@ -29,10 +31,10 @@ namespace MareSynchronosServer
                 context.SaveChanges();
 
                 // clean up residuals
-                var users = context.Users.Where(u => u.CharacterIdentification != null);
+                var users = context.Users;
                 foreach (var user in users)
                 {
-                    user.CharacterIdentification = string.Empty;
+                    user.CharacterIdentification = null;
                 }
                 var looseFiles = context.Files.Where(f => f.Uploaded == false);
                 context.RemoveRange(looseFiles);

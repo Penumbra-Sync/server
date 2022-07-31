@@ -26,6 +26,7 @@ namespace MareSynchronosServer.Hubs
             string userid = AuthenticatedUserId;
             var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid);
             var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
+            var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid);
 
             MareMetrics.Pairs.Dec(ownPairData.Count);
             MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
@@ -50,6 +51,7 @@ namespace MareSynchronosServer.Hubs
 
             _dbContext.RemoveRange(otherPairData);
             _dbContext.Remove(userEntry);
+            _dbContext.Remove(auth);
             await _dbContext.SaveChangesAsync();
         }
 

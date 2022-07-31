@@ -41,7 +41,7 @@ namespace MareSynchronosServer.Hubs
 
             var isBanned = await _dbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == characterIdentification);
 
-            if (userId != null && !isBanned && !string.IsNullOrEmpty(characterIdentification))
+            if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
                 _logger.LogInformation("Connection from " + userId);
                 var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
@@ -52,8 +52,11 @@ namespace MareSynchronosServer.Hubs
                         ServerVersion = Api.Version
                     };
                 }
+                else if (string.IsNullOrEmpty(user.CharacterIdentification))
+                {
+                    MareMetrics.AuthorizedConnections.Inc();
+                }
 
-                MareMetrics.AuthorizedConnections.Inc();
                 user.LastLoggedIn = DateTime.UtcNow;
                 user.CharacterIdentification = characterIdentification;
                 await _dbContext.SaveChangesAsync();
@@ -109,9 +112,6 @@ namespace MareSynchronosServer.Hubs
 
                 (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification = null;
                 await _dbContext.SaveChangesAsync();
-
-                await Clients.All.SendAsync("UsersOnline",
-                    await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification)));
             }
 
             await base.OnDisconnectedAsync(exception);
