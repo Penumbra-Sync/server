@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -83,6 +84,8 @@ namespace MareSynchronosServer.Hubs
 
         public override Task OnConnectedAsync()
         {
+            var feature = Context.Features.Get<IHttpConnectionFeature>();
+            _logger.LogInformation("Connection from " + feature.RemoteIpAddress);
             MareMetrics.Connections.Inc();
             return base.OnConnectedAsync();
         }
