@@ -47,7 +47,10 @@ namespace MareSynchronosServer
                 MareMetrics.InitializeMetrics(context, services.GetRequiredService<IConfiguration>());
             }
 
-            host.Run();
+            if (args.Length == 0 || args[0] != "dry")
+            {
+                host.Run();
+            }
         }
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>

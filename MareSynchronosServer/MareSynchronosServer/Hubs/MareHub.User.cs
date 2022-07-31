@@ -28,6 +28,11 @@ namespace MareSynchronosServer.Hubs
             var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
             var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid);
 
+            while (_dbContext.Files.Any(f => f.Uploader == userEntry))
+            {
+                await Task.Delay(1000);
+            }
+
             MareMetrics.Pairs.Dec(ownPairData.Count);
             MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
 

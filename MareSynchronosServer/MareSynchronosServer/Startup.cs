@@ -16,6 +16,7 @@ using Prometheus;
 using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace MareSynchronosServer
 {
@@ -47,10 +48,11 @@ namespace MareSynchronosServer
 
             services.AddDbContextPool<MareDbContext>(options =>
             {
-                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"), builder =>
+                options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
-                });
-            }, 32000);
+                    builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+                }).UseSnakeCaseNamingConvention();
+            });
 
             services.AddHostedService<FileCleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
