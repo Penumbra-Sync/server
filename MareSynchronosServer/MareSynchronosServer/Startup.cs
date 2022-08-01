@@ -16,6 +16,8 @@ using Prometheus;
 using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authorization;
+using MareSynchronosServer.Discord;
+using AspNetCoreRateLimit;
 
 namespace MareSynchronosServer
 {
@@ -41,6 +43,13 @@ namespace MareSynchronosServer
                 hubOptions.StreamBufferCapacity = 200;
             });
 
+            services.AddMemoryCache();
+
+            services.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"));
+            services.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"));
+
+            services.AddInMemoryRateLimiting();
+
             services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
@@ -55,6 +64,7 @@ namespace MareSynchronosServer
 
             services.AddHostedService<FileCleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
+            services.AddHostedService<DiscordBot>();
 
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>
@@ -63,6 +73,8 @@ namespace MareSynchronosServer
                 })
                 .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+            services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -80,6 +92,8 @@ namespace MareSynchronosServer
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
+
+            app.UseIpRateLimiting();
 
             app.UseStaticFiles();
             app.UseHttpLogging();

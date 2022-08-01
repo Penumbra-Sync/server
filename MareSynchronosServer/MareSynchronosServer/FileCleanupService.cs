@@ -73,6 +73,20 @@ namespace MareSynchronosServer
                     }
                 }
 
+                var lodestoneAuths = dbContext.LodeStoneAuth.Include(u => u.User).Where(a => a.StartedAt != null).ToList();
+                List<LodeStoneAuth> expiredAuths = new List<LodeStoneAuth>();
+                foreach (var auth in lodestoneAuths)
+                {
+                    if (auth.StartedAt < DateTime.UtcNow - TimeSpan.FromMinutes(15))
+                    {
+                        expiredAuths.Add(auth);
+                    }
+                }
+
+                dbContext.RemoveRange(expiredAuths);
+                dbContext.RemoveRange(expiredAuths.Select(a => a.User));
+
+
                 if (!bool.TryParse(_configuration["PurgeUnusedAccounts"], out var purgeUnusedAccounts))
                 {
                     purgeUnusedAccounts = false;
@@ -91,7 +105,7 @@ namespace MareSynchronosServer
                     List<User> usersToRemove = new();
                     foreach (var user in allUsers)
                     {
-                        if (user.LastLoggedIn < (DateTime.Now - TimeSpan.FromDays(usersOlderThanDays)))
+                        if (user.LastLoggedIn < (DateTime.UtcNow - TimeSpan.FromDays(usersOlderThanDays)))
                         {
                             _logger.LogInformation("User outdated: " + user.UID);
                             usersToRemove.Add(user);
@@ -100,6 +114,13 @@ namespace MareSynchronosServer
 
                     foreach (var user in usersToRemove)
                     {
+                        var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
+
+                        if (lodestone != null)
+                        {
+                            dbContext.Remove(lodestone);
+                        }
+
                         var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
 
                         var userFiles = dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == user.UID).ToList();
