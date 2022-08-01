@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
@@ -27,6 +24,13 @@ namespace MareSynchronosServer.Hubs
             var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid);
             var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
             var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid);
+
+            var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid);
+
+            if (lodestone != null)
+            {
+                _dbContext.Remove(lodestone);
+            }
 
             while (_dbContext.Files.Any(f => f.Uploader == userEntry))
             {
@@ -82,12 +86,6 @@ namespace MareSynchronosServer.Hubs
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
-        [HubMethodName(Api.InvokeUserGetOnlineUsers)]
-        public async Task<int> GetOnlineUsers()
-        {
-            return await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification));
-        }
-
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetPairedClients)]
         public async Task<List<ClientPairDto>> GetPairedClients()
@@ -138,47 +136,6 @@ namespace MareSynchronosServer.Hubs
             MareMetrics.UserPushData.Inc();
             MareMetrics.UserPushDataTo.Inc(visibleCharacterIds.Count);
         }
-
-        [HubMethodName(Api.InvokeUserRegister)]
-        public async Task<string> Register()
-        {
-            using var sha256 = SHA256.Create();
-            var user = new User();
-
-            var hasValidUid = false;
-            while (!hasValidUid)
-            {
-                var uid = GenerateRandomString(10);
-                if (_dbContext.Users.Any(u => u.UID == uid)) continue;
-                user.UID = uid;
-                hasValidUid = true;
-            }
-
-            // make the first registered user on the service to admin
-            if (!await _dbContext.Users.AnyAsync())
-            {
-                user.IsAdmin = true;
-            }
-
-            var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(GenerateRandomString(64)))).Replace("-", "");
-            var auth = new Auth()
-            {
-                HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
-                    .Replace("-", ""),
-                User = user
-            };
-
-            _dbContext.Users.Add(user);
-            _dbContext.Auth.Add(auth);
-
-            _logger.LogInformation("User registered: " + user.UID);
-
-            MareMetrics.UsersRegistered.Inc();
-
-            await _dbContext.SaveChangesAsync();
-            return computedHash;
-        }
-
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientAddition)]

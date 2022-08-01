@@ -37,6 +37,8 @@ namespace MareSynchronosServer
                     user.CharacterIdentification = null;
                 }
                 var looseFiles = context.Files.Where(f => f.Uploaded == false);
+                var unfinishedRegistrations = context.LodeStoneAuth.Where(c => c.StartedAt != null);
+                context.RemoveRange(unfinishedRegistrations);
                 context.RemoveRange(looseFiles);
                 context.SaveChanges();
 

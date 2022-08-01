@@ -4,8 +4,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using MareSynchronos.API;
+using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +16,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
+    [AllowAnonymous]
+    [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
     public partial class MareHub : Hub
     {
         private readonly SystemInfoService _systemInfoService;
@@ -29,6 +33,7 @@ namespace MareSynchronosServer.Hubs
             _dbContext = mareDbContext;
         }
 
+        [AllowAnonymous]
         [HubMethodName(Api.InvokeHeartbeat)]
         public async Task<ConnectionDto> Heartbeat(string? characterIdentification)
         {
@@ -44,7 +49,6 @@ namespace MareSynchronosServer.Hubs
 
             if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
-                _logger.LogInformation("Connection from " + userId);
                 var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
                 if (!string.IsNullOrEmpty(user.CharacterIdentification) && characterIdentification != user.CharacterIdentification)
                 {
@@ -77,11 +81,13 @@ namespace MareSynchronosServer.Hubs
         }
 
         [HubMethodName(Api.InvokeGetSystemInfo)]
+        [AllowAnonymous]
         public async Task<SystemInfoDto> GetSystemInfo()
         {
             return _systemInfoService.SystemInfoDto;
         }
 
+        [AllowAnonymous]
         public override Task OnConnectedAsync()
         {
             var feature = Context.Features.Get<IHttpConnectionFeature>();
@@ -90,6 +96,7 @@ namespace MareSynchronosServer.Hubs
             return base.OnConnectedAsync();
         }
 
+        [AllowAnonymous]
         public override async Task OnDisconnectedAsync(Exception exception)
         {
             MareMetrics.Connections.Dec();
