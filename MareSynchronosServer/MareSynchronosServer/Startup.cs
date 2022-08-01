@@ -15,8 +15,7 @@ using Microsoft.AspNetCore.SignalR;
 using Prometheus;
 using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MareSynchronosServer
 {
@@ -63,6 +62,7 @@ namespace MareSynchronosServer
                     options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
                 })
                 .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
+            services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -90,19 +90,18 @@ namespace MareSynchronosServer
                 KeepAliveInterval = TimeSpan.FromSeconds(10),
             };
 
-            app.UseStaticFiles(new StaticFileOptions()
-            {
-                FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
-                RequestPath = "/cache",
-                ServeUnknownFileTypes = true
-            });
-
             app.UseHttpMetrics();
             app.UseWebSockets(webSocketOptions);
 
             app.UseAuthentication();
             app.UseAuthorization();
 
+            app.UseStaticFiles(new StaticFileOptions()
+            {
+                FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
+                RequestPath = "/cache",
+                ServeUnknownFileTypes = true
+            });
 
             app.UseEndpoints(endpoints =>
             {

@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
@@ -82,12 +79,6 @@ namespace MareSynchronosServer.Hubs
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
-        [HubMethodName(Api.InvokeUserGetOnlineUsers)]
-        public async Task<int> GetOnlineUsers()
-        {
-            return await _dbContext.Users.CountAsync(u => !string.IsNullOrEmpty(u.CharacterIdentification));
-        }
-
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetPairedClients)]
         public async Task<List<ClientPairDto>> GetPairedClients()
@@ -139,7 +130,7 @@ namespace MareSynchronosServer.Hubs
             MareMetrics.UserPushDataTo.Inc(visibleCharacterIds.Count);
         }
 
-        [HubMethodName(Api.InvokeUserRegister)]
+        /*[HubMethodName(Api.InvokeUserRegister)]
         public async Task<string> Register()
         {
             using var sha256 = SHA256.Create();
@@ -177,7 +168,7 @@ namespace MareSynchronosServer.Hubs
 
             await _dbContext.SaveChangesAsync();
             return computedHash;
-        }
+        }*/
 
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
