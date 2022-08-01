@@ -19,17 +19,17 @@ namespace MareSynchronosServer.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Auth>().ToTable("Auth");
-            modelBuilder.Entity<User>().ToTable("Users");
+            modelBuilder.Entity<Auth>().ToTable("auth");
+            modelBuilder.Entity<User>().ToTable("users");
             modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
-            modelBuilder.Entity<FileCache>().ToTable("FileCaches");
+            modelBuilder.Entity<FileCache>().ToTable("file_caches");
             modelBuilder.Entity<FileCache>().HasIndex(c => c.UploaderUID);
-            modelBuilder.Entity<ClientPair>().ToTable("ClientPairs");
+            modelBuilder.Entity<ClientPair>().ToTable("client_pairs");
             modelBuilder.Entity<ClientPair>().HasKey(u => new { u.UserUID, u.OtherUserUID });
             modelBuilder.Entity<ClientPair>().HasIndex(c => c.UserUID);
             modelBuilder.Entity<ClientPair>().HasIndex(c => c.OtherUserUID);
-            modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("ForbiddenUploadEntries");
-            modelBuilder.Entity<Banned>().ToTable("BannedUsers");
+            modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("forbidden_upload_entries");
+            modelBuilder.Entity<Banned>().ToTable("banned_users");
         }
     }
 }
