@@ -30,8 +30,9 @@ namespace MareSynchronosServer.Discord
         DiscordSocketClient discordClient;
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
         private Timer _timer;
+        private Timer _queueTimer;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
-        private DateTime lastVerifyCall = DateTime.Now;
+        private ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue;
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
@@ -52,12 +53,6 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.Name == "register")
             {
-                if (DiscordLodestoneMapping.Count > 10)
-                {
-                    await arg.RespondAsync("The bot registrations are currently overloaded. Please wait a few minutes and try again.", ephemeral: true);
-                    return;
-                }
-
                 if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                 {
                     await DeletePreviousUserAccount(arg.User.Id);
@@ -71,15 +66,17 @@ namespace MareSynchronosServer.Discord
             }
             else if (arg.Data.Name == "verify")
             {
-                if (lastVerifyCall > DateTime.Now.Subtract(TimeSpan.FromSeconds(5)))
+                EmbedBuilder eb = new EmbedBuilder();
+                if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
                 {
-                    await arg.RespondAsync("The verification is a rate limited process. Under heavy load it might take a while until you get your turn. Please wait a few seconds and try again.");
+                    eb.WithTitle("Cannot verify registration");
+                    eb.WithDescription("You need to **/register** first before you can **/verify**");
+                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
                 }
                 else
                 {
-                    lastVerifyCall = DateTime.Now;
-                    Embed response = await HandleVerifyAsync(arg.User.Id);
-                    await arg.RespondAsync(embeds: new[] { response }, ephemeral: true);
+                    await arg.RespondAsync("The verification is a rate limited process. Under heavy load it might take a while until you get your secret key reply. The bot will get back to you as soon as it can.", ephemeral: true);
+                    verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg.User));
                 }
             }
             else
@@ -115,110 +112,93 @@ namespace MareSynchronosServer.Discord
         private async Task<Embed> HandleVerifyAsync(ulong id)
         {
             var embedBuilder = new EmbedBuilder();
-            if (!DiscordLodestoneMapping.ContainsKey(id))
+
+            using var scope = services.CreateScope();
+            var req = new HttpClient();
+            using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+            var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == id);
+            if (lodestoneAuth != null)
             {
-                embedBuilder.WithTitle("Cannot verify registration");
-                embedBuilder.WithDescription("You need to **/register** first before you can **/verify**");
+                Random rand = new();
+                var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
+                var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}");
+                if (response.IsSuccessStatusCode)
+                {
+                    var content = await response.Content.ReadAsStringAsync();
+                    if (content.Contains(lodestoneAuth.LodestoneAuthString))
+                    {
+                        DiscordLodestoneMapping.TryRemove(id, out _);
+
+                        using var sha256 = SHA256.Create();
+                        var user = new User();
+
+                        var hasValidUid = false;
+                        while (!hasValidUid)
+                        {
+                            var uid = MareHub.GenerateRandomString(10);
+                            if (db.Users.Any(u => u.UID == uid)) continue;
+                            user.UID = uid;
+                            hasValidUid = true;
+                        }
+
+                        // make the first registered user on the service to admin
+                        if (!await db.Users.AnyAsync())
+                        {
+                            user.IsAdmin = true;
+                        }
+
+                        if (configuration.GetValue<bool>("PurgeUnusedAccounts"))
+                        {
+                            var purgedDays = configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
+                            user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromHours(1);
+                        }
+
+                        var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(MareHub.GenerateRandomString(64)))).Replace("-", "");
+                        var auth = new Auth()
+                        {
+                            HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
+                                .Replace("-", ""),
+                            User = user,
+                        };
+
+                        db.Users.Add(user);
+                        db.Auth.Add(auth);
+
+                        logger.LogInformation("User registered: " + user.UID);
+
+                        MareMetrics.UsersRegistered.Inc();
+
+                        lodestoneAuth.StartedAt = null;
+                        lodestoneAuth.User = user;
+                        lodestoneAuth.LodestoneAuthString = null;
+
+                        embedBuilder.WithTitle("Registration successful");
+                        embedBuilder.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
+                            + Environment.NewLine + Environment.NewLine
+                            + $"**{computedHash}**"
+                            + Environment.NewLine + Environment.NewLine
+                            + "Enter this key in Mare Synchronos and hit save to connect to the service."
+                            + Environment.NewLine
+                            + "You should connect as soon as possible to not get caught by the automatic cleanup process."
+                            + Environment.NewLine
+                            + "Have fun.");
+                    }
+                    else
+                    {
+                        embedBuilder.WithTitle("Failed to verify your character");
+                        embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/verify** again.");
+                        lodestoneAuth.StartedAt = DateTime.UtcNow;
+                    }
+                }
+
+                await db.SaveChangesAsync();
             }
             else
             {
-                using var scope = services.CreateScope();
-                var req = new HttpClient();
-                using var db = scope.ServiceProvider.GetService<MareDbContext>();
-
-                var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == id);
-                if (lodestoneAuth != null)
-                {
-                    Random rand = new();
-                    var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
-                    CancellationTokenSource cts = new CancellationTokenSource();
-                    cts.CancelAfter(TimeSpan.FromSeconds(2));
-                    try
-                    {
-                        var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}", cts.Token);
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var content = await response.Content.ReadAsStringAsync();
-                            if (content.Contains(lodestoneAuth.LodestoneAuthString))
-                            {
-                                DiscordLodestoneMapping.TryRemove(id, out _);
-
-                                using var sha256 = SHA256.Create();
-                                var user = new User();
-
-                                var hasValidUid = false;
-                                while (!hasValidUid)
-                                {
-                                    var uid = MareHub.GenerateRandomString(10);
-                                    if (db.Users.Any(u => u.UID == uid)) continue;
-                                    user.UID = uid;
-                                    hasValidUid = true;
-                                }
-
-                                // make the first registered user on the service to admin
-                                if (!await db.Users.AnyAsync())
-                                {
-                                    user.IsAdmin = true;
-                                }
-
-                                if (configuration.GetValue<bool>("PurgeUnusedAccounts"))
-                                {
-                                    var purgedDays = configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
-                                    user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromHours(1);
-                                }
-
-                                var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(MareHub.GenerateRandomString(64)))).Replace("-", "");
-                                var auth = new Auth()
-                                {
-                                    HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
-                                        .Replace("-", ""),
-                                    User = user,
-                                };
-
-                                db.Users.Add(user);
-                                db.Auth.Add(auth);
-
-                                logger.LogInformation("User registered: " + user.UID);
-
-                                MareMetrics.UsersRegistered.Inc();
-
-                                lodestoneAuth.StartedAt = null;
-                                lodestoneAuth.User = user;
-                                lodestoneAuth.LodestoneAuthString = null;
-
-                                embedBuilder.WithTitle("Registration successful");
-                                embedBuilder.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
-                                    + Environment.NewLine + Environment.NewLine
-                                    + $"**{computedHash}**"
-                                    + Environment.NewLine + Environment.NewLine
-                                    + "Enter this key in Mare Synchronos and hit save to connect to the service."
-                                    + Environment.NewLine
-                                    + "You should connect as soon as possible to not get caught by the automatic cleanup process."
-                                    + Environment.NewLine
-                                    + "Have fun.");
-                            }
-                            else
-                            {
-                                embedBuilder.WithTitle("Failed to verify your character");
-                                embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/verify** again.");
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        embedBuilder.WithTitle("Failed to get response from Lodestone");
-                        embedBuilder.WithDescription("Wait a few seconds and try again.");
-                        lodestoneAuth.StartedAt = DateTime.UtcNow;
-                    }
-
-                    await db.SaveChangesAsync();
-                }
-                else
-                {
-                    embedBuilder.WithTitle("Your auth has expired");
-                    embedBuilder.WithDescription("Start again with **/register**");
-                    DiscordLodestoneMapping.TryRemove(id, out _);
-                }
+                embedBuilder.WithTitle("Your auth has expired");
+                embedBuilder.WithDescription("Start again with **/register**");
+                DiscordLodestoneMapping.TryRemove(id, out _);
             }
 
             return embedBuilder.Build();
@@ -360,6 +340,7 @@ namespace MareSynchronosServer.Discord
                 discordClient.Disconnected += DiscordClient_Disconnected;
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
+                _queueTimer = new Timer(ProcessQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
             }
         }
 
@@ -369,6 +350,22 @@ namespace MareSynchronosServer.Discord
 
             await discordClient.LoginAsync(TokenType.Bot, authToken);
             await discordClient.StartAsync();
+        }
+
+        private void ProcessQueue(object state)
+        {
+            if (verificationQueue.TryDequeue(out var queueitem))
+            {
+                var runningTask = queueitem.Item1.Invoke();
+                while (!runningTask.IsCompleted)
+                {
+                    Thread.Sleep(250);
+                }
+
+                var dataEmbed = runningTask.Result;
+                queueitem.Item2.SendMessageAsync(embed: dataEmbed);
+                logger.LogInformation("Sent login information to user");
+            }
         }
 
         private void UpdateStatus(object state)
@@ -384,6 +381,7 @@ namespace MareSynchronosServer.Discord
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             _timer?.Change(Timeout.Infinite, 0);
+            _queueTimer?.Change(Timeout.Infinite, 0);
 
             await discordClient.LogoutAsync();
             await discordClient.StopAsync();
