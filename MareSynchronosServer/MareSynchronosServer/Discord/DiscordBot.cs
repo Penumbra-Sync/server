@@ -293,7 +293,10 @@ namespace MareSynchronosServer.Discord
         {
             var register = new SlashCommandBuilder()
                 .WithName("register")
-                .WithDescription("Starts the registration process for the Mare Synchronos server of this Discord")
+                .WithDescription("Registration for the Mare Synchronos server of this Discord")
+                .AddOption(new SlashCommandOptionBuilder()
+                    .WithDescription("Starts the registration process for the Mare Synchronos server of this Discord")
+                    .WithType(ApplicationCommandOptionType.SubCommand))
                 .AddOption(new SlashCommandOptionBuilder()
                     .WithName("forced")
                     .WithDescription("Will forcefully overwrite your current character on the service, if present")
