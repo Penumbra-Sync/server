@@ -114,44 +114,7 @@ namespace MareSynchronosServer
 
                     foreach (var user in usersToRemove)
                     {
-                        var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
-
-                        if (lodestone != null)
-                        {
-                            dbContext.Remove(lodestone);
-                        }
-
-                        var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
-
-                        var userFiles = dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == user.UID).ToList();
-                        foreach (var file in userFiles)
-                        {
-                            var fi = new FileInfo(Path.Combine(_configuration["CacheDirectory"], file.Hash));
-                            if (fi.Exists)
-                            {
-                                MareMetrics.FilesTotalSize.Dec(fi.Length);
-                                MareMetrics.FilesTotal.Dec();
-                                fi.Delete();
-                            }
-                        }
-
-                        dbContext.Files.RemoveRange(userFiles);
-
-                        var ownPairData = dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToList();
-
-                        dbContext.RemoveRange(ownPairData);
-                        var otherPairData = dbContext.ClientPairs.Include(u => u.User)
-                            .Where(u => u.OtherUser.UID == user.UID).ToList();
-
-                        MareMetrics.Pairs.Dec(ownPairData.Count);
-                        MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
-                        MareMetrics.Pairs.Dec(otherPairData.Count);
-                        MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
-                        MareMetrics.UsersRegistered.Dec();
-
-                        dbContext.RemoveRange(otherPairData);
-                        dbContext.Remove(auth);
-                        dbContext.Remove(user);
+                        PurgeUser(user);
                     }
                 }
 
@@ -162,6 +125,48 @@ namespace MareSynchronosServer
             catch
             {
             }
+        }
+
+        public static void PurgeUser(User user, MareDbContext dbContext, IConfiguration _configuration)
+        {
+            var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
+
+            if (lodestone != null)
+            {
+                dbContext.Remove(lodestone);
+            }
+
+            var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
+
+            var userFiles = dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == user.UID).ToList();
+            foreach (var file in userFiles)
+            {
+                var fi = new FileInfo(Path.Combine(_configuration["CacheDirectory"], file.Hash));
+                if (fi.Exists)
+                {
+                    MareMetrics.FilesTotalSize.Dec(fi.Length);
+                    MareMetrics.FilesTotal.Dec();
+                    fi.Delete();
+                }
+            }
+
+            dbContext.Files.RemoveRange(userFiles);
+
+            var ownPairData = dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToList();
+
+            dbContext.RemoveRange(ownPairData);
+            var otherPairData = dbContext.ClientPairs.Include(u => u.User)
+                .Where(u => u.OtherUser.UID == user.UID).ToList();
+
+            MareMetrics.Pairs.Dec(ownPairData.Count);
+            MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
+            MareMetrics.Pairs.Dec(otherPairData.Count);
+            MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
+            MareMetrics.UsersRegistered.Dec();
+
+            dbContext.RemoveRange(otherPairData);
+            dbContext.Remove(auth);
+            dbContext.Remove(user);
         }
 
         public Task StopAsync(CancellationToken cancellationToken)

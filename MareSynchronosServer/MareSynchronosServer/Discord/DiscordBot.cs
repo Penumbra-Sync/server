@@ -78,9 +78,10 @@ namespace MareSynchronosServer.Discord
             var discordAuthedUser = await db.LodeStoneAuth.Include(u => u.User).FirstOrDefaultAsync(u => u.DiscordId == id);
             if (discordAuthedUser != null && discordAuthedUser.User != null)
             {
-                logger.LogInformation("User will be purged on next round of deletions: " + discordAuthedUser.User);
-                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 1, 1).ToUniversalTime();
-                db.Remove(discordAuthedUser);
+                logger.LogInformation("Purging user: " + discordAuthedUser.User.UID);
+
+                FileCleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
+
                 await db.SaveChangesAsync();
             }
         }
@@ -180,8 +181,6 @@ namespace MareSynchronosServer.Discord
                         {
                             embedBuilder.WithTitle("Failed to verify your character");
                             embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/verify** again.");
-                            DiscordLodestoneMapping.TryRemove(id, out _);
-                            db.Remove(lodestoneAuth);
                         }
                     }
                     else
