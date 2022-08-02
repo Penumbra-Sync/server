@@ -81,7 +81,7 @@ namespace MareSynchronosServer.Discord
                 }
                 else
                 {
-                    await arg.DeferAsync();
+                    await arg.DeferAsync(ephemeral: true);
                     verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg));
                 }
             }
@@ -363,7 +363,7 @@ namespace MareSynchronosServer.Discord
             if (verificationQueue.TryDequeue(out var queueitem))
             {
                 var dataEmbed = await queueitem.Item1.Invoke();
-                await queueitem.Item2.FollowupAsync(embed: dataEmbed);
+                await queueitem.Item2.FollowupAsync(embed: dataEmbed, ephemeral: true);
                 logger.LogInformation("Sent login information to user");
             }
         }
