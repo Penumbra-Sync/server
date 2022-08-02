@@ -294,7 +294,6 @@ namespace MareSynchronosServer.Discord
             var register = new SlashCommandBuilder();
             register.WithName("register");
             register.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
-            register.AddOption("forced", ApplicationCommandOptionType.SubCommand, "Will forcefully overwrite your current character on the service, if present", false, false);
 
             var registerForced = new SlashCommandBuilder();
             registerForced.WithName("register");
