@@ -32,7 +32,7 @@ namespace MareSynchronosServer.Discord
         private Timer _timer;
         private Timer _queueTimer;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
-        private ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue = new ConcurrentQueue<(Func<Task<Embed>>, SocketUser)>();
+        private readonly ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue = new();
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
@@ -66,18 +66,25 @@ namespace MareSynchronosServer.Discord
             }
             else if (arg.Data.Name == "verify")
             {
-                EmbedBuilder eb = new EmbedBuilder();
-                if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
+                EmbedBuilder eb = new();
+                if (verificationQueue.Any(u => u.Item2.Id == arg.User.Id))
+                {
+                    eb.WithTitle("Already queued for verfication");
+                    eb.WithDescription("You are already queued for verification. Please wait.");
+                }
+                else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
                 {
                     eb.WithTitle("Cannot verify registration");
                     eb.WithDescription("You need to **/register** first before you can **/verify**");
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
                 }
                 else
                 {
-                    await arg.RespondAsync("The verification is a rate limited process. Under heavy load it might take a while until you get your secret key reply. The bot will get back to you as soon as it can.", ephemeral: true);
+                    eb.WithTitle("You are now enqueued for verification");
+                    eb.WithDescription("The verification is a rate limited process. Under heavy load it might take a while until you get your secret key reply. The bot will get back to you as soon as it can.");
                     verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg.User));
                 }
+                await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+
             }
             else
             {
@@ -151,7 +158,7 @@ namespace MareSynchronosServer.Discord
                         if (configuration.GetValue<bool>("PurgeUnusedAccounts"))
                         {
                             var purgedDays = configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
-                            user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromHours(1);
+                            user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
                         }
 
                         var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(MareHub.GenerateRandomString(64)))).Replace("-", "");
@@ -352,18 +359,12 @@ namespace MareSynchronosServer.Discord
             await discordClient.StartAsync();
         }
 
-        private void ProcessQueue(object state)
+        private async void ProcessQueue(object state)
         {
             if (verificationQueue.TryDequeue(out var queueitem))
             {
-                var runningTask = queueitem.Item1.Invoke();
-                while (!runningTask.IsCompleted)
-                {
-                    Thread.Sleep(250);
-                }
-
-                var dataEmbed = runningTask.Result;
-                queueitem.Item2.SendMessageAsync(embed: dataEmbed);
+                var dataEmbed = await queueitem.Item1.Invoke();
+                await queueitem.Item2.SendMessageAsync(embed: dataEmbed);
                 logger.LogInformation("Sent login information to user");
             }
         }
