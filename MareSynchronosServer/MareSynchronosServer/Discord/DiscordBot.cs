@@ -30,13 +30,15 @@ namespace MareSynchronosServer.Discord
         DiscordSocketClient discordClient;
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
         private Timer _timer;
-        private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "na" };
+        private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
 
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
             this.configuration = configuration;
             this.logger = logger;
+
+            authToken = configuration.GetValue<string>("DiscordBotToken");
 
             discordClient = new(new DiscordSocketConfig()
             {
@@ -50,6 +52,11 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.Name == "register")
             {
+                if (arg.Data.Options.FirstOrDefault(f => f.Name == "forced") != null)
+                {
+                    await DeletePreviousUserAccount(arg.User.Id);
+                }
+
                 var modal = new ModalBuilder();
                 modal.WithTitle("Verify with Lodestone");
                 modal.WithCustomId("register_modal");
@@ -61,6 +68,20 @@ namespace MareSynchronosServer.Discord
                 await arg.DeferAsync(true);
                 Embed response = await HandleVerifyAsync(arg.User.Id);
                 await arg.FollowupAsync(embeds: new[] { response });
+            }
+        }
+
+        private async Task DeletePreviousUserAccount(ulong id)
+        {
+            using var scope = services.CreateScope();
+            using var db = scope.ServiceProvider.GetService<MareDbContext>();
+            var discordAuthedUser = await db.LodeStoneAuth.Include(u => u.User).FirstOrDefaultAsync(u => u.DiscordId == id);
+            if (discordAuthedUser != null && discordAuthedUser.User != null)
+            {
+                logger.LogInformation("User will be purged on next round of deletions: " + discordAuthedUser.User);
+                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 0, 0);
+                db.Remove(discordAuthedUser);
+                await db.SaveChangesAsync();
             }
         }
 
@@ -145,7 +166,7 @@ namespace MareSynchronosServer.Discord
                             lodestoneAuth.LodestoneAuthString = null;
 
                             embedBuilder.WithTitle("Registration successful");
-                            embedBuilder.WithDescription("This is your private secret key. Do not share this private secret key with anyone. If you lose it, it is irrevocably lost."
+                            embedBuilder.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
                                 + Environment.NewLine + Environment.NewLine
                                 + $"**{computedHash}**"
                                 + Environment.NewLine + Environment.NewLine
@@ -158,7 +179,9 @@ namespace MareSynchronosServer.Discord
                         else
                         {
                             embedBuilder.WithTitle("Failed to verify your character");
-                            embedBuilder.WithDescription("Did not find requested authentication key on your profile. Start over with **/register**");
+                            embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/verify** again.");
+                            DiscordLodestoneMapping.TryRemove(id, out _);
+                            db.Remove(lodestoneAuth);
                         }
                     }
                     else
@@ -271,6 +294,7 @@ namespace MareSynchronosServer.Discord
             var cb = new SlashCommandBuilder();
             cb.WithName("register");
             cb.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
+            cb.AddOption("forced", ApplicationCommandOptionType.Boolean, "Will forcefully overwrite your current character on the service, if present", false, false);
 
             var cb2 = new SlashCommandBuilder();
             cb2.WithName("verify");
@@ -296,18 +320,28 @@ namespace MareSynchronosServer.Discord
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            authToken = configuration.GetValue<string>("DiscordBotToken");
             if (!string.IsNullOrEmpty(authToken))
             {
+                authToken = configuration.GetValue<string>("DiscordBotToken");
+
                 await discordClient.LoginAsync(TokenType.Bot, authToken);
                 await discordClient.StartAsync();
 
                 discordClient.Ready += DiscordClient_Ready;
                 discordClient.SlashCommandExecuted += DiscordClient_SlashCommandExecuted;
                 discordClient.ModalSubmitted += DiscordClient_ModalSubmitted;
+                discordClient.Disconnected += DiscordClient_Disconnected;
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
             }
+        }
+
+        private async Task DiscordClient_Disconnected(Exception arg)
+        {
+            authToken = configuration.GetValue<string>("DiscordBotToken");
+
+            await discordClient.LoginAsync(TokenType.Bot, authToken);
+            await discordClient.StartAsync();
         }
 
         private void UpdateStatus(object state)
