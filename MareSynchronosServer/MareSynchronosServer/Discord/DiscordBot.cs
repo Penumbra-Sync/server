@@ -96,11 +96,16 @@ namespace MareSynchronosServer.Discord
             using var scope = services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
             var discordAuthedUser = await db.LodeStoneAuth.Include(u => u.User).FirstOrDefaultAsync(u => u.DiscordId == id);
-            if (discordAuthedUser != null && discordAuthedUser.User != null)
+            if (discordAuthedUser != null)
             {
-                logger.LogInformation("Purging user: " + discordAuthedUser.User.UID);
-
-                FileCleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
+                if (discordAuthedUser.User != null)
+                {
+                    FileCleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
+                }
+                else
+                {
+                    db.Remove(discordAuthedUser);
+                }
 
                 await db.SaveChangesAsync();
             }
