@@ -79,7 +79,7 @@ namespace MareSynchronosServer.Discord
             if (discordAuthedUser != null && discordAuthedUser.User != null)
             {
                 logger.LogInformation("User will be purged on next round of deletions: " + discordAuthedUser.User);
-                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 0, 0);
+                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 1, 1);
                 db.Remove(discordAuthedUser);
                 await db.SaveChangesAsync();
             }
@@ -294,7 +294,7 @@ namespace MareSynchronosServer.Discord
             var cb = new SlashCommandBuilder();
             cb.WithName("register");
             cb.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
-            cb.AddOption("forced", ApplicationCommandOptionType.Boolean, "Will forcefully overwrite your current character on the service, if present", false, false);
+            cb.AddOption("forced", ApplicationCommandOptionType.SubCommand, "Will forcefully overwrite your current character on the service, if present", false, false);
 
             var cb2 = new SlashCommandBuilder();
             cb2.WithName("verify");
