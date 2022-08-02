@@ -66,11 +66,11 @@ namespace MareSynchronosServer.Discord
             else if (arg.Data.Name == "verify")
             {
                 Embed response = await HandleVerifyAsync(arg.User.Id);
-                await arg.RespondAsync(embeds: new[] { response });
+                await arg.RespondAsync(embeds: new[] { response }, ephemeral: true);
             }
             else
             {
-                await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.");
+                await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true);
             }
         }
 
