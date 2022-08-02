@@ -124,7 +124,7 @@ namespace MareSynchronosServer.Discord
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
             var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == id);
-            if (lodestoneAuth != null || !DiscordLodestoneMapping.ContainsKey(id))
+            if (lodestoneAuth != null && DiscordLodestoneMapping.ContainsKey(id))
             {
                 Random rand = new();
                 var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
