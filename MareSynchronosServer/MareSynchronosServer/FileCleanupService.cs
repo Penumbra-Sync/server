@@ -114,7 +114,7 @@ namespace MareSynchronosServer
 
                     foreach (var user in usersToRemove)
                     {
-                        PurgeUser(user);
+                        PurgeUser(user, dbContext, _configuration);
                     }
                 }
 
