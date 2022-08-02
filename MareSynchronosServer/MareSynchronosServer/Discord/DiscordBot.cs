@@ -93,9 +93,8 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.CustomId == "register_modal")
             {
-                await arg.DeferAsync(true);
                 var embed = await HandleRegisterModalAsync(arg);
-                await arg.FollowupAsync(embeds: new Embed[] { embed }, ephemeral: true);
+                await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true);
             }
         }
 
