@@ -52,7 +52,7 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.Name == "register")
             {
-                if (arg.Data.Options.FirstOrDefault(f => f.Name == "forced") != null)
+                if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                 {
                     await DeletePreviousUserAccount(arg.User.Id);
                 }
