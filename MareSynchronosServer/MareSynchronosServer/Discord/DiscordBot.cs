@@ -32,7 +32,7 @@ namespace MareSynchronosServer.Discord
         private Timer _timer;
         private Timer _queueTimer;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
-        private ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue;
+        private ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue = new ConcurrentQueue<(Func<Task<Embed>>, SocketUser)>();
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
