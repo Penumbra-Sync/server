@@ -295,10 +295,11 @@ namespace MareSynchronosServer.Discord
                 .WithName("register")
                 .WithDescription("Registration for the Mare Synchronos server of this Discord")
                 .AddOption(new SlashCommandOptionBuilder()
+                    .WithName("new account")
                     .WithDescription("Starts the registration process for the Mare Synchronos server of this Discord")
                     .WithType(ApplicationCommandOptionType.SubCommand))
                 .AddOption(new SlashCommandOptionBuilder()
-                    .WithName("forced")
+                    .WithName("overwrite old account")
                     .WithDescription("Will forcefully overwrite your current character on the service, if present")
                     .WithType(ApplicationCommandOptionType.SubCommand));
 
