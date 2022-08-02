@@ -52,6 +52,12 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.Name == "register")
             {
+                if (DiscordLodestoneMapping.Count > 10)
+                {
+                    await arg.RespondAsync("The bot registrations are currently overloaded. Please wait a few minutes and try again.", ephemeral: true);
+                    return;
+                }
+
                 if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                 {
                     await DeletePreviousUserAccount(arg.User.Id);
@@ -117,7 +123,9 @@ namespace MareSynchronosServer.Discord
                 {
                     Random rand = new();
                     var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
-                    var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}");
+                    CancellationTokenSource cts = new CancellationTokenSource();
+                    cts.CancelAfter(TimeSpan.FromSeconds(2));
+                    var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}", cts.Token);
                     if (response.IsSuccessStatusCode)
                     {
                         var content = await response.Content.ReadAsStringAsync();
@@ -188,7 +196,7 @@ namespace MareSynchronosServer.Discord
                     else
                     {
                         embedBuilder.WithTitle("Failed to get response from Lodestone");
-                        embedBuilder.WithDescription("Try again later");
+                        embedBuilder.WithDescription("Wait a few seconds and try again.");
                         lodestoneAuth.StartedAt = DateTime.UtcNow;
                     }
 
