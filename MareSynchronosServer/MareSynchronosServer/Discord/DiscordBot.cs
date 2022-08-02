@@ -79,7 +79,7 @@ namespace MareSynchronosServer.Discord
             if (discordAuthedUser != null && discordAuthedUser.User != null)
             {
                 logger.LogInformation("User will be purged on next round of deletions: " + discordAuthedUser.User);
-                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 1, 1);
+                discordAuthedUser.User.LastLoggedIn = new DateTime(1900, 1, 1).ToUniversalTime();
                 db.Remove(discordAuthedUser);
                 await db.SaveChangesAsync();
             }
@@ -291,19 +291,25 @@ namespace MareSynchronosServer.Discord
 
         private async Task DiscordClient_Ready()
         {
-            var cb = new SlashCommandBuilder();
-            cb.WithName("register");
-            cb.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
-            cb.AddOption("forced", ApplicationCommandOptionType.SubCommand, "Will forcefully overwrite your current character on the service, if present", false, false);
+            var register = new SlashCommandBuilder();
+            register.WithName("register");
+            register.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
+            register.AddOption("forced", ApplicationCommandOptionType.SubCommand, "Will forcefully overwrite your current character on the service, if present", false, false);
 
-            var cb2 = new SlashCommandBuilder();
-            cb2.WithName("verify");
-            cb2.WithDescription("Finishes the registration process for the Mare Synchronos server of this Discord");
+            var registerForced = new SlashCommandBuilder();
+            registerForced.WithName("register");
+            registerForced.WithDescription("Starts the registration process for the Mare Synchronos server of this Discord");
+            registerForced.AddOption("forced", ApplicationCommandOptionType.SubCommand, "Will forcefully overwrite your current character on the service, if present", false, false);
+
+            var verify = new SlashCommandBuilder();
+            verify.WithName("verify");
+            verify.WithDescription("Finishes the registration process for the Mare Synchronos server of this Discord");
 
             try
             {
-                await discordClient.CreateGlobalApplicationCommandAsync(cb.Build());
-                await discordClient.CreateGlobalApplicationCommandAsync(cb2.Build());
+                await discordClient.CreateGlobalApplicationCommandAsync(register.Build());
+                await discordClient.CreateGlobalApplicationCommandAsync(registerForced.Build());
+                await discordClient.CreateGlobalApplicationCommandAsync(verify.Build());
             }
             catch (Exception ex)
             {
