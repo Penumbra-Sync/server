@@ -32,7 +32,7 @@ namespace MareSynchronosServer.Discord
         private Timer _timer;
         private Timer _queueTimer;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
-        private readonly ConcurrentQueue<(Func<Task<Embed>>, SocketUser)> verificationQueue = new();
+        private readonly ConcurrentQueue<(Func<Task<Embed>>, SocketSlashCommand)> verificationQueue = new();
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
@@ -71,20 +71,19 @@ namespace MareSynchronosServer.Discord
                 {
                     eb.WithTitle("Already queued for verfication");
                     eb.WithDescription("You are already queued for verification. Please wait.");
+                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
                 }
                 else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
                 {
                     eb.WithTitle("Cannot verify registration");
                     eb.WithDescription("You need to **/register** first before you can **/verify**");
+                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
                 }
                 else
                 {
-                    eb.WithTitle("You are now enqueued for verification");
-                    eb.WithDescription("The verification is a rate limited process. Under heavy load it might take a while until you get your secret key reply. The bot will get back to you as soon as it can.");
-                    verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg.User));
+                    await arg.DeferAsync();
+                    verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg));
                 }
-                await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
-
             }
             else
             {
@@ -364,7 +363,7 @@ namespace MareSynchronosServer.Discord
             if (verificationQueue.TryDequeue(out var queueitem))
             {
                 var dataEmbed = await queueitem.Item1.Invoke();
-                await queueitem.Item2.SendMessageAsync(embed: dataEmbed);
+                await queueitem.Item2.FollowupAsync(embed: dataEmbed);
                 logger.LogInformation("Sent login information to user");
             }
         }
