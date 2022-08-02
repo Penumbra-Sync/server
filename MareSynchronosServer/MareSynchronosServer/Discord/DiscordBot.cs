@@ -124,7 +124,7 @@ namespace MareSynchronosServer.Discord
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
             var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == id);
-            if (lodestoneAuth != null)
+            if (lodestoneAuth != null || !DiscordLodestoneMapping.ContainsKey(id))
             {
                 Random rand = new();
                 var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
@@ -202,7 +202,7 @@ namespace MareSynchronosServer.Discord
             }
             else
             {
-                embedBuilder.WithTitle("Your auth has expired");
+                embedBuilder.WithTitle("Your auth has expired or something else went wrong");
                 embedBuilder.WithDescription("Start again with **/register**");
                 DiscordLodestoneMapping.TryRemove(id, out _);
             }
@@ -346,7 +346,7 @@ namespace MareSynchronosServer.Discord
                 discordClient.Disconnected += DiscordClient_Disconnected;
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
-                _queueTimer = new Timer(ProcessQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+                _queueTimer = new Timer(ProcessQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
             }
         }
 
