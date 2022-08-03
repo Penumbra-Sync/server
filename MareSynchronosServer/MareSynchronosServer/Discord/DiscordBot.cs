@@ -302,14 +302,16 @@ namespace MareSynchronosServer.Discord
             return auth;
         }
 
-        private int? ParseCharacterIdFromLodestoneUrl(string lodestoneUrl)
+        private int? ParseCharacterIdFromLodestoneUrl(string lodestoneUrl) 
         {
-            var isLodestoneUrl = Regex.Match(lodestoneUrl, @"https:\/\/(na|eu|de|fr|jp)\.finalfantasyxiv\.com\/lodestone\/character\/\d+").Success;
-            if (!isLodestoneUrl) return null;
+            var regex = new Regex(@"https:\/\/(na|eu|de|fr|jp)\.finalfantasyxiv\.com\/lodestone\/character\/\d+");
+            var matches = regex.Match(lodestoneUrl);
+            var isLodestoneUrl = matches.Success;
+            if (!isLodestoneUrl || matches.Groups.Count < 1) return null;
 
-            lodestoneUrl = lodestoneUrl.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
-            if (!int.TryParse(lodestoneUrl, out int lodestoneId))
-            {
+            lodestoneUrl = matches.Groups[0].ToString();
+            var stringId = lodestoneUrl.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
+            if (!int.TryParse(stringId, out int lodestoneId)) {
                 return null;
             }
 
