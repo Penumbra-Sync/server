@@ -133,9 +133,7 @@ namespace MareSynchronosServer.Hubs
                 allowableChars = @"ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
 
             // Generate random data
-            var rnd = new byte[length];
-            using (var rng = new RNGCryptoServiceProvider())
-                rng.GetBytes(rnd);
+            var rnd = RandomNumberGenerator.GetBytes(length);
 
             // Generate the output string
             var allowable = allowableChars.ToCharArray();
