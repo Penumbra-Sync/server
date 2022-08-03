@@ -364,21 +364,11 @@ namespace MareSynchronosServer.Discord
                 discordClient.Ready += DiscordClient_Ready;
                 discordClient.SlashCommandExecuted += DiscordClient_SlashCommandExecuted;
                 discordClient.ModalSubmitted += DiscordClient_ModalSubmitted;
-                discordClient.Disconnected += DiscordClient_Disconnected;
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
 
                 ProcessQueueWork();
             }
-        }
-
-
-        private async Task DiscordClient_Disconnected(Exception arg)
-        {
-            authToken = configuration.GetValue<string>("DiscordBotToken");
-
-            await discordClient.LoginAsync(TokenType.Bot, authToken);
-            await discordClient.StartAsync();
         }
 
         private async Task ProcessQueueWork()
