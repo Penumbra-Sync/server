@@ -65,6 +65,7 @@ namespace MareSynchronosServer
             services.AddHostedService<FileCleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
             services.AddHostedService<DiscordBot>();
+            services.AddHttpContextAccessor();
 
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>
