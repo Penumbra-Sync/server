@@ -19,7 +19,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MareSynchronosServer.Discord {
+namespace MareSynchronosServer.Discord
+{
     public class DiscordBot : IHostedService
     {
         private readonly IServiceProvider services;
@@ -31,7 +32,6 @@ namespace MareSynchronosServer.Discord {
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
         private Timer _timer;
         private CancellationTokenSource verificationTaskCts;
-        private Task verificationTaskWorker;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
         private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
 
@@ -57,11 +57,14 @@ namespace MareSynchronosServer.Discord {
         }
 
         private async Task DiscordClient_SlashCommandExecuted(SocketSlashCommand arg)
-        {            
+        {
             await semaphore.WaitAsync();
-            try {
-                if (arg.Data.Name == "register") {
-                    if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null) {
+            try
+            {
+                if (arg.Data.Name == "register")
+                {
+                    if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
+                    {
                         await DeletePreviousUserAccount(arg.User.Id);
                     }
 
@@ -70,27 +73,37 @@ namespace MareSynchronosServer.Discord {
                     modal.WithCustomId("register_modal");
                     modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
                     await arg.RespondWithModalAsync(modal.Build());
-                } else if (arg.Data.Name == "verify") {
+                }
+                else if (arg.Data.Name == "verify")
+                {
                     EmbedBuilder eb = new();
-                    if (verificationQueue.Any(u => u.User.Id == arg.User.Id)) {
+                    if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
+                    {
                         eb.WithTitle("Already queued for verfication");
                         eb.WithDescription("You are already queued for verification. Please wait.");
                         await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
-                    } else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id)) {
+                    }
+                    else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
+                    {
                         eb.WithTitle("Cannot verify registration");
                         eb.WithDescription("You need to **/register** first before you can **/verify**");
                         await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
-                    } else {
+                    }
+                    else
+                    {
                         await arg.DeferAsync(ephemeral: true);
                         verificationQueue.Enqueue(arg);
                     }
-                } else {
+                }
+                else
+                {
                     await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true);
                 }
-            } finally {
+            }
+            finally
+            {
                 semaphore.Release();
             }
-            
         }
 
         private async Task DeletePreviousUserAccount(ulong id)
@@ -258,6 +271,8 @@ namespace MareSynchronosServer.Discord {
                         + Environment.NewLine + Environment.NewLine
                         + $"**{lodestoneAuth}**"
                         + Environment.NewLine + Environment.NewLine
+                        + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
+                        + Environment.NewLine + Environment.NewLine
                         + "Once added and saved, use command **/verify** to finish registration and receive a secret key to use for Mare Synchronos."
                         + Environment.NewLine
                         + "You can delete the entry from your profile after verification."
@@ -272,7 +287,7 @@ namespace MareSynchronosServer.Discord {
 
         private async Task<string> GenerateLodestoneAuth(ulong discordid, string hashedLodestoneId, MareDbContext dbContext)
         {
-            var auth = MareHub.GenerateRandomString(64);
+            var auth = MareHub.GenerateRandomString(32);
             LodeStoneAuth lsAuth = new LodeStoneAuth()
             {
                 DiscordId = discordid,
@@ -353,7 +368,7 @@ namespace MareSynchronosServer.Discord {
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
 
-                verificationTaskWorker = ProcessQueueWork();
+                ProcessQueueWork();
             }
         }
 
@@ -369,15 +384,20 @@ namespace MareSynchronosServer.Discord {
         private async Task ProcessQueueWork()
         {
             verificationTaskCts = new CancellationTokenSource();
-            while(!verificationTaskCts.IsCancellationRequested) {
+            while (!verificationTaskCts.IsCancellationRequested)
+            {
 
-                if (verificationQueue.TryDequeue(out var queueitem)) {
-                    try {
+                if (verificationQueue.TryDequeue(out var queueitem))
+                {
+                    try
+                    {
                         var dataEmbed = await HandleVerifyAsync(queueitem.User.Id);
                         await queueitem.FollowupAsync(embed: dataEmbed, ephemeral: true);
 
                         logger.LogInformation("Sent login information to user");
-                    } catch(Exception e) {
+                    }
+                    catch (Exception e)
+                    {
                         logger.LogError(e.Message);
                     }
 

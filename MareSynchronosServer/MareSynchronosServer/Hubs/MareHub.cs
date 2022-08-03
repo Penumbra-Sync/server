@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
-    [AllowAnonymous]
     [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
     public partial class MareHub : Hub
     {
@@ -33,7 +32,6 @@ namespace MareSynchronosServer.Hubs
             _dbContext = mareDbContext;
         }
 
-        [AllowAnonymous]
         [HubMethodName(Api.InvokeHeartbeat)]
         public async Task<ConnectionDto> Heartbeat(string? characterIdentification)
         {
@@ -81,13 +79,11 @@ namespace MareSynchronosServer.Hubs
         }
 
         [HubMethodName(Api.InvokeGetSystemInfo)]
-        [AllowAnonymous]
         public async Task<SystemInfoDto> GetSystemInfo()
         {
             return _systemInfoService.SystemInfoDto;
         }
 
-        [AllowAnonymous]
         public override Task OnConnectedAsync()
         {
             var feature = Context.Features.Get<IHttpConnectionFeature>();
@@ -96,7 +92,6 @@ namespace MareSynchronosServer.Hubs
             return base.OnConnectedAsync();
         }
 
-        [AllowAnonymous]
         public override async Task OnDisconnectedAsync(Exception exception)
         {
             MareMetrics.Connections.Dec();
