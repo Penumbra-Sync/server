@@ -21,13 +21,15 @@ namespace MareSynchronosServer.Hubs
     {
         private readonly SystemInfoService _systemInfoService;
         private readonly IConfiguration _configuration;
+        private readonly IHttpContextAccessor contextAccessor;
         private readonly ILogger<MareHub> _logger;
         private readonly MareDbContext _dbContext;
 
-        public MareHub(MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration)
+        public MareHub(MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor)
         {
             _systemInfoService = systemInfoService;
             _configuration = configuration;
+            this.contextAccessor = contextAccessor;
             _logger = logger;
             _dbContext = mareDbContext;
         }
@@ -81,8 +83,7 @@ namespace MareSynchronosServer.Hubs
 
         public override Task OnConnectedAsync()
         {
-            var feature = Context.Features.Get<IHttpContextAccessor>();
-            _logger.LogInformation("Connection from " + feature.GetIpAddress());
+            _logger.LogInformation("Connection from " + contextAccessor.GetIpAddress());
             MareMetrics.Connections.Inc();
             return base.OnConnectedAsync();
         }

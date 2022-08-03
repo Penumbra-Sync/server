@@ -35,6 +35,8 @@ namespace MareSynchronosServer
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+
             services.AddSignalR(hubOptions =>
             {
                 hubOptions.MaximumReceiveMessageSize = long.MaxValue;
@@ -65,7 +67,6 @@ namespace MareSynchronosServer
             services.AddHostedService<FileCleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
             services.AddHostedService<DiscordBot>();
-            services.AddHttpContextAccessor();
 
             services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>
