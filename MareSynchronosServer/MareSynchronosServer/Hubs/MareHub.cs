@@ -8,6 +8,7 @@ using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -33,7 +34,7 @@ namespace MareSynchronosServer.Hubs
         }
 
         [HubMethodName(Api.InvokeHeartbeat)]
-        public async Task<ConnectionDto> Heartbeat(string? characterIdentification)
+        public async Task<ConnectionDto> Heartbeat(string characterIdentification)
         {
             MareMetrics.InitializedConnections.Inc();
 
@@ -86,8 +87,8 @@ namespace MareSynchronosServer.Hubs
 
         public override Task OnConnectedAsync()
         {
-            var feature = Context.Features.Get<IHttpConnectionFeature>();
-            _logger.LogInformation("Connection from " + feature.RemoteIpAddress);
+            var feature = Context.Features.Get<IHttpContextAccessor>();
+            _logger.LogInformation("Connection from " + feature.GetIpAddress());
             MareMetrics.Connections.Inc();
             return base.OnConnectedAsync();
         }
