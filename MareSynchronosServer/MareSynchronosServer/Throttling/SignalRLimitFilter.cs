@@ -43,7 +43,6 @@ public class SignalRLimitFilter : IHubFilter
             }
         }
 
-        //Console.WriteLine($"Calling hub method '{invocationContext.HubMethodName}'");
         return await next(invocationContext);
     }
 

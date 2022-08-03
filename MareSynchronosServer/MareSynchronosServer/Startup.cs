@@ -114,6 +114,8 @@ namespace MareSynchronosServer
             app.UseAuthentication();
             app.UseAuthorization();
 
+            app.UseMetricServer(4980);
+
             app.UseStaticFiles(new StaticFileOptions()
             {
                 FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
@@ -129,8 +131,6 @@ namespace MareSynchronosServer
                     options.TransportMaxBufferSize = 5242880;
                     options.Transports = HttpTransportType.WebSockets;
                 });
-
-                endpoints.MapMetrics();
             });
         }
     }
