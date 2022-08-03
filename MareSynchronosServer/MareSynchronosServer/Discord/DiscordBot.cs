@@ -26,6 +26,7 @@ namespace MareSynchronosServer.Discord
         private readonly IServiceProvider services;
         private readonly IConfiguration configuration;
         private readonly ILogger<DiscordBot> logger;
+        private readonly Random random;
         private string authToken = string.Empty;
         DiscordSocketClient discordClient;
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
@@ -39,6 +40,7 @@ namespace MareSynchronosServer.Discord
             this.configuration = configuration;
             this.logger = logger;
 
+            random = new();
             authToken = configuration.GetValue<string>("DiscordBotToken");
 
             discordClient = new(new DiscordSocketConfig()
@@ -131,8 +133,7 @@ namespace MareSynchronosServer.Discord
             var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == id);
             if (lodestoneAuth != null && DiscordLodestoneMapping.ContainsKey(id))
             {
-                Random rand = new();
-                var randomServer = LodestoneServers[rand.Next(LodestoneServers.Length)];
+                var randomServer = LodestoneServers[random.Next(LodestoneServers.Length)];
                 var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}");
                 if (response.IsSuccessStatusCode)
                 {
