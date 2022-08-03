@@ -19,8 +19,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MareSynchronosServer.Discord
-{
+namespace MareSynchronosServer.Discord {
     public class DiscordBot : IHostedService
     {
         private readonly IServiceProvider services;
@@ -30,14 +29,20 @@ namespace MareSynchronosServer.Discord
         DiscordSocketClient discordClient;
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
         private Timer _timer;
-        private Timer _queueTimer;
+        private CancellationTokenSource verificationTaskCts;
+        private Task verificationTaskWorker;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
-        private readonly ConcurrentQueue<(Func<Task<Embed>>, SocketSlashCommand)> verificationQueue = new();
+        private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
+
+        private SemaphoreSlim semaphore;
+
         public DiscordBot(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
         {
             this.services = services;
             this.configuration = configuration;
             this.logger = logger;
+            this.verificationQueue = new ConcurrentQueue<SocketSlashCommand>();
+            this.semaphore = new SemaphoreSlim(1);
 
             authToken = configuration.GetValue<string>("DiscordBotToken");
 
@@ -50,45 +55,40 @@ namespace MareSynchronosServer.Discord
         }
 
         private async Task DiscordClient_SlashCommandExecuted(SocketSlashCommand arg)
-        {
-            if (arg.Data.Name == "register")
-            {
-                if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
-                {
-                    await DeletePreviousUserAccount(arg.User.Id);
-                }
+        {            
+            await semaphore.WaitAsync();
+            try {
+                if (arg.Data.Name == "register") {
+                    if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null) {
+                        await DeletePreviousUserAccount(arg.User.Id);
+                    }
 
-                var modal = new ModalBuilder();
-                modal.WithTitle("Verify with Lodestone");
-                modal.WithCustomId("register_modal");
-                modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-                await arg.RespondWithModalAsync(modal.Build());
-            }
-            else if (arg.Data.Name == "verify")
-            {
-                EmbedBuilder eb = new();
-                if (verificationQueue.Any(u => u.Item2.Id == arg.User.Id))
-                {
-                    eb.WithTitle("Already queued for verfication");
-                    eb.WithDescription("You are already queued for verification. Please wait.");
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+                    var modal = new ModalBuilder();
+                    modal.WithTitle("Verify with Lodestone");
+                    modal.WithCustomId("register_modal");
+                    modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
+                    await arg.RespondWithModalAsync(modal.Build());
+                } else if (arg.Data.Name == "verify") {
+                    EmbedBuilder eb = new();
+                    if (verificationQueue.Any(u => u.User.Id == arg.User.Id)) {
+                        eb.WithTitle("Already queued for verfication");
+                        eb.WithDescription("You are already queued for verification. Please wait.");
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+                    } else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id)) {
+                        eb.WithTitle("Cannot verify registration");
+                        eb.WithDescription("You need to **/register** first before you can **/verify**");
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+                    } else {
+                        await arg.DeferAsync(ephemeral: true);
+                        verificationQueue.Enqueue(arg);
+                    }
+                } else {
+                    await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true);
                 }
-                else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
-                {
-                    eb.WithTitle("Cannot verify registration");
-                    eb.WithDescription("You need to **/register** first before you can **/verify**");
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
-                }
-                else
-                {
-                    await arg.DeferAsync(ephemeral: true);
-                    verificationQueue.Enqueue((async () => await HandleVerifyAsync(arg.User.Id), arg));
-                }
+            } finally {
+                semaphore.Release();
             }
-            else
-            {
-                await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true);
-            }
+            
         }
 
         private async Task DeletePreviousUserAccount(ulong id)
@@ -351,9 +351,11 @@ namespace MareSynchronosServer.Discord
                 discordClient.Disconnected += DiscordClient_Disconnected;
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
-                _queueTimer = new Timer(ProcessQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+
+                verificationTaskWorker = ProcessQueueWork();
             }
         }
+
 
         private async Task DiscordClient_Disconnected(Exception arg)
         {
@@ -363,13 +365,23 @@ namespace MareSynchronosServer.Discord
             await discordClient.StartAsync();
         }
 
-        private async void ProcessQueue(object state)
+        private async Task ProcessQueueWork()
         {
-            if (verificationQueue.TryDequeue(out var queueitem))
-            {
-                var dataEmbed = await queueitem.Item1.Invoke();
-                await queueitem.Item2.FollowupAsync(embed: dataEmbed, ephemeral: true);
-                logger.LogInformation("Sent login information to user");
+            verificationTaskCts = new CancellationTokenSource();
+            while(!verificationTaskCts.IsCancellationRequested) {
+
+                if (verificationQueue.TryDequeue(out var queueitem)) {
+                    try {
+                        var dataEmbed = await HandleVerifyAsync(queueitem.User.Id);
+                        await queueitem.FollowupAsync(embed: dataEmbed, ephemeral: true);
+
+                        logger.LogInformation("Sent login information to user");
+                    } catch(Exception e) {
+                        logger.LogError(e.Message);
+                    }
+
+                }
+                await Task.Delay(TimeSpan.FromSeconds(2), verificationTaskCts.Token);
             }
         }
 
@@ -386,7 +398,7 @@ namespace MareSynchronosServer.Discord
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             _timer?.Change(Timeout.Infinite, 0);
-            _queueTimer?.Change(Timeout.Infinite, 0);
+            verificationTaskCts?.Cancel();
 
             await discordClient.LogoutAsync();
             await discordClient.StopAsync();
