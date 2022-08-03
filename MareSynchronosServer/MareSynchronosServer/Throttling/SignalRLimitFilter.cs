@@ -1,4 +1,5 @@
 ﻿using AspNetCoreRateLimit;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using System;
@@ -8,19 +9,19 @@ namespace MareSynchronosServer.Throttling;
 public class SignalRLimitFilter : IHubFilter
 {
     private readonly IRateLimitProcessor _processor;
+    private readonly IHttpContextAccessor accessor;
 
     public SignalRLimitFilter(
-        IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IRateLimitCounterStore counterStore,
-        IRateLimitConfiguration rateLimitConfiguration, IIpPolicyStore policyStore)
+        IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor)
     {
         _processor = new IpRateLimitProcessor(options?.Value, policyStore, processing);
+        this.accessor = accessor;
     }
 
     public async ValueTask<object> InvokeMethodAsync(
         HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object>> next)
     {
-        var httpContext = invocationContext.Context.GetHttpContext();
-        var ip = httpContext.Connection.RemoteIpAddress.ToString();
+        var ip = accessor.GetIpAddress();
         var client = new ClientRequestIdentity
         {
             ClientIp = ip,
@@ -44,9 +45,27 @@ public class SignalRLimitFilter : IHubFilter
     }
 
     // Optional method
-    public Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
+    public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
     {
-        return next(context);
+        var ip = accessor.GetIpAddress();
+        var client = new ClientRequestIdentity
+        {
+            ClientIp = ip,
+            Path = "Connect",
+            HttpVerb = "ws",
+        };
+        foreach (var rule in await _processor.GetMatchingRulesAsync(client))
+        {
+            var counter = await _processor.ProcessRequestAsync(client, rule);
+            Console.WriteLine("time: {0}, count: {1}", counter.Timestamp, counter.Count);
+            if (counter.Count > rule.Limit)
+            {
+                var retry = counter.Timestamp.RetryAfterFrom(rule);
+                throw new HubException($"rate limit {retry}");
+            }
+        }
+
+        await next(context);
     }
 
     // Optional method
