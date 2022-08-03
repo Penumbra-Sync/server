@@ -18,6 +18,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authorization;
 using MareSynchronosServer.Discord;
 using AspNetCoreRateLimit;
+using MareSynchronosServer.Throttling;
 
 namespace MareSynchronosServer
 {
@@ -36,14 +37,6 @@ namespace MareSynchronosServer
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddHttpContextAccessor();
-
-            services.AddSignalR(hubOptions =>
-            {
-                hubOptions.MaximumReceiveMessageSize = long.MaxValue;
-                hubOptions.EnableDetailedErrors = true;
-                hubOptions.MaximumParallelInvocationsPerClient = 10;
-                hubOptions.StreamBufferCapacity = 200;
-            });
 
             services.AddMemoryCache();
 
@@ -77,6 +70,15 @@ namespace MareSynchronosServer
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+
+            services.AddSignalR(hubOptions =>
+            {
+                hubOptions.MaximumReceiveMessageSize = long.MaxValue;
+                hubOptions.EnableDetailedErrors = true;
+                hubOptions.MaximumParallelInvocationsPerClient = 10;
+                hubOptions.StreamBufferCapacity = 200;
+                hubOptions.AddFilter<SignalRLimitFilter>();
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
