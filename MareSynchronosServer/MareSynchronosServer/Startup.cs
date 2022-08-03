@@ -69,7 +69,6 @@ namespace MareSynchronosServer
                 .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-            services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
             services.AddSignalR(hubOptions =>
             {
@@ -77,8 +76,9 @@ namespace MareSynchronosServer
                 hubOptions.EnableDetailedErrors = true;
                 hubOptions.MaximumParallelInvocationsPerClient = 10;
                 hubOptions.StreamBufferCapacity = 200;
-                hubOptions.AddFilter<SignalRLimitFilter>();
             });
+
+            services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
