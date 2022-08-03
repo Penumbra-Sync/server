@@ -18,6 +18,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authorization;
 using MareSynchronosServer.Discord;
 using AspNetCoreRateLimit;
+using MareSynchronosServer.Throttling;
 
 namespace MareSynchronosServer
 {
