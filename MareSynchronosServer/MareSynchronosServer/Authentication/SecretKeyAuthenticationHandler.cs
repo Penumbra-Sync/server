@@ -7,8 +7,6 @@ using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,13 +20,8 @@ namespace MareSynchronosServer.Authentication
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            var endpoint = Context.GetEndpoint();
-            var endpointMetaData = endpoint?.Metadata?.GetMetadata<IAllowAnonymous>();
-
-            if (!Request.Headers.ContainsKey("Authorization") && endpointMetaData == null)
+            if (!Request.Headers.ContainsKey("Authorization"))
                 return AuthenticateResult.Fail("Failed Authorization");
-            else if (!Request.Headers.ContainsKey("Authorization") && endpointMetaData != null)
-                return AuthenticateResult.NoResult();
 
             var authHeader = Request.Headers["Authorization"].ToString();
 
@@ -43,10 +36,6 @@ namespace MareSynchronosServer.Authentication
             if (uid == null)
             {
                 return AuthenticateResult.Fail("Failed Authorization");
-            }
-            else if (endpointMetaData != null && uid == null)
-            {
-                return AuthenticateResult.NoResult();
             }
 
             var claims = new List<Claim> {

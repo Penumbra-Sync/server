@@ -9,7 +9,6 @@ using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -34,6 +33,7 @@ namespace MareSynchronosServer.Hubs
         }
 
         [HubMethodName(Api.InvokeHeartbeat)]
+        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         public async Task<ConnectionDto> Heartbeat(string characterIdentification)
         {
             MareMetrics.InitializedConnections.Inc();
@@ -77,12 +77,6 @@ namespace MareSynchronosServer.Hubs
             {
                 ServerVersion = Api.Version
             };
-        }
-
-        [HubMethodName(Api.InvokeGetSystemInfo)]
-        public async Task<SystemInfoDto> GetSystemInfo()
-        {
-            return _systemInfoService.SystemInfoDto;
         }
 
         public override Task OnConnectedAsync()
