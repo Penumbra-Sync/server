@@ -114,7 +114,8 @@ namespace MareSynchronosServer
             app.UseAuthentication();
             app.UseAuthorization();
 
-            app.UseMetricServer(4980);
+            var metricServer = new KestrelMetricServer(4980);
+            metricServer.Start();
 
             app.UseStaticFiles(new StaticFileOptions()
             {

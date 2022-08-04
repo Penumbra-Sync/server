@@ -174,7 +174,8 @@ namespace MareSynchronosServer.Hubs
             {
                 var decodedFile = LZ4.LZ4Codec.Unwrap(uploadedFile.ToArray());
                 using var sha1 = SHA1.Create();
-                var computedHash = await sha1.ComputeHashAsync(new MemoryStream(decodedFile));
+                using var ms = new MemoryStream(decodedFile);
+                var computedHash = await sha1.ComputeHashAsync(ms);
                 var computedHashString = BitConverter.ToString(computedHash).Replace("-", "");
                 if (hash != computedHashString)
                 {
