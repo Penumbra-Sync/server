@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
+using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace MareSynchronosServer.Throttling;
@@ -37,8 +39,9 @@ public class SignalRLimitFilter : IHubFilter
             var counter = await _processor.ProcessRequestAsync(client, rule);
             if (counter.Count > rule.Limit)
             {
+                var authUserId = invocationContext.Context.User.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
                 var retry = counter.Timestamp.RetryAfterFrom(rule);
-                logger.LogWarning($"Method rate limit triggered from {ip}: {invocationContext.HubMethodName}");
+                logger.LogWarning($"Method rate limit triggered from {ip}/{authUserId}: {invocationContext.HubMethodName}");
                 throw new HubException($"call limit {retry}");
             }
         }
