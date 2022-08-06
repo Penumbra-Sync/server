@@ -16,7 +16,6 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs
 {
-    [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
     public partial class MareHub : Hub
     {
         private readonly SystemInfoService _systemInfoService;
