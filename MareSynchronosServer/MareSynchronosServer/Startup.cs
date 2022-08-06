@@ -57,7 +57,7 @@ namespace MareSynchronosServer
                 }).UseSnakeCaseNamingConvention();
             });
 
-            services.AddHostedService<FileCleanupService>();
+            services.AddHostedService<CleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
             services.AddHostedService<DiscordBot>();
 
