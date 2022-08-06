@@ -66,7 +66,7 @@ namespace MareSynchronosServer
                 {
                     options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
                 })
-                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
+                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => {});
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();

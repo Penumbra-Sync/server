@@ -10,19 +10,38 @@ using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronosServer.Data;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServer.Authentication
 {
+    public class FailedAuthorization
+    {
+        private int failedAttempts = 1;
+        public int FailedAttempts => failedAttempts;
+        public Task ResetTask { get; set; }
+        public CancellationTokenSource ResetCts { get; set; } = new();
+        public void IncreaseFailedAttempts()
+        {
+            Interlocked.Increment(ref failedAttempts);
+        }
+    }
+
     public class SecretKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
+        private readonly IHttpContextAccessor _accessor;
         private readonly MareDbContext _mareDbContext;
+        private readonly IConfiguration _configuration;
         public const string AuthScheme = "SecretKeyAuth";
         private const string unauthorized = "Unauthorized";
         public static ConcurrentDictionary<string, string> Authentications = new();
+        private static ConcurrentDictionary<string, FailedAuthorization> FailedAuthorizations = new();
         private static SemaphoreSlim dbLockSemaphore = new SemaphoreSlim(20);
+        private int failedAttemptsForTempBan;
+        private int tempBanMinutes;
 
         public static void ClearUnauthorizedUsers()
         {
@@ -47,12 +66,34 @@ namespace MareSynchronosServer.Authentication
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             if (!Request.Headers.ContainsKey("Authorization"))
+            {
                 return AuthenticateResult.Fail("Failed Authorization");
+            }
 
             var authHeader = Request.Headers["Authorization"].ToString();
 
             if (string.IsNullOrEmpty(authHeader))
                 return AuthenticateResult.Fail("Failed Authorization");
+
+            var ip = _accessor.GetIpAddress();
+
+            if (FailedAuthorizations.TryGetValue(ip, out var failedAuth))
+            {
+                if (failedAuth.FailedAttempts > failedAttemptsForTempBan)
+                {
+                    failedAuth.ResetCts.Cancel();
+                    failedAuth.ResetCts = new CancellationTokenSource();
+                    var token = failedAuth.ResetCts.Token;
+                    failedAuth.ResetTask = Task.Run(async () =>
+                    {
+                        await Task.Delay(TimeSpan.FromMinutes(tempBanMinutes), token);
+                        if (token.IsCancellationRequested) return;
+                        FailedAuthorizations.Remove(ip, out _);
+                    }, token);
+                    Logger.LogWarning("TempBan " + ip + " for authorization spam");
+                    return AuthenticateResult.Fail("Failed Authorization");
+                }
+            }
 
             using var sha256 = SHA256.Create();
             var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(authHeader))).Replace("-", "");
@@ -60,9 +101,18 @@ namespace MareSynchronosServer.Authentication
             if (Authentications.TryGetValue(hashedHeader, out string uid))
             {
                 if (uid == unauthorized)
+                {
+                    Logger.LogWarning("Failed authorization from " + ip);
+                    if (FailedAuthorizations.TryGetValue(ip, out var auth))
+                    {
+                        auth.IncreaseFailedAttempts();
+                    }
+                    else
+                    {
+                        FailedAuthorizations[ip] = new FailedAuthorization();
+                    }
                     return AuthenticateResult.Fail("Failed Authorization");
-                else
-                    Logger.LogDebug("Found cached entry for " + uid);
+                }
             }
 
             if (string.IsNullOrEmpty(uid))
@@ -82,6 +132,15 @@ namespace MareSynchronosServer.Authentication
                 if (uid == null)
                 {
                     Authentications[hashedHeader] = unauthorized;
+                    Logger.LogWarning("Failed authorization from " + ip);
+                    if (FailedAuthorizations.TryGetValue(ip, out var auth))
+                    {
+                        auth.IncreaseFailedAttempts();
+                    }
+                    else
+                    {
+                        FailedAuthorizations[ip] = new FailedAuthorization();
+                    }
                     return AuthenticateResult.Fail("Failed Authorization");
                 }
                 else
@@ -101,10 +160,14 @@ namespace MareSynchronosServer.Authentication
             return AuthenticateResult.Success(ticket);
         }
 
-        public SecretKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options,
-            MareDbContext mareDbContext, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
+        public SecretKeyAuthenticationHandler(IOptionsMonitor<AuthenticationSchemeOptions> options, IHttpContextAccessor accessor,
+            MareDbContext mareDbContext, IConfiguration configuration, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
         {
+            _accessor = accessor;
             _mareDbContext = mareDbContext;
+            _configuration = configuration;
+            failedAttemptsForTempBan = _configuration.GetValue<int>("FailedAuthForTempBan", 5);
+            tempBanMinutes = _configuration.GetValue<int>("TempBanDurationInMinutes", 30);
         }
     }
 }
