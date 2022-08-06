@@ -69,7 +69,7 @@ namespace MareSynchronosServer.Authentication
             {
                 try
                 {
-                    dbLockSemaphore.Wait();
+                    await dbLockSemaphore.WaitAsync();
                     uid = (await _mareDbContext.Auth.Include("User").AsNoTracking()
                         .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader))?.UserUID;
                 }
