@@ -115,7 +115,7 @@ namespace MareSynchronosServer.Discord
             {
                 if (discordAuthedUser.User != null)
                 {
-                    FileCleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
+                    CleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
                 }
                 else
                 {
@@ -250,7 +250,13 @@ namespace MareSynchronosServer.Discord
 
                 var db = scope.ServiceProvider.GetService<MareDbContext>();
 
-                if (db.LodeStoneAuth.Any(a => a.DiscordId == arg.User.Id))
+                // check if discord id or lodestone id is banned
+                if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == arg.User.Id.ToString() || a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
+                {
+                    embed.WithTitle("no");
+                    embed.WithDescription("your account is banned");
+                }
+                else if (db.LodeStoneAuth.Any(a => a.DiscordId == arg.User.Id))
                 {
                     // user already in db
                     embed.WithTitle("Registration failed");
@@ -302,7 +308,7 @@ namespace MareSynchronosServer.Discord
             return auth;
         }
 
-        private int? ParseCharacterIdFromLodestoneUrl(string lodestoneUrl) 
+        private int? ParseCharacterIdFromLodestoneUrl(string lodestoneUrl)
         {
             var regex = new Regex(@"https:\/\/(na|eu|de|fr|jp)\.finalfantasyxiv\.com\/lodestone\/character\/\d+");
             var matches = regex.Match(lodestoneUrl);
@@ -311,7 +317,8 @@ namespace MareSynchronosServer.Discord
 
             lodestoneUrl = matches.Groups[0].ToString();
             var stringId = lodestoneUrl.Split('/', StringSplitOptions.RemoveEmptyEntries).Last();
-            if (!int.TryParse(stringId, out int lodestoneId)) {
+            if (!int.TryParse(stringId, out int lodestoneId))
+            {
                 return null;
             }
 

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
 using MareSynchronosServer.Models;
@@ -15,14 +16,14 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer
 {
-    public class FileCleanupService : IHostedService, IDisposable
+    public class CleanupService : IHostedService, IDisposable
     {
-        private readonly ILogger<FileCleanupService> _logger;
+        private readonly ILogger<CleanupService> _logger;
         private readonly IServiceProvider _services;
         private readonly IConfiguration _configuration;
         private Timer _timer;
 
-        public FileCleanupService(ILogger<FileCleanupService> logger, IServiceProvider services, IConfiguration configuration)
+        public CleanupService(ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
         {
             _logger = logger;
             _services = services;
@@ -31,14 +32,14 @@ namespace MareSynchronosServer
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("File Cleanup Service started");
+            _logger.LogInformation("Cleanup Service started");
 
-            _timer = new Timer(CleanUpFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
+            _timer = new Timer(CleanUp, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
 
             return Task.CompletedTask;
         }
 
-        private void CleanUpFiles(object state)
+        private void CleanUp(object state)
         {
             if (!int.TryParse(_configuration["UnusedFileRetentionPeriodInDays"], out var filesOlderThanDays))
             {
@@ -73,6 +74,7 @@ namespace MareSynchronosServer
                     }
                 }
 
+                _logger.LogInformation($"Cleaning up expired lodestone authentications");
                 var lodestoneAuths = dbContext.LodeStoneAuth.Include(u => u.User).Where(a => a.StartedAt != null).ToList();
                 List<LodeStoneAuth> expiredAuths = new List<LodeStoneAuth>();
                 foreach (var auth in lodestoneAuths)
@@ -118,6 +120,9 @@ namespace MareSynchronosServer
                     }
                 }
 
+                _logger.LogInformation("Cleaning up unauthorized users");
+                SecretKeyAuthenticationHandler.ClearUnauthorizedUsers();
+
                 _logger.LogInformation($"Cleanup complete");
 
                 dbContext.SaveChanges();
@@ -135,6 +140,8 @@ namespace MareSynchronosServer
             {
                 dbContext.Remove(lodestone);
             }
+
+            SecretKeyAuthenticationHandler.RemoveAuthentication(user.UID);
 
             var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
 

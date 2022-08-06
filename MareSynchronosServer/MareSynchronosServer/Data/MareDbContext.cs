@@ -16,6 +16,7 @@ namespace MareSynchronosServer.Data
         public DbSet<Banned> BannedUsers { get; set; }
         public DbSet<Auth> Auth { get; set; }
         public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
+        public DbSet<BannedRegistrations> BannedRegistrations { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -32,6 +33,7 @@ namespace MareSynchronosServer.Data
             modelBuilder.Entity<ForbiddenUploadEntry>().ToTable("forbidden_upload_entries");
             modelBuilder.Entity<Banned>().ToTable("banned_users");
             modelBuilder.Entity<LodeStoneAuth>().ToTable("lodestone_auth");
+            modelBuilder.Entity<BannedRegistrations>().ToTable("banned_registrations");
         }
     }
 }

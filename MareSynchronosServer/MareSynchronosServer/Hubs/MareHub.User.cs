@@ -20,11 +20,11 @@ namespace MareSynchronosServer.Hubs
         {
             _logger.LogInformation("User " + AuthenticatedUserId + " deleted their account");
 
+
             string userid = AuthenticatedUserId;
             var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid);
             var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
             var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid);
-
             var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid);
 
             if (lodestone != null)
@@ -36,6 +36,8 @@ namespace MareSynchronosServer.Hubs
             {
                 await Task.Delay(1000);
             }
+
+            SecretKeyAuthenticationHandler.RemoveAuthentication(userid);
 
             MareMetrics.Pairs.Dec(ownPairData.Count);
             MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
