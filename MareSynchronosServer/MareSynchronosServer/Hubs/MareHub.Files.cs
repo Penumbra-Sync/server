@@ -103,36 +103,49 @@ namespace MareSynchronosServer.Hubs
         [HubMethodName(Api.InvokeFileSendFiles)]
         public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
         {
-            fileListHashes = fileListHashes.Where(f => !string.IsNullOrEmpty(f)).Distinct().ToList();
-            _logger.LogInformation($"User {AuthenticatedUserId} sending {fileListHashes.Count} files");
-            var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash)).ToListAsync();
-            var filesToUpload = new List<UploadFileDto>();
-            filesToUpload.AddRange(forbiddenFiles.Select(f => new UploadFileDto()
+            var userSentHashes = new HashSet<string>(fileListHashes.Distinct());
+            _logger.LogInformation($"User {AuthenticatedUserId} sending files: {userSentHashes.Count}");
+            var coveredFiles = new Dictionary<string, UploadFileDto>();
+            // Todo: Check if a select can directly transform to hashset
+            var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f);
+            var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f);
+            var uploader = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+
+            foreach (var file in userSentHashes)
             {
-                ForbiddenBy = f.ForbiddenBy,
-                Hash = f.Hash,
-                IsForbidden = true
-            }));
-            fileListHashes.RemoveAll(f => filesToUpload.Any(u => u.Hash == f));
-            var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash)).ToListAsync();
-            foreach (var file in fileListHashes.Where(f => existingFiles.All(e => e.Hash != f) && filesToUpload.All(u => u.Hash != f)))
-            {
+                // Skip empty file hashes, duplicate file hashes, forbidden file hashes and existing file hashes
+                if (string.IsNullOrEmpty(file)) { continue; }
+                if (coveredFiles.ContainsKey(file)) { continue; }
+                if (forbiddenFiles.ContainsKey(file))
+                {
+                    coveredFiles[file] = new UploadFileDto()
+                    {
+                        ForbiddenBy = forbiddenFiles[file].ForbiddenBy,
+                        Hash = file,
+                        IsForbidden = true
+                    };
+
+                    continue;
+                }
+                if (existingFiles.ContainsKey(file)) { continue; }
+
                 _logger.LogInformation("User " + AuthenticatedUserId + " needs upload: " + file);
                 var userId = AuthenticatedUserId;
                 await _dbContext.Files.AddAsync(new FileCache()
                 {
                     Hash = file,
                     Uploaded = false,
-                    Uploader = _dbContext.Users.Single(u => u.UID == userId)
+                    Uploader = uploader
                 });
-                await _dbContext.SaveChangesAsync();
-                filesToUpload.Add(new UploadFileDto
-                {
-                    Hash = file
-                });
-            }
 
-            return filesToUpload;
+                coveredFiles[file] = new UploadFileDto()
+                {
+                    Hash = file,
+                };
+            }
+            //Save bulk
+            await _dbContext.SaveChangesAsync();
+            return coveredFiles.Values.ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
