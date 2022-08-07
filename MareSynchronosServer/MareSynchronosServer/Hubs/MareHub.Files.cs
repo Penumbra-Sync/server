@@ -104,7 +104,7 @@ namespace MareSynchronosServer.Hubs
         public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
         {
             fileListHashes = fileListHashes.Where(f => !string.IsNullOrEmpty(f)).Distinct().ToList();
-            _logger.LogInformation("User " + AuthenticatedUserId + " sending files");
+            _logger.LogInformation($"User {AuthenticatedUserId} sending {fileListHashes.Count} files");
             var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => fileListHashes.Contains(f.Hash)).ToListAsync();
             var filesToUpload = new List<UploadFileDto>();
             filesToUpload.AddRange(forbiddenFiles.Select(f => new UploadFileDto()
