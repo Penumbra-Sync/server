@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 using System.Security.Claims;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace MareSynchronosServer.Throttling;
@@ -14,6 +15,7 @@ public class SignalRLimitFilter : IHubFilter
     private readonly IRateLimitProcessor _processor;
     private readonly IHttpContextAccessor accessor;
     private readonly ILogger<SignalRLimitFilter> logger;
+    private static SemaphoreSlim ConnectionLimiterSemaphore = new SemaphoreSlim(20);
 
     public SignalRLimitFilter(
         IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor, ILogger<SignalRLimitFilter> logger)
@@ -52,6 +54,7 @@ public class SignalRLimitFilter : IHubFilter
     // Optional method
     public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
     {
+        await ConnectionLimiterSemaphore.WaitAsync();
         var ip = accessor.GetIpAddress();
         var client = new ClientRequestIdentity
         {
@@ -66,11 +69,21 @@ public class SignalRLimitFilter : IHubFilter
             {
                 var retry = counter.Timestamp.RetryAfterFrom(rule);
                 logger.LogWarning($"Connection rate limit triggered from {ip}");
+                ConnectionLimiterSemaphore.Release();
                 throw new HubException($"Connection rate limit {retry}");
             }
         }
 
-        await next(context);
+        try
+        {
+            await Task.Delay(100);
+            await next(context);
+        }
+        catch { }
+        finally
+        {
+            ConnectionLimiterSemaphore.Release();
+        }
     }
 
     // Optional method
