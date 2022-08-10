@@ -248,7 +248,7 @@ namespace MareSynchronosServer.Discord
 
                 var hashedLodestoneId = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(lodestoneId.ToString()))).Replace("-", "");
 
-                var db = scope.ServiceProvider.GetService<MareDbContext>();
+                using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
                 // check if discord id or lodestone id is banned
                 if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == arg.User.Id.ToString() || a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
@@ -408,7 +408,7 @@ namespace MareSynchronosServer.Discord
         private void UpdateStatus(object state)
         {
             using var scope = services.CreateScope();
-            var db = scope.ServiceProvider.GetService<MareDbContext>();
+            using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
             var users = db.Users.Count(c => c.CharacterIdentification != null);
 

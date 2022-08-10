@@ -45,7 +45,7 @@ public class SystemInfoService : IHostedService, IDisposable
         MareMetrics.AvailableIOWorkerThreads.Set(ioThreads);
 
         using var scope = _services.CreateScope();
-        var db = scope.ServiceProvider.GetService<MareDbContext>();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
         var users = db.Users.Count(c => c.CharacterIdentification != null);
 

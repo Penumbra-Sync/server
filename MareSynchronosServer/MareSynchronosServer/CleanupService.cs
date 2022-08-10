@@ -51,7 +51,7 @@ namespace MareSynchronosServer
             try
             {
                 using var scope = _services.CreateScope();
-                var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+                using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
                 var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
 
