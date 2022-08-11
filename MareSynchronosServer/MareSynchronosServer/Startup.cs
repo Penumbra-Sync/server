@@ -41,6 +41,7 @@ namespace MareSynchronosServer
             services.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"));
             services.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"));
 
+            services.AddMemoryCache();
             services.AddInMemoryRateLimiting();
 
             services.AddSingleton<SystemInfoService, SystemInfoService>();
