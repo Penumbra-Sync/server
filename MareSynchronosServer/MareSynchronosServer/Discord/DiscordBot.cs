@@ -421,8 +421,8 @@ namespace MareSynchronosServer.Discord
 
         public async Task StopAsync(CancellationToken cancellationToken)
         {
-            _timer?.Change(Timeout.Infinite, 0);
             verificationTaskCts?.Cancel();
+            updateStatusCts?.Cancel();
 
             await discordClient.LogoutAsync();
             await discordClient.StopAsync();
