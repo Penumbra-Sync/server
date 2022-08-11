@@ -30,8 +30,8 @@ namespace MareSynchronosServer.Discord
         private string authToken = string.Empty;
         DiscordSocketClient discordClient;
         ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
-        private Timer _timer;
         private CancellationTokenSource verificationTaskCts;
+        private CancellationTokenSource updateStatusCts;
         private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
         private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
 
@@ -374,9 +374,8 @@ namespace MareSynchronosServer.Discord
                 discordClient.SlashCommandExecuted += DiscordClient_SlashCommandExecuted;
                 discordClient.ModalSubmitted += DiscordClient_ModalSubmitted;
 
-                _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
-
                 _ = ProcessQueueWork();
+                _ = UpdateStatusAsync();
             }
         }
 
@@ -404,14 +403,20 @@ namespace MareSynchronosServer.Discord
             }
         }
 
-        private void UpdateStatus(object state)
+        private async Task UpdateStatusAsync()
         {
-            using var scope = services.CreateScope();
-            using var db = scope.ServiceProvider.GetService<MareDbContext>();
+            updateStatusCts = new();
+            while (!updateStatusCts.IsCancellationRequested)
+            {
+                using var scope = services.CreateScope();
+                using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
-            var users = db.Users.Count(c => c.CharacterIdentification != null);
+                var users = db.Users.Count(c => c.CharacterIdentification != null);
 
-            discordClient.SetActivityAsync(new Game("Mare for " + users + " Users"));
+                await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users"));
+
+                await Task.Delay(TimeSpan.FromSeconds(15));
+            }
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
