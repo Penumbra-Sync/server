@@ -49,7 +49,7 @@ namespace MareSynchronosServer
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
 
-            services.AddDbContextPool<MareDbContext>(options =>
+            services.AddDbContext<MareDbContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {

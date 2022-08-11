@@ -376,7 +376,7 @@ namespace MareSynchronosServer.Discord
 
                 _timer = new Timer(UpdateStatus, null, TimeSpan.Zero, TimeSpan.FromSeconds(15));
 
-                ProcessQueueWork();
+                _ = ProcessQueueWork();
             }
         }
 
@@ -385,7 +385,6 @@ namespace MareSynchronosServer.Discord
             verificationTaskCts = new CancellationTokenSource();
             while (!verificationTaskCts.IsCancellationRequested)
             {
-
                 if (verificationQueue.TryDequeue(out var queueitem))
                 {
                     try
