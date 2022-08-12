@@ -18,12 +18,23 @@ using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServer.Authentication
 {
-    public class FailedAuthorization
+    public class FailedAuthorization : IDisposable
     {
         private int failedAttempts = 1;
         public int FailedAttempts => failedAttempts;
         public Task ResetTask { get; set; }
         public CancellationTokenSource ResetCts { get; set; } = new();
+
+        public void Dispose()
+        {
+            try
+            {
+                ResetCts?.Cancel();
+                ResetCts?.Dispose();
+            }
+            catch { }
+        }
+
         public void IncreaseFailedAttempts()
         {
             Interlocked.Increment(ref failedAttempts);
@@ -82,13 +93,15 @@ namespace MareSynchronosServer.Authentication
                 if (failedAuth.FailedAttempts > failedAttemptsForTempBan)
                 {
                     failedAuth.ResetCts.Cancel();
+                    failedAuth.ResetCts.Dispose();
                     failedAuth.ResetCts = new CancellationTokenSource();
                     var token = failedAuth.ResetCts.Token;
                     failedAuth.ResetTask = Task.Run(async () =>
                     {
                         await Task.Delay(TimeSpan.FromMinutes(tempBanMinutes), token);
                         if (token.IsCancellationRequested) return;
-                        FailedAuthorizations.Remove(ip, out _);
+                        FailedAuthorizations.Remove(ip, out var fauth);
+                        fauth.Dispose();
                     }, token);
                     Logger.LogWarning("TempBan " + ip + " for authorization spam");
                     return AuthenticateResult.Fail("Failed Authorization");
