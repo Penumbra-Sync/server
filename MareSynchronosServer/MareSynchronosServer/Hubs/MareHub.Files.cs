@@ -212,7 +212,7 @@ namespace MareSynchronosServer.Hubs
                     return;
                 }
 
-                File.Move(tempFileName, finalFileName);
+                File.Move(tempFileName, finalFileName, true);
                 relatedFile = _dbContext.Files.Single(f => f.Hash == hash);
                 relatedFile.Uploaded = true;
 
