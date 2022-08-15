@@ -10,6 +10,11 @@ namespace MareSynchronosServer
             if (!string.IsNullOrEmpty(accessor.HttpContext.Request.Headers["CF-CONNECTING-IP"]))
                 return accessor.HttpContext.Request.Headers["CF-CONNECTING-IP"];
 
+            if (!string.IsNullOrEmpty(accessor.HttpContext.Request.Headers["X-Forwarded-For"]))
+            {
+                return accessor.HttpContext.Request.Headers["X-Forwarded-For"];
+            }
+
             var ipAddress = accessor.HttpContext.GetServerVariable("HTTP_X_FORWARDED_FOR");
 
             if (!string.IsNullOrEmpty(ipAddress))
