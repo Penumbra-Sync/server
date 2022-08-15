@@ -77,7 +77,8 @@ namespace MareSynchronosServer.Hubs
                 ForbiddenBy = forbidden?.ForbiddenBy ?? string.Empty,
                 IsForbidden = forbidden != null,
                 Hash = hash,
-                Size = fileSize
+                Size = fileSize,
+                Url = _configuration["CdnFullUrl"] + hash.ToUpperInvariant()
             };
 
             if (!fileInfo.Exists && file != null)
