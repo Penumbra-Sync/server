@@ -91,26 +91,29 @@ namespace MareSynchronosServer.Hubs
         {
             MareMetrics.Connections.Dec();
 
-            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
+            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
                 MareMetrics.AuthorizedConnections.Dec();
+
                 _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
                 var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
-                    .Include(u => u.User)
                     .Include(u => u.OtherUser)
-                    .Where(w => w.User.UID == user.UID && !w.IsPaused)
-                    .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                    .Select(e => e.OtherUser).ToListAsync();
-                var otherEntries = await _dbContext.ClientPairs.AsNoTracking().Include(u => u.User)
-                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser.UID == user.UID && !u.IsPaused).ToListAsync();
-                await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
+                    .Where(self => self.UserUID == user.UID && !self.IsPaused && self.OtherUser.CharacterIdentification != null)
+                    .Select(e => e.OtherUserUID)
+                    .ToListAsync();
 
-                var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID).ToList();
-                _dbContext.RemoveRange(notUploadedFiles);
+                var otherEntries = await _dbContext.ClientPairs.AsNoTracking()
+                    .Where(other => otherUsers.Contains(other.UserUID) && other.OtherUserUID == user.UID && !other.IsPaused)
+                    .Select(u => u.UserUID)
+                    .ToListAsync();
 
-                (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification = null;
+                await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
+
+                _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID));
+
+                user.CharacterIdentification = null;
                 await _dbContext.SaveChangesAsync();
             }
 

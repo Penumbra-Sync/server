@@ -15,7 +15,8 @@ public class SignalRLimitFilter : IHubFilter
     private readonly IRateLimitProcessor _processor;
     private readonly IHttpContextAccessor accessor;
     private readonly ILogger<SignalRLimitFilter> logger;
-    private static SemaphoreSlim ConnectionLimiterSemaphore = new SemaphoreSlim(20);
+    private static SemaphoreSlim ConnectionLimiterSemaphore = new(20);
+    private static SemaphoreSlim DisconnectLimiterSemaphore = new(20);
 
     public SignalRLimitFilter(
         IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor, ILogger<SignalRLimitFilter> logger)
@@ -76,20 +77,34 @@ public class SignalRLimitFilter : IHubFilter
 
         try
         {
-            await Task.Delay(100);
+            await Task.Delay(250);
             await next(context);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Error on OnConnectedAsync");
+        }
         finally
         {
             ConnectionLimiterSemaphore.Release();
         }
     }
 
-    // Optional method
-    public Task OnDisconnectedAsync(
+    public async Task OnDisconnectedAsync(
         HubLifetimeContext context, Exception exception, Func<HubLifetimeContext, Exception, Task> next)
     {
-        return next(context, exception);
+        await DisconnectLimiterSemaphore.WaitAsync();
+        try
+        {
+            await next(context, exception);
+        }
+        catch
+        {
+            logger.LogWarning(exception, "Error on OnDisconnectedAsync");
+        }
+        finally
+        {
+            DisconnectLimiterSemaphore.Release();
+        }
     }
 }
