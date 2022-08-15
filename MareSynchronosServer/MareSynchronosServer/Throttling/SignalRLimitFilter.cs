@@ -97,10 +97,12 @@ public class SignalRLimitFilter : IHubFilter
         try
         {
             await next(context, exception);
+            await Task.Delay(250);
         }
-        catch
+        catch (Exception e)
         {
-            logger.LogWarning(exception, "Error on OnDisconnectedAsync");
+            logger.LogWarning(exception, "InitialException on OnDisconnectedAsync");
+            logger.LogWarning(e, "ThrownException on OnDisconnectedAsync");
         }
         finally
         {
