@@ -91,11 +91,12 @@ namespace MareSynchronosServer.Hubs
         {
             MareMetrics.Connections.Dec();
 
-            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
+            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
                 MareMetrics.AuthorizedConnections.Dec();
-                _logger.LogInformation("Disconnect from " + AuthenticatedUserId);             
+
+                _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
                 var query =
                     from userToOther in _dbContext.ClientPairs
@@ -112,15 +113,14 @@ namespace MareSynchronosServer.Hubs
                         userToOther.UserUID == user.UID
                         && !userToOther.IsPaused
                         && !otherToUser.IsPaused
-                    select otherToUser;
+                    select otherToUser.UserUID;
                 var otherEntries = await query.ToListAsync();
-                                
-                await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
 
-                var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID).ToList();
-                _dbContext.RemoveRange(notUploadedFiles);
+                await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
 
-                (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification = null;
+                _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID));
+
+                user.CharacterIdentification = null;
                 await _dbContext.SaveChangesAsync();
             }
 
