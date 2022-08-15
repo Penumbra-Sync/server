@@ -52,8 +52,8 @@ namespace MareSynchronosServerTest.Hubs {
 
             // Non-related data
             context.ClientPairs.Add(new ClientPair() { UserUID = "User6", OtherUserUID = "User4", IsPaused = true });
-            context.ClientPairs.Add(new ClientPair() { UserUID = "User4", OtherUserUID = "User3", IsPaused = true });
-            context.ClientPairs.Add(new ClientPair() { UserUID = "User3", OtherUserUID = "User2", IsPaused = true });
+            context.ClientPairs.Add(new ClientPair() { UserUID = "User4", OtherUserUID = "User3", IsPaused = false });
+            context.ClientPairs.Add(new ClientPair() { UserUID = "User3", OtherUserUID = "User2", IsPaused = false });
 
             context.SaveChanges();
 
