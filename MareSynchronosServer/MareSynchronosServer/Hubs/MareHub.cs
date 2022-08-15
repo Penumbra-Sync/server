@@ -117,8 +117,8 @@ namespace MareSynchronosServer.Hubs
                 var otherEntries = await query.ToListAsync();
 
                 await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
-
-                _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID));
+                                
+                _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == user.UID));
 
                 user.CharacterIdentification = null;
                 await _dbContext.SaveChangesAsync();
