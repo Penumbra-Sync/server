@@ -98,16 +98,23 @@ namespace MareSynchronosServer.Hubs
 
                 _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
 
-                var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
-                    .Include(u => u.OtherUser)
-                    .Where(self => self.UserUID == user.UID && !self.IsPaused && self.OtherUser.CharacterIdentification != null)
-                    .Select(e => e.OtherUserUID)
-                    .ToListAsync();
+                var query =
+                    from userToOther in _dbContext.ClientPairs
+                    join otherToUser in _dbContext.ClientPairs
+                        on new {
+                            user = userToOther.UserUID,
+                            other = userToOther.OtherUserUID
 
-                var otherEntries = await _dbContext.ClientPairs.AsNoTracking()
-                    .Where(other => otherUsers.Contains(other.UserUID) && other.OtherUserUID == user.UID && !other.IsPaused)
-                    .Select(u => u.UserUID)
-                    .ToListAsync();
+                        } equals new {
+                            user = otherToUser.OtherUserUID,
+                            other = otherToUser.UserUID
+                        }
+                    where
+                        userToOther.UserUID == user.UID
+                        && !userToOther.IsPaused
+                        && !otherToUser.IsPaused
+                    select otherToUser.UserUID;
+                var otherEntries = await query.ToListAsync();
 
                 await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
 

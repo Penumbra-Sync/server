@@ -31,7 +31,7 @@ namespace MareSynchronosServerTest.Discord {
         [TestCase("https://eu.finalfantasyxiv.com/lodestone/character/1234?myurlparameter=500", 1234)]
         [TestCase("https://de.finalfantasyxiv.com/lodestone/character/1234/whatever/3456", 1234)]
         [TestCase("https://na.finalfantasyxiv.com/lodestone/character/1234abcd4321/whatever/3456", 1234)]
-        public void Test1(string url, int? expectedId) {
+        public void ParseCharacterIdFromLodestoneUrl_CheckThatIdIsParsedCorrectly(string url, int? expectedId) {
             var inMemorySettings = new Dictionary<string, string> {
                 {"DiscordBotToken", "1234"}
             };
