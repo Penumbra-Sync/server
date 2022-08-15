@@ -14,6 +14,8 @@ namespace MareSynchronosServer.Metrics
             new(Prometheus.Metrics.CreateGauge("mare_unauthorized_connections", "Unauthorized Connections"));
         public static readonly LockedProxyGauge AuthorizedConnections =
             new(Prometheus.Metrics.CreateGauge("mare_authorized_connections", "Authorized Connections"));
+        public static readonly LockedProxyGauge AvailableWorkerThreads = new(Prometheus.Metrics.CreateGauge("mare_available_threadpool", "Available Threadpool Workers"));
+        public static readonly LockedProxyGauge AvailableIOWorkerThreads = new(Prometheus.Metrics.CreateGauge("mare_available_threadpool_io", "Available Threadpool IO Workers"));
 
         public static readonly LockedProxyGauge UsersRegistered = new(Prometheus.Metrics.CreateGauge("mare_users_registered", "Total Registrations"));
 

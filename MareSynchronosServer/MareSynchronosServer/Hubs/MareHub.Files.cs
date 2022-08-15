@@ -158,18 +158,27 @@ namespace MareSynchronosServer.Hubs
             if (relatedFile == null) return;
             var forbiddenFile = _dbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
             if (forbiddenFile != null) return;
-            var uploadedFile = new List<byte>();
+            var finalFileName = Path.Combine(BasePath, hash);
+            var tempFileName = finalFileName + ".tmp";
+            using var fileStream = new FileStream(tempFileName, FileMode.OpenOrCreate);
+            long length = 0;
             try
             {
                 await foreach (var chunk in fileContent)
                 {
-                    uploadedFile.AddRange(chunk);
+                    length += chunk.Length;
+                    await fileStream.WriteAsync(chunk);
                 }
+
+                await fileStream.FlushAsync();
+                await fileStream.DisposeAsync();
             }
             catch
             {
                 try
                 {
+                    await fileStream.FlushAsync();
+                    await fileStream.DisposeAsync();
                     _dbContext.Files.Remove(relatedFile);
                     await _dbContext.SaveChangesAsync();
                 }
@@ -177,15 +186,19 @@ namespace MareSynchronosServer.Hubs
                 {
                     // already removed
                 }
+                finally
+                {
+                    File.Delete(tempFileName);
+                }
 
                 return;
             }
 
-            _logger.LogInformation("User " + AuthenticatedUserId + " upload finished: " + hash + ", size: " + uploadedFile.Count);
+            _logger.LogInformation("User " + AuthenticatedUserId + " upload finished: " + hash + ", size: " + length);
 
             try
             {
-                var decodedFile = LZ4.LZ4Codec.Unwrap(uploadedFile.ToArray());
+                var decodedFile = LZ4.LZ4Codec.Unwrap(await File.ReadAllBytesAsync(tempFileName));
                 using var sha1 = SHA1.Create();
                 using var ms = new MemoryStream(decodedFile);
                 var computedHash = await sha1.ComputeHashAsync(ms);
@@ -199,12 +212,12 @@ namespace MareSynchronosServer.Hubs
                     return;
                 }
 
-                await File.WriteAllBytesAsync(Path.Combine(BasePath, hash), uploadedFile.ToArray());
+                File.Move(tempFileName, finalFileName, true);
                 relatedFile = _dbContext.Files.Single(f => f.Hash == hash);
                 relatedFile.Uploaded = true;
 
                 MareMetrics.FilesTotal.Inc();
-                MareMetrics.FilesTotalSize.Inc(uploadedFile.Count);
+                MareMetrics.FilesTotalSize.Inc(length);
 
                 await _dbContext.SaveChangesAsync();
                 _logger.LogInformation("File " + hash + " added to DB");
@@ -215,7 +228,6 @@ namespace MareSynchronosServer.Hubs
                 _dbContext.Remove(relatedFile);
                 await _dbContext.SaveChangesAsync();
             }
-
         }
     }
 }

@@ -38,18 +38,17 @@ namespace MareSynchronosServer
         {
             services.AddHttpContextAccessor();
 
-            services.AddMemoryCache();
-
             services.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"));
             services.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"));
 
+            services.AddMemoryCache();
             services.AddInMemoryRateLimiting();
 
             services.AddSingleton<SystemInfoService, SystemInfoService>();
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
 
-            services.AddDbContextPool<MareDbContext>(options =>
+            services.AddDbContext<MareDbContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
@@ -61,7 +60,6 @@ namespace MareSynchronosServer
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
             services.AddHostedService<DiscordBot>();
 
-            services.AddDatabaseDeveloperPageExceptionFilter();
             services.AddAuthentication(options =>
                 {
                     options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
