@@ -95,16 +95,26 @@ namespace MareSynchronosServer.Hubs
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
                 MareMetrics.AuthorizedConnections.Dec();
-                _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
+                _logger.LogInformation("Disconnect from " + AuthenticatedUserId);             
 
-                var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
-                    .Include(u => u.User)
-                    .Include(u => u.OtherUser)
-                    .Where(w => w.User.UID == user.UID && !w.IsPaused)
-                    .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                    .Select(e => e.OtherUser).ToListAsync();
-                var otherEntries = await _dbContext.ClientPairs.AsNoTracking().Include(u => u.User)
-                    .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser.UID == user.UID && !u.IsPaused).ToListAsync();
+                var query =
+                    from userToOther in _dbContext.ClientPairs
+                    join otherToUser in _dbContext.ClientPairs
+                        on new {
+                            user = userToOther.UserUID,
+                            other = userToOther.OtherUserUID
+
+                        } equals new {
+                            user = otherToUser.OtherUserUID,
+                            other = otherToUser.UserUID
+                        }
+                    where
+                        userToOther.UserUID == user.UID
+                        && !userToOther.IsPaused
+                        && !otherToUser.IsPaused
+                    select otherToUser;
+                var otherEntries = await query.ToListAsync();
+                                
                 await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
 
                 var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == user.UID).ToList();
