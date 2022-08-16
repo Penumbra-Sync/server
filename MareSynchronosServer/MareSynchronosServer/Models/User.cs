@@ -8,6 +8,7 @@ namespace MareSynchronosServer.Models
         [Key]
         [MaxLength(10)]
         public string UID { get; set; }
+        [MaxLength(100)]
         public string CharacterIdentification { get; set; }
         [Timestamp]
         public byte[] Timestamp { get; set; }

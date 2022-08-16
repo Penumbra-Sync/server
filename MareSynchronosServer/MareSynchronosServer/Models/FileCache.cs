@@ -7,6 +7,7 @@ namespace MareSynchronosServer.Models
         [Key]
         [MaxLength(40)]
         public string Hash { get; set; }
+        [MaxLength(10)]
         public string UploaderUID { get; set; }
         public User Uploader { get; set; }
         public bool Uploaded { get; set; }
