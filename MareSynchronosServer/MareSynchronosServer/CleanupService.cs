@@ -55,8 +55,8 @@ namespace MareSynchronosServer
             {
                 var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
 
-                var allFiles = dbContext.Files.Where(f => f.Uploaded).ToList();
-                foreach (var file in allFiles)
+                var allFiles = dbContext.Files.ToList();
+                foreach (var file in allFiles.Where(f => f.Uploaded))
                 {
                     var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
                     var fi = new FileInfo(fileName);
