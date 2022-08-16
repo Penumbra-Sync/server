@@ -106,20 +106,21 @@ namespace MareSynchronosServer.Hubs
         {
             var userSentHashes = new HashSet<string>(fileListHashes.Distinct());
             _logger.LogInformation($"User {AuthenticatedUserId} sending files: {userSentHashes.Count}");
-            var coveredFiles = new Dictionary<string, UploadFileDto>();
+            var notCoveredFiles = new Dictionary<string, UploadFileDto>();
             // Todo: Check if a select can directly transform to hashset
             var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f);
             var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f);
             var uploader = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
 
+            List<FileCache> fileCachesToUpload = new();
             foreach (var file in userSentHashes)
             {
                 // Skip empty file hashes, duplicate file hashes, forbidden file hashes and existing file hashes
                 if (string.IsNullOrEmpty(file)) { continue; }
-                if (coveredFiles.ContainsKey(file)) { continue; }
+                if (notCoveredFiles.ContainsKey(file)) { continue; }
                 if (forbiddenFiles.ContainsKey(file))
                 {
-                    coveredFiles[file] = new UploadFileDto()
+                    notCoveredFiles[file] = new UploadFileDto()
                     {
                         ForbiddenBy = forbiddenFiles[file].ForbiddenBy,
                         Hash = file,
@@ -132,21 +133,22 @@ namespace MareSynchronosServer.Hubs
 
                 _logger.LogInformation("User " + AuthenticatedUserId + " needs upload: " + file);
                 var userId = AuthenticatedUserId;
-                await _dbContext.Files.AddAsync(new FileCache()
+                fileCachesToUpload.Add(new FileCache()
                 {
                     Hash = file,
                     Uploaded = false,
                     Uploader = uploader
                 });
 
-                coveredFiles[file] = new UploadFileDto()
+                notCoveredFiles[file] = new UploadFileDto()
                 {
                     Hash = file,
                 };
             }
             //Save bulk
+            await _dbContext.Files.AddRangeAsync(fileCachesToUpload);
             await _dbContext.SaveChangesAsync();
-            return coveredFiles.Values.ToList();
+            return notCoveredFiles.Values.ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]

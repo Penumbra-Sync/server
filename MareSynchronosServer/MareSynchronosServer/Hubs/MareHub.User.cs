@@ -118,25 +118,33 @@ namespace MareSynchronosServer.Hubs
             _logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
 
             var user = await GetAuthenticatedUserUntrackedAsync();
-            var senderPairedUsers = await _dbContext.ClientPairs.AsNoTracking()
-                .Include(w => w.User)
-                .Include(w => w.OtherUser)
-                .Where(w => w.User.UID == user.UID && !w.IsPaused
-                    && visibleCharacterIds.Contains(w.OtherUser.CharacterIdentification))
-                .Select(u => u.OtherUser).ToListAsync();
 
-            foreach (var pairedUser in senderPairedUsers)
-            {
-                var isPaused = (await _dbContext.ClientPairs.AsNoTracking()
-                    .FirstOrDefaultAsync(w =>
-                    w.User.UID == pairedUser.UID && w.OtherUser.UID == user.UID))?.IsPaused ?? true;
-                if (isPaused) continue;
-                await Clients.User(pairedUser.UID).SendAsync(Api.OnUserReceiveCharacterData, characterCache,
-                    user.CharacterIdentification);
-            }
+            var query =
+                from userToOther in _dbContext.ClientPairs
+                join otherToUser in _dbContext.ClientPairs
+                    on new
+                    {
+                        user = userToOther.UserUID,
+                        other = userToOther.OtherUserUID
+
+                    } equals new
+                    {
+                        user = otherToUser.OtherUserUID,
+                        other = otherToUser.UserUID
+                    }
+                where
+                    userToOther.UserUID == user.UID
+                    && !userToOther.IsPaused
+                    && !otherToUser.IsPaused
+                    && visibleCharacterIds.Contains(userToOther.OtherUser.CharacterIdentification)
+                select otherToUser.UserUID;
+
+            var otherEntries = await query.ToListAsync();
+
+            await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, user.CharacterIdentification);
 
             MareMetrics.UserPushData.Inc();
-            MareMetrics.UserPushDataTo.Inc(visibleCharacterIds.Count);
+            MareMetrics.UserPushDataTo.Inc(otherEntries.Count);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]

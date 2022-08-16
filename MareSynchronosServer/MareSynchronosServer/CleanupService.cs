@@ -46,13 +46,13 @@ namespace MareSynchronosServer
                 filesOlderThanDays = 7;
             }
 
+            using var scope = _services.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+
             _logger.LogInformation($"Cleaning up files older than {filesOlderThanDays} days");
 
             try
             {
-                using var scope = _services.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
-
                 var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
 
                 var allFiles = dbContext.Files.Where(f => f.Uploaded).ToList();
@@ -70,10 +70,47 @@ namespace MareSynchronosServer
                         MareMetrics.FilesTotalSize.Dec(fi.Length);
                         _logger.LogInformation("File outdated: " + fileName);
                         dbContext.Files.Remove(file);
-                        File.Delete(fileName);
+                        fi.Delete();
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during file cleanup");
+            }
 
+            var cacheSizeLimitInGiB = _configuration.GetValue<double>("CacheSizeHardLimitInGiB", -1);
+
+            try
+            {
+                if (cacheSizeLimitInGiB > 0)
+                {
+                    _logger.LogInformation("Cleaning up files beyond the cache size limit");
+                    var allLocalFiles = Directory.EnumerateFiles(_configuration["CacheDirectory"]).Select(f => new FileInfo(f)).ToList().OrderBy(f => f.LastAccessTimeUtc).ToList();
+                    var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
+                    long cacheSizeLimitInBytes = (long)(cacheSizeLimitInGiB * 1024 * 1024 * 1024);
+                    HashSet<string> removedHashes = new();
+                    while (totalCacheSizeInBytes > cacheSizeLimitInBytes && allLocalFiles.Any())
+                    {
+                        var oldestFile = allLocalFiles.First();
+                        removedHashes.Add(oldestFile.Name.ToLower());
+                        allLocalFiles.Remove(oldestFile);
+                        totalCacheSizeInBytes -= oldestFile.Length;
+                        MareMetrics.FilesTotal.Dec();
+                        MareMetrics.FilesTotalSize.Dec(oldestFile.Length);
+                        oldestFile.Delete();
+                    }
+
+                    dbContext.Files.RemoveRange(dbContext.Files.Where(f => removedHashes.Contains(f.Hash.ToLower())));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during cache size limit cleanup");
+            }
+
+            try
+            {
                 _logger.LogInformation($"Cleaning up expired lodestone authentications");
                 var lodestoneAuths = dbContext.LodeStoneAuth.Include(u => u.User).Where(a => a.StartedAt != null).ToList();
                 List<LodeStoneAuth> expiredAuths = new List<LodeStoneAuth>();
@@ -85,10 +122,16 @@ namespace MareSynchronosServer
                     }
                 }
 
-                dbContext.RemoveRange(expiredAuths);
                 dbContext.RemoveRange(expiredAuths.Select(a => a.User));
+                dbContext.RemoveRange(expiredAuths);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during expired auths cleanup");
+            }
 
-
+            try
+            {
                 if (!bool.TryParse(_configuration["PurgeUnusedAccounts"], out var purgeUnusedAccounts))
                 {
                     purgeUnusedAccounts = false;
@@ -121,15 +164,17 @@ namespace MareSynchronosServer
                 }
 
                 _logger.LogInformation("Cleaning up unauthorized users");
-                SecretKeyAuthenticationHandler.ClearUnauthorizedUsers();
-
-                _logger.LogInformation($"Cleanup complete");
-
-                dbContext.SaveChanges();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Error during user purge");
             }
+
+            SecretKeyAuthenticationHandler.ClearUnauthorizedUsers();
+
+            _logger.LogInformation($"Cleanup complete");
+
+            dbContext.SaveChanges();
         }
 
         public static void PurgeUser(User user, MareDbContext dbContext, IConfiguration _configuration)

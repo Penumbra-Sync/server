@@ -101,13 +101,9 @@ namespace MareSynchronosServer
             app.UseHttpLogging();
 
             app.UseRouting();
-            var webSocketOptions = new WebSocketOptions
-            {
-                KeepAliveInterval = TimeSpan.FromSeconds(10),
-            };
 
             app.UseHttpMetrics();
-            app.UseWebSockets(webSocketOptions);
+            app.UseWebSockets();
 
             app.UseAuthentication();
             app.UseAuthorization();
