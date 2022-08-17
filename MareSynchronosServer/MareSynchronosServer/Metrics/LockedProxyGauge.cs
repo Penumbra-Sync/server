@@ -13,34 +13,34 @@ public class LockedProxyGauge
 
     public void Inc(double inc = 1d)
     {
-        lock (_g)
-        {
+        //lock (_g)
+        //{
             _g.Inc(inc);
-        }
+        //}
     }
 
     public void IncTo(double incTo)
     {
-        lock (_g)
-        {
+        //lock (_g)
+        //{
             _g.IncTo(incTo);
-        }
+        //}
     }
 
     public void Dec(double decBy = 1d)
     {
-        lock (_g)
-        {
+        //lock (_g)
+        //{
             _g.Dec(decBy);
-        }
+        //}
     }
 
     public void Set(double setTo)
     {
-        lock (_g)
-        {
+        //lock (_g)
+        //{
             _g.Set(setTo);
-        }
+        //}
     }
 
     public double Value =>  _g.Value;

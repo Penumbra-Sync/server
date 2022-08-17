@@ -13,10 +13,10 @@ namespace MareSynchronosServer.Metrics
 
         public void Inc(double inc = 1d)
         {
-            lock (_c)
-            {
+            //lock (_c)
+            //{
                 _c.Inc(inc);
-            }
+            //}
         }
     }
 }

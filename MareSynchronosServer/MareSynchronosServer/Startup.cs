@@ -1,4 +1,3 @@
-using System;
 using MareSynchronos.API;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -13,7 +12,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Prometheus;
-using WebSocketOptions = Microsoft.AspNetCore.Builder.WebSocketOptions;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authorization;
 using MareSynchronosServer.Discord;
@@ -48,13 +46,14 @@ namespace MareSynchronosServer
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
 
-            services.AddDbContext<MareDbContext>(options =>
+            services.AddDbContextPool<MareDbContext>(options =>
             {
+                options.EnableThreadSafetyChecks(false);
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
                     builder.MigrationsHistoryTable("_efmigrationshistory", "public");
                 }).UseSnakeCaseNamingConvention();
-            });
+            }, Configuration.GetValue("DbContextPoolSize", 1024));
 
             services.AddHostedService<CleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
@@ -64,7 +63,7 @@ namespace MareSynchronosServer
                 {
                     options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
                 })
-                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => {});
+                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();

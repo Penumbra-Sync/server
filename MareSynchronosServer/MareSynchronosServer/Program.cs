@@ -23,7 +23,7 @@ namespace MareSynchronosServer
             using (var scope = host.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
-                var context = services.GetRequiredService<MareDbContext>();
+                using var context = services.GetRequiredService<MareDbContext>();
                 context.Database.Migrate();
                 context.SaveChanges();
 
