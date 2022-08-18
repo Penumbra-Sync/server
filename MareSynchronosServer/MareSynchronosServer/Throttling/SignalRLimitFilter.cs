@@ -94,6 +94,11 @@ public class SignalRLimitFilter : IHubFilter
         HubLifetimeContext context, Exception exception, Func<HubLifetimeContext, Exception, Task> next)
     {
         await DisconnectLimiterSemaphore.WaitAsync();
+        if (exception != null)
+        {
+            logger.LogWarning(exception, "InitialException on OnDisconnectedAsync");
+        }
+
         try
         {
             await next(context, exception);
@@ -101,7 +106,6 @@ public class SignalRLimitFilter : IHubFilter
         }
         catch (Exception e)
         {
-            logger.LogWarning(exception, "InitialException on OnDisconnectedAsync");
             logger.LogWarning(e, "ThrownException on OnDisconnectedAsync");
         }
         finally
