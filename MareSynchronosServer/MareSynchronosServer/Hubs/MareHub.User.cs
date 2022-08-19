@@ -205,39 +205,37 @@ namespace MareSynchronosServer.Hubs
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientPauseChange)]
-        public async Task SendPairedClientPauseChange(string uid, bool isPaused)
+        public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
         {
-            if (uid == AuthenticatedUserId) return;
-            var user = await _dbContext.Users.AsNoTracking()
-                .SingleAsync(u => u.UID == AuthenticatedUserId);
-            var otherUser = await _dbContext.Users.AsNoTracking()
-                .SingleOrDefaultAsync(u => u.UID == uid);
-            if (otherUser == null) return;
-            _logger.LogInformation("User " + AuthenticatedUserId + " changed pause status with " + uid + " to " + isPaused);
-            ClientPair wl =
-                await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == user && w.OtherUser == otherUser);
-            wl.IsPaused = isPaused;
-            _dbContext.Update(wl);
-            await _dbContext.SaveChangesAsync();
-            var otherEntry = OppositeEntry(uid);
+            if (otherUserUid == AuthenticatedUserId) return;
+            ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid);
+            if (pair == null) return;
 
-            await Clients.User(user.UID)
+            _logger.LogInformation("User " + AuthenticatedUserId + " changed pause status with " + otherUserUid + " to " + isPaused);
+            pair.IsPaused = isPaused;
+            _dbContext.Update(pair);
+            await _dbContext.SaveChangesAsync();
+            var selfCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification;
+            var otherCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == otherUserUid)).CharacterIdentification;
+            var otherEntry = OppositeEntry(otherUserUid);
+
+            await Clients.User(AuthenticatedUserId)
                 .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                 {
-                    OtherUID = otherUser.UID,
+                    OtherUID = otherUserUid,
                     IsPaused = isPaused,
                     IsPausedFromOthers = otherEntry?.IsPaused ?? false,
                     IsSynced = otherEntry != null
-                }, otherUser.CharacterIdentification);
+                }, otherCharaIdent);
             if (otherEntry != null)
             {
-                await Clients.User(uid).SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
+                await Clients.User(otherUserUid).SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                 {
-                    OtherUID = user.UID,
+                    OtherUID = AuthenticatedUserId,
                     IsPaused = otherEntry.IsPaused,
                     IsPausedFromOthers = isPaused,
                     IsSynced = true
-                }, user.CharacterIdentification);
+                }, selfCharaIdent);
             }
 
             if (isPaused)

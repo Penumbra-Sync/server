@@ -54,41 +54,47 @@ namespace MareSynchronosServer.Hubs
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
-        [HubMethodName(Api.InvokeFileGetFileSize)]
-        public async Task<DownloadFileDto> GetFileSize(string hash)
+        [HubMethodName(Api.InvokeGetFilesSizes)]
+        public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
         {
-            var file = await _dbContext.Files.AsNoTracking().SingleOrDefaultAsync(f => f.Hash == hash);
-            var forbidden = _dbContext.ForbiddenUploadEntries.AsNoTracking().
-                SingleOrDefault(f => f.Hash == hash);
-            var fileInfo = new FileInfo(Path.Combine(BasePath, hash));
-            long fileSize = 0;
-            try
+            var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync();
+            var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
+                Where(f => hashes.Contains(f.Hash)).ToListAsync();
+            List<DownloadFileDto> response = new();
+            foreach (var hash in hashes)
             {
-                fileSize = fileInfo.Length;
-            }
-            catch
-            {
-                // file doesn't exist anymore
-            }
+                var fileInfo = new FileInfo(Path.Combine(BasePath, hash));
+                long fileSize = 0;
+                try
+                {
+                    fileSize = fileInfo.Length;
+                }
+                catch
+                {
+                    // file doesn't exist anymore
+                }
 
-            var response = new DownloadFileDto
-            {
-                FileExists = fileInfo.Exists,
-                ForbiddenBy = forbidden?.ForbiddenBy ?? string.Empty,
-                IsForbidden = forbidden != null,
-                Hash = hash,
-                Size = fileSize,
-                Url = _configuration["CdnFullUrl"] + hash.ToUpperInvariant()
-            };
+                var forbiddenFile = forbiddenFiles.SingleOrDefault(f => f.Hash == hash);
+                var downloadFile = allFiles.SingleOrDefault(f => f.Hash == hash);
 
-            if (!fileInfo.Exists && file != null)
-            {
-                _dbContext.Files.Remove(file);
-                await _dbContext.SaveChangesAsync();
+                response.Add(new DownloadFileDto
+                {
+                    FileExists = fileInfo.Exists,
+                    ForbiddenBy = forbiddenFile?.ForbiddenBy ?? string.Empty,
+                    IsForbidden = forbiddenFile != null,
+                    Hash = hash,
+                    Size = fileSize,
+                    Url = _configuration["CdnFullUrl"] + hash.ToUpperInvariant()
+                });
+
+                if (!fileInfo.Exists && downloadFile != null)
+                {
+                    _dbContext.Files.Remove(downloadFile);
+                    await _dbContext.SaveChangesAsync();
+                }
             }
 
             return response;
-
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
