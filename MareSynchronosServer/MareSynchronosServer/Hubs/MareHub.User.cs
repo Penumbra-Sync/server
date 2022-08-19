@@ -93,21 +93,36 @@ namespace MareSynchronosServer.Hubs
         public async Task<List<ClientPairDto>> GetPairedClients()
         {
             string userid = AuthenticatedUserId;
-            var pairs = await _dbContext.ClientPairs.AsNoTracking()
-                .Include(u => u.OtherUser)
-                .Include(u => u.User)
-                .Where(w => w.User.UID == userid)
-                .ToListAsync();
-            return pairs.Select(w =>
-            {
-                var otherEntry = OppositeEntry(w.OtherUser.UID);
-                return new ClientPairDto
+            var query =
+                from userToOther in _dbContext.ClientPairs
+                join otherToUser in _dbContext.ClientPairs
+                    on new
+                    {
+                        user = userToOther.UserUID,
+                        other = userToOther.OtherUserUID
+
+                    } equals new
+                    {
+                        user = otherToUser.OtherUserUID,
+                        other = otherToUser.UserUID
+                    } into leftJoin
+                from otherEntry in leftJoin.DefaultIfEmpty()
+                where
+                    userToOther.UserUID == userid
+                select new
                 {
-                    IsPaused = w.IsPaused,
-                    OtherUID = w.OtherUser.UID,
-                    IsSynced = otherEntry != null,
-                    IsPausedFromOthers = otherEntry?.IsPaused ?? false,
+                    userToOther.IsPaused,
+                    OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
+                    userToOther.OtherUserUID,
+                    IsSynced = otherEntry != null
                 };
+
+            return (await query.ToListAsync()).Select(f => new ClientPairDto()
+            {
+                IsPaused = f.IsPaused,
+                OtherUID = f.OtherUserUID,
+                IsSynced = f.IsSynced,
+                IsPausedFromOthers = f.OtherIsPaused
             }).ToList();
         }
 
