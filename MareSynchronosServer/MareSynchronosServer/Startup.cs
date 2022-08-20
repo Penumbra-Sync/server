@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Authorization;
 using MareSynchronosServer.Discord;
 using AspNetCoreRateLimit;
 using MareSynchronosServer.Throttling;
+using Ben.Diagnostics;
 
 namespace MareSynchronosServer
 {
@@ -48,11 +49,11 @@ namespace MareSynchronosServer
 
             services.AddDbContextPool<MareDbContext>(options =>
             {
-                options.EnableThreadSafetyChecks(false);
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
                     builder.MigrationsHistoryTable("_efmigrationshistory", "public");
                 }).UseSnakeCaseNamingConvention();
+                options.EnableThreadSafetyChecks(false);
             }, Configuration.GetValue("DbContextPoolSize", 1024));
 
             services.AddHostedService<CleanupService>();
@@ -81,6 +82,7 @@ namespace MareSynchronosServer
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            app.UseBlockingDetection();
 
             if (env.IsDevelopment())
             {
