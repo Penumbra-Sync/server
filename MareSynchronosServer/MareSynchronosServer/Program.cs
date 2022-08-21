@@ -57,11 +57,6 @@ namespace MareSynchronosServer
                     webBuilder.UseContentRoot(AppContext.BaseDirectory);
                     webBuilder.ConfigureLogging((ctx, builder) =>
                     {
-                        builder.AddSimpleConsole(options =>
-                        {
-                            options.SingleLine = true;
-                            options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ";
-                        });
                         builder.AddConfiguration(ctx.Configuration.GetSection("Logging"));
                         builder.AddFile(o => o.RootPath = AppContext.BaseDirectory);
                     });
