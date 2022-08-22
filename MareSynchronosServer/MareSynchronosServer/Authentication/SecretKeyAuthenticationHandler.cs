@@ -113,7 +113,7 @@ namespace MareSynchronosServer.Authentication
                     var token = failedAuth.ResetCts.Token;
                     failedAuth.ResetTask = Task.Run(async () =>
                     {
-                        await Task.Delay(TimeSpan.FromMinutes(tempBanMinutes), token);
+                        await Task.Delay(TimeSpan.FromMinutes(tempBanMinutes), token).ConfigureAwait(false);
                         if (token.IsCancellationRequested) return;
                         FailedAuthorization fauth;
                         lock (failedAuthLock)
@@ -123,7 +123,7 @@ namespace MareSynchronosServer.Authentication
                         fauth.Dispose();
                     }, token);
 
-                    Logger.LogWarning("TempBan " + ip + " for authorization spam");
+                    Logger.LogWarning("TempBan {ip} for authorization spam", ip);
                     return AuthenticateResult.Fail("Failed Authorization");
                 }
             }
@@ -142,7 +142,7 @@ namespace MareSynchronosServer.Authentication
 
                         lock (failedAuthLock)
                         {
-                            Logger.LogWarning("Failed authorization from " + ip);
+                            Logger.LogWarning("Failed authorization from {ip}", ip);
                             if (FailedAuthorizations.TryGetValue(ip, out var auth))
                             {
                                 auth.IncreaseFailedAttempts();
@@ -163,7 +163,7 @@ namespace MareSynchronosServer.Authentication
             if (string.IsNullOrEmpty(uid))
             {
                 uid = (await _mareDbContext.Auth.AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader))?.UserUID;
+                    .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader).ConfigureAwait(false))?.UserUID;
 
                 if (uid == null)
                 {
@@ -172,7 +172,7 @@ namespace MareSynchronosServer.Authentication
                         Authentications[hashedHeader] = unauthorized;
                     }
 
-                    Logger.LogWarning("Failed authorization from " + ip);
+                    Logger.LogWarning("Failed authorization from {ip}", ip);
                     lock (failedAuthLock)
                     {
                         if (FailedAuthorizations.TryGetValue(ip, out var auth))

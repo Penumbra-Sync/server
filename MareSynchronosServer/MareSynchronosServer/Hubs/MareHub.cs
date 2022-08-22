@@ -41,15 +41,15 @@ namespace MareSynchronosServer.Hubs
 
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
-            _logger.LogInformation("Connection from " + userId + ", CI: " + characterIdentification);
+            _logger.LogInformation("Connection from {userId}, CI: {characterIdentification}", userId, characterIdentification);
 
-            await Clients.Caller.SendAsync(Api.OnUpdateSystemInfo, _systemInfoService.SystemInfoDto);
+            await Clients.Caller.SendAsync(Api.OnUpdateSystemInfo, _systemInfoService.SystemInfoDto).ConfigureAwait(false);
 
-            var isBanned = await _dbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == characterIdentification);
+            var isBanned = await _dbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == characterIdentification).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
             {
-                var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId));
+                var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId).ConfigureAwait(false));
                 if (!string.IsNullOrEmpty(user.CharacterIdentification) && characterIdentification != user.CharacterIdentification)
                 {
                     return new ConnectionDto()
@@ -64,7 +64,7 @@ namespace MareSynchronosServer.Hubs
 
                 user.LastLoggedIn = DateTime.UtcNow;
                 user.CharacterIdentification = characterIdentification;
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync().ConfigureAwait(false);
                 return new ConnectionDto
                 {
                     ServerVersion = Api.Version,
@@ -82,7 +82,7 @@ namespace MareSynchronosServer.Hubs
 
         public override Task OnConnectedAsync()
         {
-            _logger.LogInformation("Connection from " + contextAccessor.GetIpAddress());
+            _logger.LogInformation("Connection from {ip}", contextAccessor.GetIpAddress());
             MareMetrics.Connections.Inc();
             return base.OnConnectedAsync();
         }
@@ -91,12 +91,12 @@ namespace MareSynchronosServer.Hubs
         {
             MareMetrics.Connections.Dec();
 
-            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId);
+            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
                 MareMetrics.AuthorizedConnections.Dec();
 
-                _logger.LogInformation("Disconnect from " + AuthenticatedUserId);
+                _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
 
                 var query =
                     from userToOther in _dbContext.ClientPairs
@@ -114,17 +114,17 @@ namespace MareSynchronosServer.Hubs
                         && !userToOther.IsPaused
                         && !otherToUser.IsPaused
                     select otherToUser.UserUID;
-                var otherEntries = await query.ToListAsync();
+                var otherEntries = await query.ToListAsync().ConfigureAwait(false);
 
-                await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification);
+                await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, user.CharacterIdentification).ConfigureAwait(false);
                                 
                 _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == user.UID));
 
                 user.CharacterIdentification = null;
-                await _dbContext.SaveChangesAsync();
+                await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             }
 
-            await base.OnDisconnectedAsync(exception);
+            await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
         }
 
         public static string GenerateRandomString(int length, string allowableChars = null)
@@ -149,7 +149,7 @@ namespace MareSynchronosServer.Hubs
 
         protected async Task<Models.User> GetAuthenticatedUserUntrackedAsync()
         {
-            return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId);
+            return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
         }
     }
 }

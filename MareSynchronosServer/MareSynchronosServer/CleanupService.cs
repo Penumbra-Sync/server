@@ -49,7 +49,7 @@ namespace MareSynchronosServer
             using var scope = _services.CreateScope();
             using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            _logger.LogInformation($"Cleaning up files older than {filesOlderThanDays} days");
+            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", filesOlderThanDays);
 
             try
             {
@@ -62,13 +62,13 @@ namespace MareSynchronosServer
                     var fi = new FileInfo(fileName);
                     if (!fi.Exists)
                     {
-                        _logger.LogInformation("File does not exist anymore: " + fileName);
+                        _logger.LogInformation("File does not exist anymore: {fileName}", fileName);
                         dbContext.Files.Remove(file);
                     }
                     else if (fi.LastAccessTime < prevTime)
                     {
                         MareMetrics.FilesTotalSize.Dec(fi.Length);
-                        _logger.LogInformation("File outdated: " + fileName);
+                        _logger.LogInformation("File outdated: {fileName}", fileName);
                         dbContext.Files.Remove(file);
                         fi.Delete();
                     }
@@ -144,7 +144,7 @@ namespace MareSynchronosServer
                         usersOlderThanDays = 14;
                     }
 
-                    _logger.LogInformation($"Cleaning up users older than {usersOlderThanDays} days");
+                    _logger.LogInformation("Cleaning up users older than {usersOlderThanDays} days", usersOlderThanDays);
 
                     var allUsers = dbContext.Users.ToList();
                     List<User> usersToRemove = new();
@@ -152,7 +152,7 @@ namespace MareSynchronosServer
                     {
                         if (user.LastLoggedIn < (DateTime.UtcNow - TimeSpan.FromDays(usersOlderThanDays)))
                         {
-                            _logger.LogInformation("User outdated: " + user.UID);
+                            _logger.LogInformation("User outdated: {userUID}", user.UID);
                             usersToRemove.Add(user);
                         }
                     }

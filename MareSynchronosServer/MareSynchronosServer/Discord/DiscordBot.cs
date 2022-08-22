@@ -58,21 +58,21 @@ namespace MareSynchronosServer.Discord
 
         private async Task DiscordClient_SlashCommandExecuted(SocketSlashCommand arg)
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
                 if (arg.Data.Name == "register")
                 {
                     if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                     {
-                        await DeletePreviousUserAccount(arg.User.Id);
+                        await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
                     }
 
                     var modal = new ModalBuilder();
                     modal.WithTitle("Verify with Lodestone");
                     modal.WithCustomId("register_modal");
                     modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-                    await arg.RespondWithModalAsync(modal.Build());
+                    await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
                 }
                 else if (arg.Data.Name == "verify")
                 {
@@ -81,23 +81,23 @@ namespace MareSynchronosServer.Discord
                     {
                         eb.WithTitle("Already queued for verfication");
                         eb.WithDescription("You are already queued for verification. Please wait.");
-                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
                     }
                     else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
                     {
                         eb.WithTitle("Cannot verify registration");
                         eb.WithDescription("You need to **/register** first before you can **/verify**");
-                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true);
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
                     }
                     else
                     {
-                        await arg.DeferAsync(ephemeral: true);
+                        await arg.DeferAsync(ephemeral: true).ConfigureAwait(false);
                         verificationQueue.Enqueue(arg);
                     }
                 }
                 else
                 {
-                    await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true);
+                    await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
                 }
             }
             finally
@@ -110,7 +110,7 @@ namespace MareSynchronosServer.Discord
         {
             using var scope = services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
-            var discordAuthedUser = await db.LodeStoneAuth.Include(u => u.User).FirstOrDefaultAsync(u => u.DiscordId == id);
+            var discordAuthedUser = await db.LodeStoneAuth.Include(u => u.User).FirstOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
             if (discordAuthedUser != null)
             {
                 if (discordAuthedUser.User != null)
@@ -122,7 +122,7 @@ namespace MareSynchronosServer.Discord
                     db.Remove(discordAuthedUser);
                 }
 
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync().ConfigureAwait(false);
             }
         }
 
@@ -130,8 +130,8 @@ namespace MareSynchronosServer.Discord
         {
             if (arg.Data.CustomId == "register_modal")
             {
-                var embed = await HandleRegisterModalAsync(arg);
-                await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true);
+                var embed = await HandleRegisterModalAsync(arg).ConfigureAwait(false);
+                await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
             }
         }
 
@@ -147,10 +147,10 @@ namespace MareSynchronosServer.Discord
             if (lodestoneAuth != null && DiscordLodestoneMapping.ContainsKey(id))
             {
                 var randomServer = LodestoneServers[random.Next(LodestoneServers.Length)];
-                var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}");
+                var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{DiscordLodestoneMapping[id]}").ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
-                    var content = await response.Content.ReadAsStringAsync();
+                    var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                     if (content.Contains(lodestoneAuth.LodestoneAuthString))
                     {
                         DiscordLodestoneMapping.TryRemove(id, out _);
@@ -168,7 +168,7 @@ namespace MareSynchronosServer.Discord
                         }
 
                         // make the first registered user on the service to admin
-                        if (!await db.Users.AnyAsync())
+                        if (!await db.Users.AnyAsync().ConfigureAwait(false))
                         {
                             user.IsAdmin = true;
                         }
@@ -187,10 +187,10 @@ namespace MareSynchronosServer.Discord
                             User = user,
                         };
 
-                        db.Users.Add(user);
-                        db.Auth.Add(auth);
+                        await db.Users.AddAsync(user).ConfigureAwait(false);
+                        await db.Auth.AddAsync(auth).ConfigureAwait(false);
 
-                        logger.LogInformation("User registered: " + user.UID);
+                        logger.LogInformation("User registered: {userUID}", user.UID);
 
                         MareMetrics.UsersRegistered.Inc();
 
@@ -217,7 +217,7 @@ namespace MareSynchronosServer.Discord
                     }
                 }
 
-                await db.SaveChangesAsync();
+                await db.SaveChangesAsync().ConfigureAwait(false);
             }
             else
             {
@@ -270,7 +270,7 @@ namespace MareSynchronosServer.Discord
                 }
                 else
                 {
-                    string lodestoneAuth = await GenerateLodestoneAuth(arg.User.Id, hashedLodestoneId, db);
+                    string lodestoneAuth = await GenerateLodestoneAuth(arg.User.Id, hashedLodestoneId, db).ConfigureAwait(false);
                     // check if lodestone id is already in db
                     embed.WithTitle("Authorize your character");
                     embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
@@ -303,7 +303,7 @@ namespace MareSynchronosServer.Discord
             };
 
             dbContext.Add(lsAuth);
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             return auth;
         }
@@ -345,8 +345,8 @@ namespace MareSynchronosServer.Discord
 
             try
             {
-                await discordClient.CreateGlobalApplicationCommandAsync(register.Build());
-                await discordClient.CreateGlobalApplicationCommandAsync(verify.Build());
+                await discordClient.CreateGlobalApplicationCommandAsync(register.Build()).ConfigureAwait(false);
+                await discordClient.CreateGlobalApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -356,7 +356,7 @@ namespace MareSynchronosServer.Discord
 
         private Task Log(LogMessage msg)
         {
-            logger.LogInformation(msg.ToString());
+            logger.LogInformation("{msg}", msg);
 
             return Task.CompletedTask;
         }
@@ -367,8 +367,8 @@ namespace MareSynchronosServer.Discord
             {
                 authToken = configuration.GetValue<string>("DiscordBotToken");
 
-                await discordClient.LoginAsync(TokenType.Bot, authToken);
-                await discordClient.StartAsync();
+                await discordClient.LoginAsync(TokenType.Bot, authToken).ConfigureAwait(false);
+                await discordClient.StartAsync().ConfigureAwait(false);
 
                 discordClient.Ready += DiscordClient_Ready;
                 discordClient.SlashCommandExecuted += DiscordClient_SlashCommandExecuted;
@@ -388,18 +388,18 @@ namespace MareSynchronosServer.Discord
                 {
                     try
                     {
-                        var dataEmbed = await HandleVerifyAsync(queueitem.User.Id);
-                        await queueitem.FollowupAsync(embed: dataEmbed, ephemeral: true);
+                        var dataEmbed = await HandleVerifyAsync(queueitem.User.Id).ConfigureAwait(false);
+                        await queueitem.FollowupAsync(embed: dataEmbed, ephemeral: true).ConfigureAwait(false);
 
                         logger.LogInformation("Sent login information to user");
                     }
                     catch (Exception e)
                     {
-                        logger.LogError(e.Message);
+                        logger.LogError(e, "Error during queue work");
                     }
 
                 }
-                await Task.Delay(TimeSpan.FromSeconds(2), verificationTaskCts.Token);
+                await Task.Delay(TimeSpan.FromSeconds(2), verificationTaskCts.Token).ConfigureAwait(false);
             }
         }
 
@@ -408,14 +408,14 @@ namespace MareSynchronosServer.Discord
             updateStatusCts = new();
             while (!updateStatusCts.IsCancellationRequested)
             {
-                using var scope = services.CreateScope();
-                using var db = scope.ServiceProvider.GetService<MareDbContext>();
+                await using var scope = services.CreateAsyncScope();
+                await using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
                 var users = db.Users.Count(c => c.CharacterIdentification != null);
 
-                await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users"));
+                await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users")).ConfigureAwait(false);
 
-                await Task.Delay(TimeSpan.FromSeconds(15));
+                await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
             }
         }
 
@@ -424,8 +424,8 @@ namespace MareSynchronosServer.Discord
             verificationTaskCts?.Cancel();
             updateStatusCts?.Cancel();
 
-            await discordClient.LogoutAsync();
-            await discordClient.StopAsync();
+            await discordClient.LogoutAsync().ConfigureAwait(false);
+            await discordClient.StopAsync().ConfigureAwait(false);
         }
     }
 }

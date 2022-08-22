@@ -37,25 +37,25 @@ public class SignalRLimitFilter : IHubFilter
             HttpVerb = "ws",
             ClientId = invocationContext.Context.UserIdentifier
         };
-        foreach (var rule in await _processor.GetMatchingRulesAsync(client))
+        foreach (var rule in await _processor.GetMatchingRulesAsync(client).ConfigureAwait(false))
         {
-            var counter = await _processor.ProcessRequestAsync(client, rule);
+            var counter = await _processor.ProcessRequestAsync(client, rule).ConfigureAwait(false);
             if (counter.Count > rule.Limit)
             {
                 var authUserId = invocationContext.Context.User.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
                 var retry = counter.Timestamp.RetryAfterFrom(rule);
-                logger.LogWarning($"Method rate limit triggered from {ip}/{authUserId}: {invocationContext.HubMethodName}");
+                logger.LogWarning("Method rate limit triggered from {ip}/{authUserId}: {method}", ip, authUserId, invocationContext.HubMethodName);
                 throw new HubException($"call limit {retry}");
             }
         }
 
-        return await next(invocationContext);
+        return await next(invocationContext).ConfigureAwait(false);
     }
 
     // Optional method
     public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
     {
-        await ConnectionLimiterSemaphore.WaitAsync();
+        await ConnectionLimiterSemaphore.WaitAsync().ConfigureAwait(false);
         var ip = accessor.GetIpAddress();
         var client = new ClientRequestIdentity
         {
@@ -63,13 +63,13 @@ public class SignalRLimitFilter : IHubFilter
             Path = "Connect",
             HttpVerb = "ws",
         };
-        foreach (var rule in await _processor.GetMatchingRulesAsync(client))
+        foreach (var rule in await _processor.GetMatchingRulesAsync(client).ConfigureAwait(false))
         {
-            var counter = await _processor.ProcessRequestAsync(client, rule);
+            var counter = await _processor.ProcessRequestAsync(client, rule).ConfigureAwait(false);
             if (counter.Count > rule.Limit)
             {
                 var retry = counter.Timestamp.RetryAfterFrom(rule);
-                logger.LogWarning($"Connection rate limit triggered from {ip}");
+                logger.LogWarning("Connection rate limit triggered from {ip}", ip);
                 ConnectionLimiterSemaphore.Release();
                 throw new HubException($"Connection rate limit {retry}");
             }
@@ -77,8 +77,8 @@ public class SignalRLimitFilter : IHubFilter
 
         try
         {
-            await Task.Delay(250);
-            await next(context);
+            await Task.Delay(250).ConfigureAwait(false);
+            await next(context).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -93,7 +93,7 @@ public class SignalRLimitFilter : IHubFilter
     public async Task OnDisconnectedAsync(
         HubLifetimeContext context, Exception exception, Func<HubLifetimeContext, Exception, Task> next)
     {
-        await DisconnectLimiterSemaphore.WaitAsync();
+        await DisconnectLimiterSemaphore.WaitAsync().ConfigureAwait(false);
         if (exception != null)
         {
             logger.LogWarning(exception, "InitialException on OnDisconnectedAsync");
@@ -101,8 +101,8 @@ public class SignalRLimitFilter : IHubFilter
 
         try
         {
-            await next(context, exception);
-            await Task.Delay(250);
+            await next(context, exception).ConfigureAwait(false);
+            await Task.Delay(250).ConfigureAwait(false);
         }
         catch (Exception e)
         {

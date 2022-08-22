@@ -40,7 +40,7 @@ public class SystemInfoService : IHostedService, IDisposable
     private void PushSystemInfo(object state)
     {
         ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
-        _logger.LogInformation($"ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available");
+        _logger.LogInformation("ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available", workerThreads, ioThreads);
         MareMetrics.AvailableWorkerThreads.Set(workerThreads);
         MareMetrics.AvailableIOWorkerThreads.Set(ioThreads);
 

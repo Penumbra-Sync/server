@@ -73,7 +73,7 @@ namespace MareSynchronosServerTest.Hubs {
             hub.Clients = clientsMock.Object;
             hub.Context = clientContextMock.Object;
 
-            await hub.OnDisconnectedAsync(new Exception("Test Exception"));
+            await hub.OnDisconnectedAsync(new Exception("Test Exception")).ConfigureAwait(false);
 
             clientsMock.Verify(x => x.Users(It.Is<IReadOnlyList<string>>(x => x.Count() == 2 && x[0] == "User2" && x[1] == "User3")), Times.Once);
             clientProxyMock.Verify(x => x.SendCoreAsync(It.IsAny<string>(), It.Is<object[]>(o => (string)o[0] == "Ident1"), It.IsAny<CancellationToken>()), Times.Once);
