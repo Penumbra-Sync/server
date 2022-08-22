@@ -4,9 +4,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Metrics;
+using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
@@ -147,7 +148,7 @@ namespace MareSynchronosServer.Hubs
 
         protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
 
-        protected async Task<Models.User> GetAuthenticatedUserUntrackedAsync()
+        protected async Task<User> GetAuthenticatedUserUntrackedAsync()
         {
             return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
         }

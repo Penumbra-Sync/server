@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace MareSynchronosServer.Models
+namespace MareSynchronosShared.Models
 {
     public class ForbiddenUploadEntry
     {

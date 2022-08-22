@@ -2,14 +2,13 @@ using System;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
-using MareSynchronosServer.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MareSynchronosServer.Metrics;
-using MareSynchronosServer.Models;
 using System.Collections.Generic;
+using MareSynchronosShared.Data;
 
 namespace MareSynchronosServer
 {

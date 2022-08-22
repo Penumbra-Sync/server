@@ -2,7 +2,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 
-namespace MareSynchronosServer.Authentication
+namespace MareSynchronosServer
 {
     public class IdBasedUserIdProvider : IUserIdProvider
     {

@@ -1,9 +1,7 @@
 ﻿using Discord;
 using Discord.WebSocket;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
 using MareSynchronosServer.Metrics;
-using MareSynchronosServer.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,6 +16,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Models;
 
 namespace MareSynchronosServer.Discord
 {

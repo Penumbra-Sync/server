@@ -5,8 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
@@ -18,6 +16,8 @@ using MareSynchronosServer.Discord;
 using AspNetCoreRateLimit;
 using MareSynchronosServer.Throttling;
 using Ben.Diagnostics;
+using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Data;
 
 namespace MareSynchronosServer
 {

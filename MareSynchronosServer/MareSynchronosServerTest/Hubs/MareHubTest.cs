@@ -1,6 +1,4 @@
-﻿using MareSynchronosServer.Data;
-using MareSynchronosServer.Hubs;
-using MareSynchronosServer.Models;
+﻿using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +11,8 @@ using System.Linq;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Models;
 
 namespace MareSynchronosServerTest.Hubs {
     public class MareHubTest {

@@ -1,22 +1,19 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
-using System.Threading;
-using System.Threading.Tasks;
-using MareSynchronosServer.Data;
+using MareSynchronosServer;
 using MareSynchronosServer.Metrics;
+using MareSynchronosShared.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using ISystemClock = Microsoft.AspNetCore.Authentication.ISystemClock;
 
-namespace MareSynchronosServer.Authentication
+namespace MareSynchronosShared.Authentication
 {
     public class FailedAuthorization : IDisposable
     {

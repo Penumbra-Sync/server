@@ -1,7 +1,6 @@
-﻿using System;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
-namespace MareSynchronosServer.Models
+namespace MareSynchronosShared.Models
 {
     public class LodeStoneAuth
     {

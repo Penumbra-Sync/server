@@ -2,9 +2,9 @@
 using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Authentication;
 using MareSynchronosServer.Metrics;
-using MareSynchronosServer.Models;
+using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;

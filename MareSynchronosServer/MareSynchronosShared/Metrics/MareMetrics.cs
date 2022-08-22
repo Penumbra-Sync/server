@@ -1,6 +1,6 @@
 ﻿using System.IO;
 using System.Linq;
-using MareSynchronosServer.Data;
+using MareSynchronosShared.Data;
 using Microsoft.Extensions.Configuration;
 using Prometheus;
 
