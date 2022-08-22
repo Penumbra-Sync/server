@@ -1,30 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using MareSynchronosServer.Metrics;
-using MareSynchronosShared.Authentication;
+﻿using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using MetricsService = MareSynchronosShared.Protos.MetricsService;
 
-namespace MareSynchronosServer
+namespace MareSynchronosServices
 {
     public class CleanupService : IHostedService, IDisposable
     {
+        private readonly MetricsService.MetricsServiceClient _metricsClient;
+        private readonly SecretKeyAuthenticationHandler _authService;
         private readonly ILogger<CleanupService> _logger;
         private readonly IServiceProvider _services;
         private readonly IConfiguration _configuration;
         private Timer _timer;
 
-        public CleanupService(ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
+        public CleanupService(MetricsService.MetricsServiceClient metricsClient, SecretKeyAuthenticationHandler authService, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
         {
+            _metricsClient = metricsClient;
+            _authService = authService;
             _logger = logger;
             _services = services;
             _configuration = configuration;
@@ -56,9 +52,10 @@ namespace MareSynchronosServer
                 var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
 
                 var allFiles = dbContext.Files.ToList();
+                var cachedir = _configuration["CacheDirectory"];
                 foreach (var file in allFiles.Where(f => f.Uploaded))
                 {
-                    var fileName = Path.Combine(_configuration["CacheDirectory"], file.Hash);
+                    var fileName = Path.Combine(cachedir, file.Hash);
                     var fi = new FileInfo(fileName);
                     if (!fi.Exists)
                     {
@@ -67,7 +64,8 @@ namespace MareSynchronosServer
                     }
                     else if (fi.LastAccessTime < prevTime)
                     {
-                        MareMetrics.FilesTotalSize.Dec(fi.Length);
+                        _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length });
+                        _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
                         _logger.LogInformation("File outdated: {fileName}", fileName);
                         dbContext.Files.Remove(file);
                         fi.Delete();
@@ -96,8 +94,8 @@ namespace MareSynchronosServer
                         removedHashes.Add(oldestFile.Name.ToLower());
                         allLocalFiles.Remove(oldestFile);
                         totalCacheSizeInBytes -= oldestFile.Length;
-                        MareMetrics.FilesTotal.Dec();
-                        MareMetrics.FilesTotalSize.Dec(oldestFile.Length);
+                        _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = oldestFile.Length });
+                        _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
                         oldestFile.Delete();
                     }
 
@@ -170,14 +168,14 @@ namespace MareSynchronosServer
                 _logger.LogWarning(ex, "Error during user purge");
             }
 
-            SecretKeyAuthenticationHandler.ClearUnauthorizedUsers();
+            _authService.ClearUnauthorizedUsers();
 
             _logger.LogInformation($"Cleanup complete");
 
             dbContext.SaveChanges();
         }
 
-        public static void PurgeUser(User user, MareDbContext dbContext, IConfiguration _configuration)
+        public void PurgeUser(User user, MareDbContext dbContext, IConfiguration _configuration)
         {
             var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
 
@@ -186,7 +184,7 @@ namespace MareSynchronosServer
                 dbContext.Remove(lodestone);
             }
 
-            SecretKeyAuthenticationHandler.RemoveAuthentication(user.UID);
+            _authService.RemoveAuthentication(user.UID);
 
             var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
 
@@ -196,8 +194,8 @@ namespace MareSynchronosServer
                 var fi = new FileInfo(Path.Combine(_configuration["CacheDirectory"], file.Hash));
                 if (fi.Exists)
                 {
-                    MareMetrics.FilesTotalSize.Dec(fi.Length);
-                    MareMetrics.FilesTotal.Dec();
+                    _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length });
+                    _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
                     fi.Delete();
                 }
             }
@@ -210,12 +208,10 @@ namespace MareSynchronosServer
             var otherPairData = dbContext.ClientPairs.Include(u => u.User)
                 .Where(u => u.OtherUser.UID == user.UID).ToList();
 
-            MareMetrics.Pairs.Dec(ownPairData.Count);
-            MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
-            MareMetrics.Pairs.Dec(otherPairData.Count);
-            MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
-            MareMetrics.UsersRegistered.Dec();
-
+            _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairs, Value = ownPairData.Count + otherPairData.Count });
+            _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = ownPairData.Count(c => c.IsPaused) });
+            _metricsClient.DecGauge(new GaugeRequest() { GaugeName = MetricsAPI.GaugeUsersRegistered, Value = 1 });
+            
             dbContext.RemoveRange(otherPairData);
             dbContext.Remove(auth);
             dbContext.Remove(user);

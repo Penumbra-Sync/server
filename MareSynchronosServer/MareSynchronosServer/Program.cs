@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MareSynchronosServer.Metrics;
 using System.Collections.Generic;
 using MareSynchronosShared.Data;
 
@@ -37,8 +36,6 @@ namespace MareSynchronosServer
                 context.RemoveRange(unfinishedRegistrations);
                 context.RemoveRange(looseFiles);
                 context.SaveChanges();
-
-                MareMetrics.InitializeMetrics(context, services.GetRequiredService<IConfiguration>());
             }
 
             if (args.Length == 0 || args[0] != "dry")

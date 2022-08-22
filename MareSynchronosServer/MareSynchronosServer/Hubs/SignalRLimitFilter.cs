@@ -1,22 +1,22 @@
-﻿using AspNetCoreRateLimit;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using AspNetCoreRateLimit;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
-namespace MareSynchronosServer.Throttling;
+namespace MareSynchronosServer.Hubs;
 public class SignalRLimitFilter : IHubFilter
 {
     private readonly IRateLimitProcessor _processor;
     private readonly IHttpContextAccessor accessor;
     private readonly ILogger<SignalRLimitFilter> logger;
-    private static SemaphoreSlim ConnectionLimiterSemaphore = new(20);
-    private static SemaphoreSlim DisconnectLimiterSemaphore = new(20);
+    private static readonly SemaphoreSlim ConnectionLimiterSemaphore = new(20);
+    private static readonly SemaphoreSlim DisconnectLimiterSemaphore = new(20);
 
     public SignalRLimitFilter(
         IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor, ILogger<SignalRLimitFilter> logger)

@@ -1,0 +1,59 @@
+﻿using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Encodings.Web;
+using MareSynchronosServer;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Protos;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using ISystemClock = Microsoft.AspNetCore.Authentication.ISystemClock;
+
+namespace MareSynchronosShared.Authentication
+{
+
+    public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+    {
+        public const string AuthScheme = "SecretKeyGrpcAuth";
+
+        private readonly AuthService.AuthServiceClient _authClient;
+        private readonly IHttpContextAccessor _accessor;
+
+        public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient, 
+            IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
+        {
+            this._authClient = authClient;
+            _accessor = accessor;
+        }
+
+        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            Request.Headers.TryGetValue("Authorization", out var authHeader);
+            var ip = _accessor.GetIpAddress();
+
+            var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader});
+
+            if (!authResult.Success)
+            {
+                return AuthenticateResult.Fail("Failed Authorization");
+            }
+
+            string uid = authResult.Uid;
+
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, uid)
+            };
+
+            var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
+            var principal = new ClaimsPrincipal(identity);
+            var ticket = new AuthenticationTicket(principal, Scheme.Name);
+
+            return AuthenticateResult.Success(ticket);
+        }
+    }
+}

@@ -2,9 +2,10 @@
 using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Metrics;
 using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,7 @@ namespace MareSynchronosServer.Hubs
 {
     public partial class MareHub
     {
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserDeleteAccount)]
         public async Task DeleteAccount()
         {
@@ -37,10 +38,8 @@ namespace MareSynchronosServer.Hubs
                 await Task.Delay(1000).ConfigureAwait(false);
             }
 
-            SecretKeyAuthenticationHandler.RemoveAuthentication(userid);
+            await _authServiceClient.RemoveAuthAsync(new RemoveAuthRequest() { Uid = userid }).ConfigureAwait(false);
 
-            MareMetrics.Pairs.Dec(ownPairData.Count);
-            MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
 
             _dbContext.RemoveRange(ownPairData);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
@@ -56,9 +55,12 @@ namespace MareSynchronosServer.Hubs
                     }, userEntry.CharacterIdentification).ConfigureAwait(false);
             }
 
-            MareMetrics.Pairs.Dec(otherPairData.Count);
-            MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
-            MareMetrics.UsersRegistered.Dec();
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugePairs, Value = ownPairData.Count + otherPairData.Count }).ConfigureAwait(false);
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugePairsPaused, Value = ownPairData.Count(c => c.IsPaused) }).ConfigureAwait(false);
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugeUsersRegistered, Value = 1 }).ConfigureAwait(false);
 
             _dbContext.RemoveRange(otherPairData);
             _dbContext.Remove(userEntry);
@@ -66,7 +68,7 @@ namespace MareSynchronosServer.Hubs
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetOnlineCharacters)]
         public async Task<List<string>> GetOnlineCharacters()
         {
@@ -88,7 +90,7 @@ namespace MareSynchronosServer.Hubs
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetPairedClients)]
         public async Task<List<ClientPairDto>> GetPairedClients()
         {
@@ -126,7 +128,7 @@ namespace MareSynchronosServer.Hubs
             }).ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserPushCharacterDataToVisibleClients)]
         public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
         {
@@ -158,11 +160,13 @@ namespace MareSynchronosServer.Hubs
 
             await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, user.CharacterIdentification).ConfigureAwait(false);
 
-            MareMetrics.UserPushData.Inc();
-            MareMetrics.UserPushDataTo.Inc(otherEntries.Count);
+            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
+            { CounterName = MetricsAPI.CounterUserPushData, Value = 1 }).ConfigureAwait(false);
+            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
+            { CounterName = MetricsAPI.CounterUserPushDataTo, Value = otherEntries.Count }).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientAddition)]
         public async Task SendPairedClientAddition(string uid)
         {
@@ -215,10 +219,10 @@ namespace MareSynchronosServer.Hubs
                 }
             }
 
-            MareMetrics.Pairs.Inc();
+            await _metricsClient.IncGaugeAsync(new GaugeRequest() {GaugeName = MetricsAPI.GaugePairs, Value = 1}).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientPauseChange)]
         public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
         {
@@ -255,15 +259,15 @@ namespace MareSynchronosServer.Hubs
 
             if (isPaused)
             {
-                MareMetrics.PairsPaused.Inc();
+                await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
             }
             else
             {
-                MareMetrics.PairsPaused.Dec();
+                await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientRemoval)]
         public async Task SendPairedClientRemoval(string uid)
         {
@@ -303,7 +307,7 @@ namespace MareSynchronosServer.Hubs
                 }
             }
 
-            MareMetrics.Pairs.Dec();
+            await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairs, Value = 1 }).ConfigureAwait(false);
         }
 
         private ClientPair OppositeEntry(string otherUID) =>

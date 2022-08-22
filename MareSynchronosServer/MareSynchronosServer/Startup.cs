@@ -1,3 +1,4 @@
+using System;
 using MareSynchronos.API;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -9,15 +10,12 @@ using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
-using Prometheus;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authorization;
-using MareSynchronosServer.Discord;
 using AspNetCoreRateLimit;
-using MareSynchronosServer.Throttling;
 using Ben.Diagnostics;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Protos;
 
 namespace MareSynchronosServer
 {
@@ -47,6 +45,15 @@ namespace MareSynchronosServer
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
 
+            services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
+            {
+                c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+            });
+            services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
+            {
+                c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+            });
+
             services.AddDbContextPool<MareDbContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
@@ -56,15 +63,13 @@ namespace MareSynchronosServer
                 options.EnableThreadSafetyChecks(false);
             }, Configuration.GetValue("DbContextPoolSize", 1024));
 
-            services.AddHostedService<CleanupService>();
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
-            services.AddHostedService<DiscordBot>();
 
             services.AddAuthentication(options =>
                 {
-                    options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
+                    options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
                 })
-                .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
+                .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { });
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
@@ -98,26 +103,12 @@ namespace MareSynchronosServer
 
             app.UseIpRateLimiting();
 
-            app.UseStaticFiles();
-            app.UseHttpLogging();
-
             app.UseRouting();
 
-            app.UseHttpMetrics();
             app.UseWebSockets();
 
             app.UseAuthentication();
             app.UseAuthorization();
-
-            var metricServer = new KestrelMetricServer(4980);
-            metricServer.Start();
-
-            app.UseStaticFiles(new StaticFileOptions()
-            {
-                FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
-                RequestPath = "/cache",
-                ServeUnknownFileTypes = true
-            });
 
             app.UseEndpoints(endpoints =>
             {

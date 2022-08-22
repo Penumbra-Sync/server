@@ -18,7 +18,7 @@ namespace MareSynchronosServer.Hubs
 
         private List<string> OnlineAdmins => _dbContext.Users.Where(u => !string.IsNullOrEmpty(u.CharacterIdentification) && (u.IsModerator || u.IsAdmin))
                                 .Select(u => u.UID).ToList();
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminChangeModeratorStatus)]
         public async Task ChangeModeratorStatus(string uid, bool isModerator)
         {
@@ -33,7 +33,7 @@ namespace MareSynchronosServer.Hubs
             await Clients.Users(user.UID).SendAsync(Api.OnAdminForcedReconnect).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminDeleteBannedUser)]
         public async Task DeleteBannedUser(BannedUserDto dto)
         {
@@ -51,7 +51,7 @@ namespace MareSynchronosServer.Hubs
             await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminDeleteBannedUser, dto).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminDeleteForbiddenFile)]
         public async Task DeleteForbiddenFile(ForbiddenFileDto dto)
         {
@@ -69,7 +69,7 @@ namespace MareSynchronosServer.Hubs
             await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminDeleteForbiddenFile, dto).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeAdminGetBannedUsers)]
         public async Task<List<BannedUserDto>> GetBannedUsers()
         {
@@ -82,7 +82,7 @@ namespace MareSynchronosServer.Hubs
             }).ToListAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeAdminGetForbiddenFiles)]
         public async Task<List<ForbiddenFileDto>> GetForbiddenFiles()
         {
@@ -95,7 +95,7 @@ namespace MareSynchronosServer.Hubs
             }).ToListAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeAdminGetOnlineUsers)]
         public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
         {
@@ -110,7 +110,7 @@ namespace MareSynchronosServer.Hubs
             }).ToListAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminUpdateOrAddBannedUser)]
         public async Task UpdateOrAddBannedUser(BannedUserDto dto)
         {
@@ -142,7 +142,7 @@ namespace MareSynchronosServer.Hubs
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminUpdateOrAddForbiddenFile)]
         public async Task UpdateOrAddForbiddenFile(ForbiddenFileDto dto)
         {

@@ -7,9 +7,10 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Metrics;
 using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -21,7 +22,7 @@ namespace MareSynchronosServer.Hubs
     {
         private string BasePath => _configuration["CacheDirectory"];
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendFileAbortUpload)]
         public async Task AbortUpload()
         {
@@ -32,7 +33,7 @@ namespace MareSynchronosServer.Hubs
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendFileDeleteAllFiles)]
         public async Task DeleteAllFiles()
         {
@@ -44,8 +45,10 @@ namespace MareSynchronosServer.Hubs
                 var fi = new FileInfo(Path.Combine(BasePath, file.Hash));
                 if (fi.Exists)
                 {
-                    MareMetrics.FilesTotalSize.Dec(fi.Length);
-                    MareMetrics.FilesTotal.Dec();
+                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
+                        {GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length}).ConfigureAwait(false);
+                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
+                        { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1}).ConfigureAwait(false);
                     fi.Delete();
                 }
             }
@@ -53,7 +56,7 @@ namespace MareSynchronosServer.Hubs
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeGetFilesSizes)]
         public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
         {
@@ -97,7 +100,7 @@ namespace MareSynchronosServer.Hubs
             return response;
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeFileIsUploadFinished)]
         public async Task<bool> IsUploadFinished()
         {
@@ -106,7 +109,7 @@ namespace MareSynchronosServer.Hubs
                 .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeFileSendFiles)]
         public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
         {
@@ -156,7 +159,7 @@ namespace MareSynchronosServer.Hubs
             return notCoveredFiles.Values.ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendFileUploadFileStreamAsync)]
         public async Task UploadFileStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
         {
@@ -224,8 +227,10 @@ namespace MareSynchronosServer.Hubs
                 relatedFile = _dbContext.Files.Single(f => f.Hash == hash);
                 relatedFile.Uploaded = true;
 
-                MareMetrics.FilesTotal.Inc();
-                MareMetrics.FilesTotalSize.Inc(length);
+                await _metricsClient.IncGaugeAsync(new GaugeRequest()
+                    { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = length }).ConfigureAwait(false);
+                await _metricsClient.IncGaugeAsync(new GaugeRequest()
+                    { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 }).ConfigureAwait(false);
 
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
                 _logger.LogInformation("File {hash} added to DB", hash);
