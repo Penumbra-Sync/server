@@ -3,9 +3,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Data;
 using MareSynchronosServer.Hubs;
-using MareSynchronosServer.Metrics;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -40,12 +41,16 @@ public class SystemInfoService : IHostedService, IDisposable
     private void PushSystemInfo(object state)
     {
         ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
-        _logger.LogInformation($"ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available");
-        MareMetrics.AvailableWorkerThreads.Set(workerThreads);
-        MareMetrics.AvailableIOWorkerThreads.Set(ioThreads);
+        _logger.LogInformation("ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available", workerThreads, ioThreads);
 
         using var scope = _services.CreateScope();
-        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
+
+        var metricsServiceClient = scope.ServiceProvider.GetService<MetricsService.MetricsServiceClient>()!;
+        _ = metricsServiceClient.SetGauge(new SetGaugeRequest()
+        { GaugeName = MetricsAPI.GaugeAvailableWorkerThreads, Value = workerThreads });
+        _ = metricsServiceClient.SetGauge(new SetGaugeRequest()
+        { GaugeName = MetricsAPI.GaugeAvailableIOWorkerThreads, Value = ioThreads });
 
         var users = db.Users.Count(c => c.CharacterIdentification != null);
 

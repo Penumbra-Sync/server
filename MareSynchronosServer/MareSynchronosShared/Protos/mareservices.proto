@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+option csharp_namespace = "MareSynchronosShared.Protos";
+
+package mareservices;
+
+service AuthService {
+  rpc Authorize (AuthRequest) returns (AuthReply);
+  rpc RemoveAuth (RemoveAuthRequest) returns (Empty);
+  rpc ClearUnauthorized (Empty) returns (Empty);
+}
+
+service MetricsService {
+	rpc IncreaseCounter (IncreaseCounterRequest) returns (Empty);
+	rpc SetGauge (SetGaugeRequest) returns (Empty);
+	rpc DecGauge (GaugeRequest) returns (Empty);
+	rpc IncGauge (GaugeRequest) returns (Empty);
+}
+
+message Empty { }
+
+message GaugeRequest {
+	string gaugeName = 1;
+	double value = 2;
+}
+
+message SetGaugeRequest {
+	string gaugeName = 1;
+	double value = 2;
+}
+
+message IncreaseCounterRequest {
+	string counterName = 1;
+	double value = 2;
+}
+
+message RemoveAuthRequest {
+	string uid = 1;
+}
+
+message AuthRequest {
+	string ip = 1;
+	string secretKey = 2;
+}
+
+message AuthReply {
+  bool success = 1;
+  string uid = 2;
+}

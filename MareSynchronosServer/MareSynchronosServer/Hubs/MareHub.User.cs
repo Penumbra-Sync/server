@@ -2,9 +2,10 @@
 using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
-using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Metrics;
-using MareSynchronosServer.Models;
+using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Models;
+using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,18 +15,18 @@ namespace MareSynchronosServer.Hubs
 {
     public partial class MareHub
     {
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserDeleteAccount)]
         public async Task DeleteAccount()
         {
-            _logger.LogInformation("User " + AuthenticatedUserId + " deleted their account");
+            _logger.LogInformation("User {AuthenticatedUserId} deleted their account", AuthenticatedUserId);
 
 
             string userid = AuthenticatedUserId;
-            var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid);
-            var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync();
-            var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid);
-            var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid);
+            var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid).ConfigureAwait(false);
+            var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync().ConfigureAwait(false);
+            var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid).ConfigureAwait(false);
+            var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid).ConfigureAwait(false);
 
             if (lodestone != null)
             {
@@ -34,18 +35,16 @@ namespace MareSynchronosServer.Hubs
 
             while (_dbContext.Files.Any(f => f.Uploader == userEntry))
             {
-                await Task.Delay(1000);
+                await Task.Delay(1000).ConfigureAwait(false);
             }
 
-            SecretKeyAuthenticationHandler.RemoveAuthentication(userid);
+            await _authServiceClient.RemoveAuthAsync(new RemoveAuthRequest() { Uid = userid }).ConfigureAwait(false);
 
-            MareMetrics.Pairs.Dec(ownPairData.Count);
-            MareMetrics.PairsPaused.Dec(ownPairData.Count(c => c.IsPaused));
 
             _dbContext.RemoveRange(ownPairData);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
-                .Where(u => u.OtherUser.UID == userid).ToListAsync();
+                .Where(u => u.OtherUser.UID == userid).ToListAsync().ConfigureAwait(false);
             foreach (var pair in otherPairData)
             {
                 await Clients.User(pair.User.UID)
@@ -53,42 +52,45 @@ namespace MareSynchronosServer.Hubs
                     {
                         OtherUID = userid,
                         IsRemoved = true
-                    }, userEntry.CharacterIdentification);
+                    }, userEntry.CharacterIdentification).ConfigureAwait(false);
             }
 
-            MareMetrics.Pairs.Dec(otherPairData.Count());
-            MareMetrics.PairsPaused.Dec(otherPairData.Count(c => c.IsPaused));
-            MareMetrics.UsersRegistered.Dec();
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugePairs, Value = ownPairData.Count + otherPairData.Count }).ConfigureAwait(false);
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugePairsPaused, Value = ownPairData.Count(c => c.IsPaused) }).ConfigureAwait(false);
+            await _metricsClient.DecGaugeAsync(new GaugeRequest()
+            { GaugeName = MetricsAPI.GaugeUsersRegistered, Value = 1 }).ConfigureAwait(false);
 
             _dbContext.RemoveRange(otherPairData);
             _dbContext.Remove(userEntry);
             _dbContext.Remove(auth);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetOnlineCharacters)]
         public async Task<List<string>> GetOnlineCharacters()
         {
-            _logger.LogInformation("User " + AuthenticatedUserId + " requested online characters");
+            _logger.LogInformation("User {AuthenticatedUserId} requested online characters", AuthenticatedUserId);
 
-            var ownUser = await GetAuthenticatedUserUntrackedAsync();
+            var ownUser = await GetAuthenticatedUserUntrackedAsync().ConfigureAwait(false);
 
             var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
-            .Include(u => u.User)
-            .Include(u => u.OtherUser)
-            .Where(w => w.User.UID == ownUser.UID && !w.IsPaused)
-            .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-            .Select(e => e.OtherUser).ToListAsync();
+                .Include(u => u.User)
+                .Include(u => u.OtherUser)
+                .Where(w => w.User.UID == ownUser.UID && !w.IsPaused)
+                .Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
+                .Select(e => e.OtherUser).ToListAsync().ConfigureAwait(false);
             var otherEntries = await _dbContext.ClientPairs.AsNoTracking()
                 .Include(u => u.User)
-                .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync();
+                .Where(u => otherUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused).ToListAsync().ConfigureAwait(false);
 
-            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserAddOnlinePairedPlayer, ownUser.CharacterIdentification);
+            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserAddOnlinePairedPlayer, ownUser.CharacterIdentification).ConfigureAwait(false);
             return otherEntries.Select(e => e.User.CharacterIdentification).Distinct().ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserGetPairedClients)]
         public async Task<List<ClientPairDto>> GetPairedClients()
         {
@@ -117,7 +119,7 @@ namespace MareSynchronosServer.Hubs
                     IsSynced = otherEntry != null
                 };
 
-            return (await query.ToListAsync()).Select(f => new ClientPairDto()
+            return (await query.ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
             {
                 IsPaused = f.IsPaused,
                 OtherUID = f.OtherUserUID,
@@ -126,13 +128,13 @@ namespace MareSynchronosServer.Hubs
             }).ToList();
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.InvokeUserPushCharacterDataToVisibleClients)]
         public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
         {
-            _logger.LogInformation("User " + AuthenticatedUserId + " pushing character data to " + visibleCharacterIds.Count + " visible clients");
+            _logger.LogInformation("User {AuthenticatedUserId} pushing character data to {visibleCharacterIds} visible clients", AuthenticatedUserId, visibleCharacterIds.Count);
 
-            var user = await GetAuthenticatedUserUntrackedAsync();
+            var user = await GetAuthenticatedUserUntrackedAsync().ConfigureAwait(false);
 
             var query =
                 from userToOther in _dbContext.ClientPairs
@@ -154,38 +156,40 @@ namespace MareSynchronosServer.Hubs
                     && visibleCharacterIds.Contains(userToOther.OtherUser.CharacterIdentification)
                 select otherToUser.UserUID;
 
-            var otherEntries = await query.ToListAsync();
+            var otherEntries = await query.ToListAsync().ConfigureAwait(false);
 
-            await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, user.CharacterIdentification);
+            await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, user.CharacterIdentification).ConfigureAwait(false);
 
-            MareMetrics.UserPushData.Inc();
-            MareMetrics.UserPushDataTo.Inc(otherEntries.Count);
+            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
+            { CounterName = MetricsAPI.CounterUserPushData, Value = 1 }).ConfigureAwait(false);
+            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
+            { CounterName = MetricsAPI.CounterUserPushDataTo, Value = otherEntries.Count }).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientAddition)]
         public async Task SendPairedClientAddition(string uid)
         {
             if (uid == AuthenticatedUserId) return;
             uid = uid.Trim();
-            var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
+            var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
 
             var otherUser = await _dbContext.Users
-                .SingleOrDefaultAsync(u => u.UID == uid);
+                .SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
             var existingEntry =
                 await _dbContext.ClientPairs.AsNoTracking()
                     .FirstOrDefaultAsync(p =>
-                    p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid);
+                        p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid).ConfigureAwait(false);
             if (otherUser == null || existingEntry != null) return;
-            _logger.LogInformation("User " + AuthenticatedUserId + " adding " + uid + " to whitelist");
+            _logger.LogInformation("User {AuthenticatedUserId} adding {uid} to whitelist", AuthenticatedUserId, uid);
             ClientPair wl = new ClientPair()
             {
                 IsPaused = false,
                 OtherUser = otherUser,
                 User = user
             };
-            await _dbContext.ClientPairs.AddAsync(wl);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             var otherEntry = OppositeEntry(uid);
             await Clients.User(user.UID)
                 .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
@@ -194,7 +198,7 @@ namespace MareSynchronosServer.Hubs
                     IsPaused = false,
                     IsPausedFromOthers = otherEntry?.IsPaused ?? false,
                     IsSynced = otherEntry != null
-                }, string.Empty);
+                }, string.Empty).ConfigureAwait(false);
             if (otherEntry != null)
             {
                 await Clients.User(uid).SendAsync(Api.OnUserUpdateClientPairs,
@@ -204,34 +208,34 @@ namespace MareSynchronosServer.Hubs
                         IsPaused = otherEntry.IsPaused,
                         IsPausedFromOthers = false,
                         IsSynced = true
-                    }, user.CharacterIdentification);
+                    }, user.CharacterIdentification).ConfigureAwait(false);
 
                 if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
                     await Clients.User(user.UID)
-                        .SendAsync(Api.OnUserAddOnlinePairedPlayer, otherUser.CharacterIdentification);
+                        .SendAsync(Api.OnUserAddOnlinePairedPlayer, otherUser.CharacterIdentification).ConfigureAwait(false);
                     await Clients.User(otherUser.UID)
-                        .SendAsync(Api.OnUserAddOnlinePairedPlayer, user.CharacterIdentification);
+                        .SendAsync(Api.OnUserAddOnlinePairedPlayer, user.CharacterIdentification).ConfigureAwait(false);
                 }
             }
 
-            MareMetrics.Pairs.Inc();
+            await _metricsClient.IncGaugeAsync(new GaugeRequest() {GaugeName = MetricsAPI.GaugePairs, Value = 1}).ConfigureAwait(false);
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientPauseChange)]
         public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
         {
             if (otherUserUid == AuthenticatedUserId) return;
-            ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid);
+            ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
             if (pair == null) return;
 
-            _logger.LogInformation("User " + AuthenticatedUserId + " changed pause status with " + otherUserUid + " to " + isPaused);
+            _logger.LogInformation("User {AuthenticatedUserId} changed pause status with {otherUserUid} to {isPaused}", AuthenticatedUserId, otherUserUid, isPaused);
             pair.IsPaused = isPaused;
             _dbContext.Update(pair);
-            await _dbContext.SaveChangesAsync();
-            var selfCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId)).CharacterIdentification;
-            var otherCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == otherUserUid)).CharacterIdentification;
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            var selfCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false)).CharacterIdentification;
+            var otherCharaIdent = (await _dbContext.Users.SingleAsync(u => u.UID == otherUserUid).ConfigureAwait(false)).CharacterIdentification;
             var otherEntry = OppositeEntry(otherUserUid);
 
             await Clients.User(AuthenticatedUserId)
@@ -241,7 +245,7 @@ namespace MareSynchronosServer.Hubs
                     IsPaused = isPaused,
                     IsPausedFromOthers = otherEntry?.IsPaused ?? false,
                     IsSynced = otherEntry != null
-                }, otherCharaIdent);
+                }, otherCharaIdent).ConfigureAwait(false);
             if (otherEntry != null)
             {
                 await Clients.User(otherUserUid).SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
@@ -250,60 +254,60 @@ namespace MareSynchronosServer.Hubs
                     IsPaused = otherEntry.IsPaused,
                     IsPausedFromOthers = isPaused,
                     IsSynced = true
-                }, selfCharaIdent);
+                }, selfCharaIdent).ConfigureAwait(false);
             }
 
             if (isPaused)
             {
-                MareMetrics.PairsPaused.Inc();
+                await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
             }
             else
             {
-                MareMetrics.PairsPaused.Dec();
+                await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
             }
         }
 
-        [Authorize(AuthenticationSchemes = SecretKeyAuthenticationHandler.AuthScheme)]
+        [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientRemoval)]
         public async Task SendPairedClientRemoval(string uid)
         {
             if (uid == AuthenticatedUserId) return;
 
-            var sender = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId);
-            var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid);
+            var sender = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
+            var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
             if (otherUser == null) return;
-            _logger.LogInformation("User " + AuthenticatedUserId + " removed " + uid + " from whitelist");
+            _logger.LogInformation("User {AuthenticatedUserId} removed {uid} from whitelist", AuthenticatedUserId, uid);
             ClientPair wl =
-                await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == sender && w.OtherUser == otherUser);
+                await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.User == sender && w.OtherUser == otherUser).ConfigureAwait(false);
             if (wl == null) return;
             _dbContext.ClientPairs.Remove(wl);
-            await _dbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             var otherEntry = OppositeEntry(uid);
             await Clients.User(sender.UID)
                 .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                 {
                     OtherUID = otherUser.UID,
                     IsRemoved = true
-                }, otherUser.CharacterIdentification);
+                }, otherUser.CharacterIdentification).ConfigureAwait(false);
             if (otherEntry != null)
             {
                 if (!string.IsNullOrEmpty(otherUser.CharacterIdentification))
                 {
                     await Clients.User(sender.UID)
-                        .SendAsync(Api.OnUserRemoveOnlinePairedPlayer, otherUser.CharacterIdentification);
+                        .SendAsync(Api.OnUserRemoveOnlinePairedPlayer, otherUser.CharacterIdentification).ConfigureAwait(false);
                     await Clients.User(otherUser.UID)
-                        .SendAsync(Api.OnUserRemoveOnlinePairedPlayer, sender.CharacterIdentification);
+                        .SendAsync(Api.OnUserRemoveOnlinePairedPlayer, sender.CharacterIdentification).ConfigureAwait(false);
                     await Clients.User(otherUser.UID).SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                     {
                         OtherUID = sender.UID,
                         IsPaused = otherEntry.IsPaused,
                         IsPausedFromOthers = false,
                         IsSynced = false
-                    }, sender.CharacterIdentification);
+                    }, sender.CharacterIdentification).ConfigureAwait(false);
                 }
             }
 
-            MareMetrics.Pairs.Dec();
+            await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairs, Value = 1 }).ConfigureAwait(false);
         }
 
         private ClientPair OppositeEntry(string otherUID) =>
