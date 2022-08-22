@@ -59,6 +59,7 @@ namespace MareSynchronosServer
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
                 {
                     builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+                    builder.MigrationsAssembly("MareSynchronosShared");
                 }).UseSnakeCaseNamingConvention();
                 options.EnableThreadSafetyChecks(false);
             }, Configuration.GetValue("DbContextPoolSize", 1024));

@@ -22,7 +22,7 @@ namespace MareSynchronosServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("MareSynchronosServer.Models.Auth", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.Auth", b =>
                 {
                     b.Property<string>("HashedKey")
                         .HasMaxLength(64)
@@ -42,7 +42,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("auth", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.Banned", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.Banned", b =>
                 {
                     b.Property<string>("CharacterIdentification")
                         .HasMaxLength(100)
@@ -65,7 +65,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("banned_users", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.BannedRegistrations", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.BannedRegistrations", b =>
                 {
                     b.Property<string>("DiscordIdOrLodestoneAuth")
                         .HasMaxLength(100)
@@ -78,7 +78,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("banned_registrations", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.ClientPair", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.ClientPair", b =>
                 {
                     b.Property<string>("UserUID")
                         .HasMaxLength(10)
@@ -116,7 +116,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("client_pairs", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.FileCache", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.FileCache", b =>
                 {
                     b.Property<string>("Hash")
                         .HasMaxLength(40)
@@ -147,7 +147,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("file_caches", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.ForbiddenUploadEntry", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.ForbiddenUploadEntry", b =>
                 {
                     b.Property<string>("Hash")
                         .HasMaxLength(40)
@@ -171,7 +171,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("forbidden_upload_entries", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.LodeStoneAuth", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.LodeStoneAuth", b =>
                 {
                     b.Property<decimal>("DiscordId")
                         .ValueGeneratedOnAdd()
@@ -205,7 +205,7 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("lodestone_auth", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.User", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.User", b =>
                 {
                     b.Property<string>("UID")
                         .HasMaxLength(10)
@@ -244,9 +244,9 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.Auth", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.Auth", b =>
                 {
-                    b.HasOne("MareSynchronosServer.Models.User", "User")
+                    b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
                         .HasConstraintName("fk_auth_users_user_temp_id");
@@ -254,16 +254,16 @@ namespace MareSynchronosServer.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.ClientPair", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.ClientPair", b =>
                 {
-                    b.HasOne("MareSynchronosServer.Models.User", "OtherUser")
+                    b.HasOne("MareSynchronosShared.Models.User", "OtherUser")
                         .WithMany()
                         .HasForeignKey("OtherUserUID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_client_pairs_users_other_user_temp_id1");
 
-                    b.HasOne("MareSynchronosServer.Models.User", "User")
+                    b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -275,9 +275,9 @@ namespace MareSynchronosServer.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.FileCache", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.FileCache", b =>
                 {
-                    b.HasOne("MareSynchronosServer.Models.User", "Uploader")
+                    b.HasOne("MareSynchronosShared.Models.User", "Uploader")
                         .WithMany()
                         .HasForeignKey("UploaderUID")
                         .HasConstraintName("fk_file_caches_users_uploader_uid");
@@ -285,9 +285,9 @@ namespace MareSynchronosServer.Migrations
                     b.Navigation("Uploader");
                 });
 
-            modelBuilder.Entity("MareSynchronosServer.Models.LodeStoneAuth", b =>
+            modelBuilder.Entity("MareSynchronosShared.Models.LodeStoneAuth", b =>
                 {
-                    b.HasOne("MareSynchronosServer.Models.User", "User")
+                    b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
                         .HasConstraintName("fk_lodestone_auth_users_user_uid");
