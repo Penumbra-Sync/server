@@ -32,10 +32,13 @@ namespace MareSynchronosShared.Authentication
 
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            Request.Headers.TryGetValue("Authorization", out var authHeader);
+            if(!Request.Headers.TryGetValue("Authorization", out var authHeader))
+            {
+                authHeader = string.Empty;
+            }
             var ip = _accessor.GetIpAddress();
 
-            var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader});
+            var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader}).ConfigureAwait(false);
 
             if (!authResult.Success)
             {
