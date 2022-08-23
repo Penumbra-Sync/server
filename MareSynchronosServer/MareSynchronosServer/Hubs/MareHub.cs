@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Linq;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosShared.Authentication;
@@ -22,22 +21,24 @@ namespace MareSynchronosServer.Hubs
     {
         private readonly MetricsService.MetricsServiceClient _metricsClient;
         private readonly AuthService.AuthServiceClient _authServiceClient;
+        private readonly FileService.FileServiceClient _fileServiceClient;
         private readonly SystemInfoService _systemInfoService;
         private readonly IConfiguration _configuration;
         private readonly IHttpContextAccessor contextAccessor;
         private readonly ILogger<MareHub> _logger;
         private readonly MareDbContext _dbContext;
-
-        public MareHub(MetricsService.MetricsServiceClient metricsClient, AuthService.AuthServiceClient authServiceClient,
+        public MareHub(MetricsService.MetricsServiceClient metricsClient, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
             MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor)
         {
             _metricsClient = metricsClient;
             _authServiceClient = authServiceClient;
+            _fileServiceClient = fileServiceClient;
             _systemInfoService = systemInfoService;
             _configuration = configuration;
             this.contextAccessor = contextAccessor;
             _logger = logger;
             _dbContext = mareDbContext;
+            _staticFileAddress = new Uri(_configuration["StaticFileServiceAddress"]);
         }
 
         [HubMethodName(Api.InvokeHeartbeat)]

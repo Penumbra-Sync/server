@@ -17,7 +17,31 @@ service MetricsService {
 	rpc IncGauge (GaugeRequest) returns (Empty);
 }
 
+service FileService {
+	rpc UploadFile (UploadFileRequest) returns (Empty);
+	rpc GetFileSizes (FileSizeRequest) returns (FileSizeResponse);
+	rpc DeleteFiles (DeleteFilesRequest) returns (Empty);
+}
+
 message Empty { }
+
+message UploadFileRequest {
+	string hash = 1;
+	string uploader = 2;
+	bytes fileData = 3;
+}
+
+message DeleteFilesRequest {
+	repeated string hash = 1;
+}
+
+message FileSizeRequest {
+	repeated string hash = 1;
+}
+
+message FileSizeResponse {
+	map<string, int64> hashToFileSize = 1;
+}
 
 message GaugeRequest {
 	string gaugeName = 1;

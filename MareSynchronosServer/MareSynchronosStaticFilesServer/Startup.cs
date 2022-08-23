@@ -1,6 +1,5 @@
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
-using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +27,19 @@ public class Startup
         {
             c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
         });
+        services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
+        {
+            c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+        });
+
+        services.AddDbContextPool<MareDbContext>(options =>
+        {
+            options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
+            {
+                builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+            }).UseSnakeCaseNamingConvention();
+            options.EnableThreadSafetyChecks(false);
+        }, Configuration.GetValue("DbContextPoolSize", 1024));
 
         services.AddAuthentication(options =>
             {
@@ -35,6 +47,11 @@ public class Startup
             })
             .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { });
         services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+        services.AddGrpc(o =>
+        {
+            o.MaxReceiveMessageSize = null;
+        });
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -46,12 +63,17 @@ public class Startup
 
         app.UseAuthentication();
         app.UseAuthorization();
-        
+
         app.UseStaticFiles(new StaticFileOptions()
         {
             FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
             RequestPath = "/cache",
             ServeUnknownFileTypes = true
+        });
+
+        app.UseEndpoints(e =>
+        {
+            e.MapGrpcService<FileService>();
         });
     }
 }

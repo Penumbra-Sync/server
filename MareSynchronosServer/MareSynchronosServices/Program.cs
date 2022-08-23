@@ -1,7 +1,4 @@
 using MareSynchronosServices;
-using MareSynchronosServices.Metrics;
-using MareSynchronosShared.Data;
-using Microsoft.EntityFrameworkCore;
 
 public class Program
 {

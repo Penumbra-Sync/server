@@ -53,6 +53,10 @@ namespace MareSynchronosServer
             {
                 c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
             });
+            services.AddGrpcClient<FileService.FileServiceClient>(c =>
+            {
+                c.Address = new Uri(Configuration.GetValue<string>("StaticFileServiceAddress"));
+            });
 
             services.AddDbContextPool<MareDbContext>(options =>
             {

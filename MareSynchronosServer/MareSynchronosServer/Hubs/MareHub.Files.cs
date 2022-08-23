@@ -2,13 +2,11 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
-using System.Threading;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using MareSynchronos.API;
 using MareSynchronosShared.Authentication;
-using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
@@ -20,8 +18,6 @@ namespace MareSynchronosServer.Hubs
 {
     public partial class MareHub
     {
-        private string BasePath => _configuration["CacheDirectory"];
-
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendFileAbortUpload)]
         public async Task AbortUpload()
@@ -40,20 +36,9 @@ namespace MareSynchronosServer.Hubs
             _logger.LogInformation("User {AuthenticatedUserId} deleted all their files", AuthenticatedUserId);
 
             var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
-            foreach (var file in ownFiles)
-            {
-                var fi = new FileInfo(Path.Combine(BasePath, file.Hash));
-                if (fi.Exists)
-                {
-                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
-                        {GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length}).ConfigureAwait(false);
-                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
-                        { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1}).ConfigureAwait(false);
-                    fi.Delete();
-                }
-            }
-            _dbContext.Files.RemoveRange(ownFiles);
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            var request = new DeleteFilesRequest();
+            request.Hash.AddRange(ownFiles.Select(f => f.Hash));
+            _ = await _fileServiceClient.DeleteFilesAsync(request).ConfigureAwait(false);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -64,37 +49,24 @@ namespace MareSynchronosServer.Hubs
             var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
                 Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
             List<DownloadFileDto> response = new();
-            foreach (var hash in hashes)
-            {
-                var fileInfo = new FileInfo(Path.Combine(BasePath, hash));
-                long fileSize = 0;
-                try
-                {
-                    fileSize = fileInfo.Length;
-                }
-                catch
-                {
-                    // file doesn't exist anymore
-                }
 
-                var forbiddenFile = forbiddenFiles.SingleOrDefault(f => f.Hash == hash);
-                var downloadFile = allFiles.SingleOrDefault(f => f.Hash == hash);
+            FileSizeRequest request = new FileSizeRequest();
+            var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request).ConfigureAwait(false);
+
+            foreach (var hash in grpcResponse.HashToFileSize)
+            {
+                var forbiddenFile = forbiddenFiles.SingleOrDefault(f => f.Hash == hash.Key);
+                var downloadFile = allFiles.SingleOrDefault(f => f.Hash == hash.Key);
 
                 response.Add(new DownloadFileDto
                 {
-                    FileExists = fileInfo.Exists,
+                    FileExists = hash.Value > 0,
                     ForbiddenBy = forbiddenFile?.ForbiddenBy ?? string.Empty,
                     IsForbidden = forbiddenFile != null,
-                    Hash = hash,
-                    Size = fileSize,
-                    Url = _configuration["CdnFullUrl"] + hash.ToUpperInvariant()
+                    Hash = hash.Key,
+                    Size = hash.Value,
+                    Url = _configuration["CdnFullUrl"] + hash.Key.ToUpperInvariant()
                 });
-
-                if (!fileInfo.Exists && downloadFile != null)
-                {
-                    _dbContext.Files.Remove(downloadFile);
-                    await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-                }
             }
 
             return response;
@@ -169,8 +141,8 @@ namespace MareSynchronosServer.Hubs
             if (relatedFile == null) return;
             var forbiddenFile = _dbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
             if (forbiddenFile != null) return;
-            var finalFileName = Path.Combine(BasePath, hash);
-            var tempFileName = finalFileName + ".tmp";
+
+            var tempFileName = Path.GetTempFileName();
             using var fileStream = new FileStream(tempFileName, FileMode.OpenOrCreate);
             long length = 0;
             try
@@ -223,17 +195,10 @@ namespace MareSynchronosServer.Hubs
                     return;
                 }
 
-                File.Move(tempFileName, finalFileName, true);
-                relatedFile = _dbContext.Files.Single(f => f.Hash == hash);
-                relatedFile.Uploaded = true;
-
-                await _metricsClient.IncGaugeAsync(new GaugeRequest()
-                    { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = length }).ConfigureAwait(false);
-                await _metricsClient.IncGaugeAsync(new GaugeRequest()
-                    { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 }).ConfigureAwait(false);
-
-                await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-                _logger.LogInformation("File {hash} added to DB", hash);
+                UploadFileRequest req = new();
+                req.FileData = ByteString.CopyFrom(await File.ReadAllBytesAsync(tempFileName).ConfigureAwait(false));
+                File.Delete(tempFileName);
+                _ = await _fileServiceClient.UploadFileAsync(req).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
