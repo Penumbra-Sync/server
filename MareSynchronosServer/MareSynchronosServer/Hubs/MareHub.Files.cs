@@ -51,6 +51,7 @@ namespace MareSynchronosServer.Hubs
             List<DownloadFileDto> response = new();
 
             FileSizeRequest request = new FileSizeRequest();
+            request.Hash.AddRange(hashes);
             var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request).ConfigureAwait(false);
 
             foreach (var hash in grpcResponse.HashToFileSize)
