@@ -38,7 +38,6 @@ namespace MareSynchronosServer.Hubs
             this.contextAccessor = contextAccessor;
             _logger = logger;
             _dbContext = mareDbContext;
-            _staticFileAddress = new Uri(_configuration["StaticFileServiceAddress"]);
         }
 
         [HubMethodName(Api.InvokeHeartbeat)]
