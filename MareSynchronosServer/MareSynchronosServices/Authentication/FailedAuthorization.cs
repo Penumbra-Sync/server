@@ -1,4 +1,8 @@
-﻿namespace MareSynchronosServices.Authentication;
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace MareSynchronosServices.Authentication;
 
 public class FailedAuthorization : IDisposable
 {

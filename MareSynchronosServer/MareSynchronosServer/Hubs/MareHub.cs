@@ -23,10 +23,10 @@ namespace MareSynchronosServer.Hubs
         private readonly AuthService.AuthServiceClient _authServiceClient;
         private readonly FileService.FileServiceClient _fileServiceClient;
         private readonly SystemInfoService _systemInfoService;
-        private readonly IConfiguration _configuration;
         private readonly IHttpContextAccessor contextAccessor;
         private readonly ILogger<MareHub> _logger;
         private readonly MareDbContext _dbContext;
+        private readonly Uri cdnFullUri;
         public MareHub(MetricsService.MetricsServiceClient metricsClient, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
             MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor)
         {
@@ -34,7 +34,7 @@ namespace MareSynchronosServer.Hubs
             _authServiceClient = authServiceClient;
             _fileServiceClient = fileServiceClient;
             _systemInfoService = systemInfoService;
-            _configuration = configuration;
+            cdnFullUri = new Uri(configuration.GetRequiredSection("MareSynchronos").GetValue<string>("CdnFullUrl"));
             this.contextAccessor = contextAccessor;
             _logger = logger;
             _dbContext = mareDbContext;

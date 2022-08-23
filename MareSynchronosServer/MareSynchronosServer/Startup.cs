@@ -12,7 +12,6 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using AspNetCoreRateLimit;
-using Ben.Diagnostics;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
@@ -45,17 +44,19 @@ namespace MareSynchronosServer
             services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
             services.AddTransient(_ => Configuration);
 
+            var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
+
             services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
             {
-                c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+                c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
             });
             services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
             {
-                c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+                c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
             });
             services.AddGrpcClient<FileService.FileServiceClient>(c =>
             {
-                c.Address = new Uri(Configuration.GetValue<string>("StaticFileServiceAddress"));
+                c.Address = new Uri(mareConfig.GetValue<string>("StaticFileServiceAddress"));
             });
 
             services.AddDbContextPool<MareDbContext>(options =>
@@ -66,7 +67,7 @@ namespace MareSynchronosServer
                     builder.MigrationsAssembly("MareSynchronosShared");
                 }).UseSnakeCaseNamingConvention();
                 options.EnableThreadSafetyChecks(false);
-            }, Configuration.GetValue("DbContextPoolSize", 1024));
+            }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
 
@@ -92,8 +93,6 @@ namespace MareSynchronosServer
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
-            app.UseBlockingDetection();
-
             if (env.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();

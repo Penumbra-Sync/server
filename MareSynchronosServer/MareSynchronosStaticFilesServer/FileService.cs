@@ -3,7 +3,13 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using System;
+using System.IO;
+using System.Linq;
 using System.Security.Policy;
+using System.Threading.Tasks;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -16,7 +22,7 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
 
     public FileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<FileService> logger, MetricsService.MetricsServiceClient metricsClient)
     {
-        _basePath = configuration["CacheDirectory"];
+        _basePath = configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"];
         _mareDbContext = mareDbContext;
         _logger = logger;
         _metricsClient = metricsClient;

@@ -1,5 +1,15 @@
 ﻿using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using static MareSynchronosShared.Protos.MetricsService;
 
 namespace MareSynchronosStaticFilesServer;
@@ -17,7 +27,12 @@ public class CleanupService : IHostedService, IDisposable
         _metrics = metrics;
         _logger = logger;
         _services = services;
-        _configuration = configuration;
+        _configuration = configuration.GetRequiredSection("MareSynchronos");
+        metrics.SetGauge(new MareSynchronosShared.Protos.SetGaugeRequest()
+        {
+            GaugeName = MetricsAPI.GaugeFilesTotalSize,
+            Value = Directory.EnumerateFiles(_configuration["CacheDirectory"]).Sum(f => new FileInfo(f).Length)
+        });
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -65,6 +80,16 @@ public class CleanupService : IHostedService, IDisposable
                     fi.Delete();
                 }
             }
+
+            foreach (var file in Directory.EnumerateFiles(cachedir).ToList())
+            {
+                FileInfo fi = new(file);
+                if (!allFiles.Any(f => f.Hash == fi.Name.ToUpperInvariant()))
+                {
+                    fi.Delete();
+                    _logger.LogInformation("File not in DB, deleting: {fileName}", fi.FullName);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -78,7 +103,8 @@ public class CleanupService : IHostedService, IDisposable
             if (cacheSizeLimitInGiB > 0)
             {
                 _logger.LogInformation("Cleaning up files beyond the cache size limit");
-                var allLocalFiles = Directory.EnumerateFiles(_configuration["CacheDirectory"]).Select(f => new FileInfo(f)).ToList().OrderBy(f => f.LastAccessTimeUtc).ToList();
+                var allLocalFiles = Directory.EnumerateFiles(_configuration["CacheDirectory"])
+                    .Select(f => new FileInfo(f)).ToList().OrderBy(f => f.LastAccessTimeUtc).ToList();
                 var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
                 long cacheSizeLimitInBytes = (long)(cacheSizeLimitInGiB * 1024 * 1024 * 1024);
                 HashSet<string> removedHashes = new();

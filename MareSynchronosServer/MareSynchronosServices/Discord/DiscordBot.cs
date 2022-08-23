@@ -1,7 +1,12 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
 using MareSynchronosServices.Metrics;
@@ -9,6 +14,10 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Discord;
 
@@ -17,14 +26,14 @@ public class DiscordBot : IHostedService
     private readonly CleanupService cleanupService;
     private readonly MareMetrics metrics;
     private readonly IServiceProvider services;
-    private readonly IConfiguration configuration;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<DiscordBot> logger;
     private readonly Random random;
     private string authToken = string.Empty;
     DiscordSocketClient discordClient;
     ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
-    private CancellationTokenSource verificationTaskCts;
-    private CancellationTokenSource updateStatusCts;
+    private CancellationTokenSource? verificationTaskCts;
+    private CancellationTokenSource? updateStatusCts;
     private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
     private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
 
@@ -35,13 +44,13 @@ public class DiscordBot : IHostedService
         this.cleanupService = cleanupService;
         this.metrics = metrics;
         this.services = services;
-        this.configuration = configuration;
+        _configuration = configuration.GetRequiredSection("MareSynchronos");
         this.logger = logger;
         this.verificationQueue = new ConcurrentQueue<SocketSlashCommand>();
         this.semaphore = new SemaphoreSlim(1);
 
         random = new();
-        authToken = configuration.GetValue<string>("DiscordBotToken");
+        authToken = _configuration.GetValue<string>("DiscordBotToken");
 
         discordClient = new(new DiscordSocketConfig()
         {
@@ -110,7 +119,7 @@ public class DiscordBot : IHostedService
         {
             if (discordAuthedUser.User != null)
             {
-                cleanupService.PurgeUser(discordAuthedUser.User, db, configuration);
+                cleanupService.PurgeUser(discordAuthedUser.User, db);
             }
             else
             {
@@ -168,9 +177,9 @@ public class DiscordBot : IHostedService
                         user.IsAdmin = true;
                     }
 
-                    if (configuration.GetValue<bool>("PurgeUnusedAccounts"))
+                    if (_configuration.GetValue<bool>("PurgeUnusedAccounts"))
                     {
-                        var purgedDays = configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
+                        var purgedDays = _configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
                         user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
                     }
 
@@ -360,7 +369,7 @@ public class DiscordBot : IHostedService
     {
         if (!string.IsNullOrEmpty(authToken))
         {
-            authToken = configuration.GetValue<string>("DiscordBotToken");
+            authToken = _configuration.GetValue<string>("DiscordBotToken");
 
             await discordClient.LoginAsync(TokenType.Bot, authToken).ConfigureAwait(false);
             await discordClient.StartAsync().ConfigureAwait(false);
@@ -423,7 +432,7 @@ public class DiscordBot : IHostedService
         await discordClient.StopAsync().ConfigureAwait(false);
     }
 
-    public static string GenerateRandomString(int length, string allowableChars = null)
+    public static string GenerateRandomString(int length, string? allowableChars = null)
     {
         if (string.IsNullOrEmpty(allowableChars))
             allowableChars = @"ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";

@@ -1,6 +1,7 @@
 using Grpc.Core;
 using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Protos;
+using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Services;
 

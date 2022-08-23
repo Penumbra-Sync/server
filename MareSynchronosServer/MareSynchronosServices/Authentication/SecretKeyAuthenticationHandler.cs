@@ -1,10 +1,17 @@
-﻿using System.Security.Cryptography;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Authentication;
 
@@ -17,8 +24,8 @@ public class SecretKeyAuthenticationHandler
     private readonly Dictionary<string, FailedAuthorization?> failedAuthorizations = new();
     private readonly object authDictLock = new();
     private readonly object failedAuthLock = new();
-    private readonly int failedAttemptsForTempBan;
-    private readonly int tempBanMinutes;
+    private readonly int _failedAttemptsForTempBan;
+    private readonly int _tempBanMinutes;
 
     public void ClearUnauthorizedUsers()
     {
@@ -58,7 +65,7 @@ public class SecretKeyAuthenticationHandler
 
         lock (failedAuthLock)
         {
-            if (failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization) && existingFailedAuthorization.FailedAttempts > failedAttemptsForTempBan)
+            if (failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization) && existingFailedAuthorization.FailedAttempts > _failedAttemptsForTempBan)
             {
                 metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
 
@@ -68,7 +75,7 @@ public class SecretKeyAuthenticationHandler
                 var token = existingFailedAuthorization.ResetCts.Token;
                 existingFailedAuthorization.ResetTask = Task.Run(async () =>
                 {
-                    await Task.Delay(TimeSpan.FromMinutes(tempBanMinutes), token).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromMinutes(_tempBanMinutes), token).ConfigureAwait(false);
                     if (token.IsCancellationRequested) return;
                     FailedAuthorization? failedAuthorization;
                     lock (failedAuthLock)
@@ -159,7 +166,8 @@ public class SecretKeyAuthenticationHandler
     {
         this.logger = logger;
         this.metrics = metrics;
-        failedAttemptsForTempBan = configuration.GetValue<int>("FailedAuthForTempBan", 5);
-        tempBanMinutes = configuration.GetValue<int>("TempBanDurationInMinutes", 30);
+        var config = configuration.GetRequiredSection("MareSynchronos");
+        _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
+        _tempBanMinutes = config.GetValue<int>("TempBanDurationInMinutes", 30);
     }
 }

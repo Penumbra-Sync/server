@@ -2,6 +2,8 @@ using Grpc.Core;
 using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
+using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Services
 {

@@ -1,7 +1,11 @@
 ﻿using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace MareSynchronosServices.Metrics;
 
@@ -16,7 +20,6 @@ public class MareMetrics
         gauges[MetricsAPI.GaugePairs].IncTo(dbContext.ClientPairs.Count());
         gauges[MetricsAPI.GaugePairsPaused].IncTo(dbContext.ClientPairs.Count(p => p.IsPaused));
         gauges[MetricsAPI.GaugeFilesTotal].IncTo(dbContext.Files.Count());
-        gauges[MetricsAPI.GaugeFilesTotalSize].IncTo(Directory.EnumerateFiles(configuration["CacheDirectory"]).Sum(f => new FileInfo(f).Length));
     }
 
     private readonly Dictionary<string, Counter> counters = new()

@@ -3,9 +3,17 @@ using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
-using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
-using MetricsService = MareSynchronosShared.Protos.MetricsService;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MareSynchronosServices
 {
@@ -16,7 +24,7 @@ namespace MareSynchronosServices
         private readonly ILogger<CleanupService> _logger;
         private readonly IServiceProvider _services;
         private readonly IConfiguration _configuration;
-        private Timer _timer;
+        private Timer? _timer;
 
         public CleanupService(MareMetrics metrics, SecretKeyAuthenticationHandler authService, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
         {
@@ -24,7 +32,7 @@ namespace MareSynchronosServices
             _authService = authService;
             _logger = logger;
             _services = services;
-            _configuration = configuration;
+            _configuration = configuration.GetRequiredSection("MareSynchronos");
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -158,7 +166,7 @@ namespace MareSynchronosServices
 
                     foreach (var user in usersToRemove)
                     {
-                        PurgeUser(user, dbContext, _configuration);
+                        PurgeUser(user, dbContext);
                     }
                 }
 
@@ -176,7 +184,7 @@ namespace MareSynchronosServices
             dbContext.SaveChanges();
         }
 
-        public void PurgeUser(User user, MareDbContext dbContext, IConfiguration _configuration)
+        public void PurgeUser(User user, MareDbContext dbContext)
         {
             var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
 
@@ -190,17 +198,6 @@ namespace MareSynchronosServices
             var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
 
             var userFiles = dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == user.UID).ToList();
-            foreach (var file in userFiles)
-            {
-                var fi = new FileInfo(Path.Combine(_configuration["CacheDirectory"], file.Hash));
-                if (fi.Exists)
-                {
-                    metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotalSize, fi.Length);
-                    metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotal, 1);
-                    fi.Delete();
-                }
-            }
-
             dbContext.Files.RemoveRange(userFiles);
 
             var ownPairData = dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToList();

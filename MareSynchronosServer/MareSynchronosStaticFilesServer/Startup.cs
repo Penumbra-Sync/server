@@ -3,8 +3,13 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using System;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -23,13 +28,15 @@ public class Startup
 
         services.AddTransient(_ => Configuration);
 
+        var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
+
         services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
         {
-            c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+            c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
         });
         services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
         {
-            c.Address = new Uri(Configuration.GetValue<string>("ServiceAddress"));
+            c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
         });
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -39,7 +46,7 @@ public class Startup
                 builder.MigrationsHistoryTable("_efmigrationshistory", "public");
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
-        }, Configuration.GetValue("DbContextPoolSize", 1024));
+        }, mareSettings.GetValue("DbContextPoolSize", 1024));
 
         services.AddAuthentication(options =>
             {
@@ -66,7 +73,7 @@ public class Startup
 
         app.UseStaticFiles(new StaticFileOptions()
         {
-            FileProvider = new PhysicalFileProvider(Configuration["CacheDirectory"]),
+            FileProvider = new PhysicalFileProvider(Configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"]),
             RequestPath = "/cache",
             ServeUnknownFileTypes = true
         });
