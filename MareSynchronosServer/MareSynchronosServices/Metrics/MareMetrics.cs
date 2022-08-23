@@ -11,7 +11,7 @@ namespace MareSynchronosServices.Metrics;
 
 public class MareMetrics
 {
-    public MareMetrics(IServiceProvider services, IConfiguration configuration)
+    public MareMetrics(IServiceProvider services)
     {
         using var scope = services.CreateScope();
         using var dbContext = scope.ServiceProvider.GetService<MareDbContext>();
@@ -36,14 +36,14 @@ public class MareMetrics
     private readonly Dictionary<string, Gauge> gauges = new()
     {
         { MetricsAPI.GaugeConnections, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Unauthorized Connections") },
-        { MetricsAPI.GaugeAuthorizedConnections, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Authorized Connections") },
-        { MetricsAPI.GaugeAvailableIOWorkerThreads, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Available Threadpool IO Workers") },
-        { MetricsAPI.GaugeAvailableWorkerThreads, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Aavailable Threadpool Workers") },
-        { MetricsAPI.GaugeUsersRegistered, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Total Registrations") },
-        { MetricsAPI.GaugePairs, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Total Pairs") },
-        { MetricsAPI.GaugePairsPaused, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Total Paused Pairs") },
-        { MetricsAPI.GaugeFilesTotal, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Total uploaded files") },
-        { MetricsAPI.GaugeFilesTotalSize, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeConnections, "Total uploaded files (bytes)") },
+        { MetricsAPI.GaugeAuthorizedConnections, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeAuthorizedConnections, "Authorized Connections") },
+        { MetricsAPI.GaugeAvailableIOWorkerThreads, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeAvailableIOWorkerThreads, "Available Threadpool IO Workers") },
+        { MetricsAPI.GaugeAvailableWorkerThreads, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeAvailableWorkerThreads, "Aavailable Threadpool Workers") },
+        { MetricsAPI.GaugeUsersRegistered, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeUsersRegistered, "Total Registrations") },
+        { MetricsAPI.GaugePairs, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugePairs, "Total Pairs") },
+        { MetricsAPI.GaugePairsPaused, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugePairsPaused, "Total Paused Pairs") },
+        { MetricsAPI.GaugeFilesTotal, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeFilesTotal, "Total uploaded files") },
+        { MetricsAPI.GaugeFilesTotalSize, Prometheus.Metrics.CreateGauge(MetricsAPI.GaugeFilesTotalSize, "Total uploaded files (bytes)") },
     };
 
     public void SetGaugeTo(string gaugeName, double value)

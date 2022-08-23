@@ -48,6 +48,8 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareSettings.GetValue("DbContextPoolSize", 1024));
 
+        services.AddHostedService<CleanupService>();
+
         services.AddAuthentication(options =>
             {
                 options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;

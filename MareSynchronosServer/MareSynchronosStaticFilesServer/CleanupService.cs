@@ -1,5 +1,6 @@
 ﻿using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Protos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,38 +11,50 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using static MareSynchronosShared.Protos.MetricsService;
 
 namespace MareSynchronosStaticFilesServer;
 
 public class CleanupService : IHostedService, IDisposable
 {
-    private readonly MetricsServiceClient _metrics;
+    private readonly MetricsService.MetricsServiceClient _metrics;
     private readonly ILogger<CleanupService> _logger;
     private readonly IServiceProvider _services;
     private readonly IConfiguration _configuration;
     private Timer? _timer;
 
-    public CleanupService(MetricsServiceClient metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
+    public CleanupService(MetricsService.MetricsServiceClient metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
     {
         _metrics = metrics;
         _logger = logger;
         _services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
-        metrics.SetGauge(new MareSynchronosShared.Protos.SetGaugeRequest()
-        {
-            GaugeName = MetricsAPI.GaugeFilesTotalSize,
-            Value = Directory.EnumerateFiles(_configuration["CacheDirectory"]).Sum(f => new FileInfo(f).Length)
-        });
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Cleanup Service started");
 
-        _timer = new Timer(CleanUp, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
+        _ = Task.Run(async () =>
+        {
+            _logger.LogInformation("Calculating initial files");
 
-        return Task.CompletedTask;
+            DirectoryInfo dir = new DirectoryInfo(_configuration["CacheDirectory"]);
+            var allFiles = dir.GetFiles();
+            await _metrics.SetGaugeAsync(new SetGaugeRequest()
+            {
+                GaugeName = MetricsAPI.GaugeFilesTotalSize,
+                Value = allFiles.Sum(f => f.Length)
+            });
+            await _metrics.SetGaugeAsync(new SetGaugeRequest()
+            {
+                GaugeName = MetricsAPI.GaugeFilesTotal,
+                Value = allFiles.Length
+            });
+
+            _logger.LogInformation("Initial file calculation finished, starting periodic cleanup task");
+
+            _timer = new Timer(CleanUp, null, TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(10));
+        });
     }
 
     private void CleanUp(object? state)
@@ -81,13 +94,17 @@ public class CleanupService : IHostedService, IDisposable
                 }
             }
 
-            foreach (var file in Directory.EnumerateFiles(cachedir).ToList())
+            var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()));
+            DirectoryInfo dir = new DirectoryInfo(cachedir);
+            var allFilesInDir = dir.GetFiles();
+            foreach (var file in allFilesInDir)
             {
-                FileInfo fi = new(file);
-                if (!allFiles.Any(f => f.Hash == fi.Name.ToUpperInvariant()))
+                if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
                 {
-                    fi.Delete();
-                    _logger.LogInformation("File not in DB, deleting: {fileName}", fi.FullName);
+                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = file.Length });
+                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
+                    file.Delete();
+                    _logger.LogInformation("File not in DB, deleting: {fileName}", file.FullName);
                 }
             }
         }

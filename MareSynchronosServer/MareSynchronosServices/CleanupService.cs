@@ -46,75 +46,8 @@ namespace MareSynchronosServices
 
         private void CleanUp(object state)
         {
-            if (!int.TryParse(_configuration["UnusedFileRetentionPeriodInDays"], out var filesOlderThanDays))
-            {
-                filesOlderThanDays = 7;
-            }
-
             using var scope = _services.CreateScope();
             using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
-
-            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", filesOlderThanDays);
-
-            try
-            {
-                var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
-
-                var allFiles = dbContext.Files.ToList();
-                var cachedir = _configuration["CacheDirectory"];
-                foreach (var file in allFiles.Where(f => f.Uploaded))
-                {
-                    var fileName = Path.Combine(cachedir, file.Hash);
-                    var fi = new FileInfo(fileName);
-                    if (!fi.Exists)
-                    {
-                        _logger.LogInformation("File does not exist anymore: {fileName}", fileName);
-                        dbContext.Files.Remove(file);
-                    }
-                    else if (fi.LastAccessTime < prevTime)
-                    {
-                        metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotalSize, fi.Length);
-                        metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotal, 1);
-                        _logger.LogInformation("File outdated: {fileName}", fileName);
-                        dbContext.Files.Remove(file);
-                        fi.Delete();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error during file cleanup");
-            }
-
-            var cacheSizeLimitInGiB = _configuration.GetValue<double>("CacheSizeHardLimitInGiB", -1);
-
-            try
-            {
-                if (cacheSizeLimitInGiB > 0)
-                {
-                    _logger.LogInformation("Cleaning up files beyond the cache size limit");
-                    var allLocalFiles = Directory.EnumerateFiles(_configuration["CacheDirectory"]).Select(f => new FileInfo(f)).ToList().OrderBy(f => f.LastAccessTimeUtc).ToList();
-                    var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
-                    long cacheSizeLimitInBytes = (long)(cacheSizeLimitInGiB * 1024 * 1024 * 1024);
-                    HashSet<string> removedHashes = new();
-                    while (totalCacheSizeInBytes > cacheSizeLimitInBytes && allLocalFiles.Any())
-                    {
-                        var oldestFile = allLocalFiles.First();
-                        removedHashes.Add(oldestFile.Name.ToLower());
-                        allLocalFiles.Remove(oldestFile);
-                        totalCacheSizeInBytes -= oldestFile.Length;
-                        metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotalSize, oldestFile.Length);
-                        metrics.DecGaugeBy(MetricsAPI.GaugeFilesTotal, 1);
-                        oldestFile.Delete();
-                    }
-
-                    dbContext.Files.RemoveRange(dbContext.Files.Where(f => removedHashes.Contains(f.Hash.ToLower())));
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error during cache size limit cleanup");
-            }
 
             try
             {
@@ -129,7 +62,7 @@ namespace MareSynchronosServices
                     }
                 }
 
-                dbContext.RemoveRange(expiredAuths.Select(a => a.User));
+                dbContext.Users.RemoveRange(expiredAuths.Where(u => u.User != null).Select(a => a.User));
                 dbContext.RemoveRange(expiredAuths);
             }
             catch (Exception ex)
