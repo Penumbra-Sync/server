@@ -199,6 +199,8 @@ namespace MareSynchronosServer.Hubs
                 UploadFileRequest req = new();
                 req.FileData = ByteString.CopyFrom(await File.ReadAllBytesAsync(tempFileName).ConfigureAwait(false));
                 File.Delete(tempFileName);
+                req.Hash = computedHashString;
+                req.Uploader = AuthenticatedUserId;
                 _ = await _fileServiceClient.UploadFileAsync(req).ConfigureAwait(false);
             }
             catch (Exception ex)

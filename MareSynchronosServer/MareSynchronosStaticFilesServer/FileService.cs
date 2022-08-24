@@ -30,7 +30,6 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
 
     public override async Task<Empty> UploadFile(UploadFileRequest request, ServerCallContext context)
     {
-
         var filePath = Path.Combine(_basePath, request.Hash);
         var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == request.Hash && f.UploaderUID == request.Uploader);
         if (file != null)
@@ -83,7 +82,7 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
     public override Task<FileSizeResponse> GetFileSizes(FileSizeRequest request, ServerCallContext context)
     {
         FileSizeResponse response = new();
-        foreach (var hash in request.Hash)
+        foreach (var hash in request.Hash.Distinct())
         {
             FileInfo fi = new(Path.Combine(_basePath, hash));
             if (fi.Exists)
