@@ -22,29 +22,6 @@ namespace MareSynchronosServer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("MareSynchronosShared.Models.Alias", b =>
-                {
-                    b.Property<string>("AliasUID")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("alias_uid");
-
-                    b.Property<string>("UserUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("user_uid");
-
-                    b.HasKey("AliasUID")
-                        .HasName("pk_aliases");
-
-                    b.HasIndex("AliasUID")
-                        .HasDatabaseName("ix_aliases_alias_uid");
-
-                    b.HasIndex("UserUID")
-                        .HasDatabaseName("ix_aliases_user_uid");
-
-                    b.ToTable("aliases", (string)null);
-                });
-
             modelBuilder.Entity("MareSynchronosShared.Models.Auth", b =>
                 {
                     b.Property<string>("HashedKey")
@@ -235,6 +212,11 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("uid");
 
+                    b.Property<string>("Alias")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("alias");
+
                     b.Property<string>("CharacterIdentification")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -267,22 +249,12 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("users", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosShared.Models.Alias", b =>
-                {
-                    b.HasOne("MareSynchronosShared.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserUID")
-                        .HasConstraintName("fk_aliases_users_user_temp_id");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("MareSynchronosShared.Models.Auth", b =>
                 {
                     b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
-                        .HasConstraintName("fk_auth_users_user_temp_id1");
+                        .HasConstraintName("fk_auth_users_user_temp_id");
 
                     b.Navigation("User");
                 });
@@ -294,14 +266,14 @@ namespace MareSynchronosServer.Migrations
                         .HasForeignKey("OtherUserUID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_client_pairs_users_other_user_temp_id2");
+                        .HasConstraintName("fk_client_pairs_users_other_user_temp_id1");
 
                     b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserUID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_client_pairs_users_user_temp_id3");
+                        .HasConstraintName("fk_client_pairs_users_user_temp_id2");
 
                     b.Navigation("OtherUser");
 

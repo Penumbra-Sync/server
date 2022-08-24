@@ -17,5 +17,7 @@ namespace MareSynchronosShared.Models
         public bool IsAdmin { get; set; } = false;
 
         public DateTime LastLoggedIn { get; set; }
+        [MaxLength(10)]
+        public string Alias { get; set; }
     }
 }

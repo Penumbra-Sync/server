@@ -73,11 +73,11 @@ namespace MareSynchronosServer.Hubs
                 user.CharacterIdentification = characterIdentification;
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-                var alias = await _dbContext.Aliases.SingleOrDefaultAsync(u => u.UserUID == userId).ConfigureAwait(false);
+                var alias = (await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == userId).ConfigureAwait(false))?.Alias ?? string.Empty;
                 return new ConnectionDto
                 {
                     ServerVersion = Api.Version,
-                    UID = alias == null ? userId : alias.AliasUID,
+                    UID = string.IsNullOrEmpty(alias) ? userId : alias,
                     IsModerator = user.IsModerator,
                     IsAdmin = user.IsAdmin
                 };
