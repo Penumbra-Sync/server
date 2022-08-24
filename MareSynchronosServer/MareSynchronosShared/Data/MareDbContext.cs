@@ -1,12 +1,33 @@
 ﻿using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosShared.Data;
 
 public class MareDbContext : DbContext
 {
+    public MareDbContext() { }
     public MareDbContext(DbContextOptions<MareDbContext> options) : base(options)
     {
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        if (optionsBuilder.IsConfigured)
+        {
+            base.OnConfiguring(optionsBuilder);
+            return;
+        }
+
+        optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=mare;Username=postgres", builder =>
+        {
+            builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+            builder.MigrationsAssembly("MareSynchronosShared");
+        }).UseSnakeCaseNamingConvention();
+        optionsBuilder.EnableThreadSafetyChecks(false);
+
+        base.OnConfiguring(optionsBuilder);
     }
 
     public DbSet<User> Users { get; set; }
@@ -17,6 +38,7 @@ public class MareDbContext : DbContext
     public DbSet<Auth> Auth { get; set; }
     public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
     public DbSet<BannedRegistrations> BannedRegistrations { get; set; }
+    public DbSet<Alias> Aliases { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -24,6 +46,8 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<Auth>().ToTable("auth");
         modelBuilder.Entity<User>().ToTable("users");
         modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
+        modelBuilder.Entity<Alias>().ToTable("aliases");
+        modelBuilder.Entity<Alias>().HasIndex(c => c.AliasUID);
         modelBuilder.Entity<FileCache>().ToTable("file_caches");
         modelBuilder.Entity<FileCache>().HasIndex(c => c.UploaderUID);
         modelBuilder.Entity<ClientPair>().ToTable("client_pairs");

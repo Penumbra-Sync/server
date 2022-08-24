@@ -109,10 +109,20 @@ namespace MareSynchronosServer.Hubs
                         other = otherToUser.UserUID
                     } into leftJoin
                 from otherEntry in leftJoin.DefaultIfEmpty()
+                join alias in _dbContext.Aliases
+                    on new
+                    {
+                        uid = userToOther.UserUID
+                    } equals new
+                    {
+                        uid = alias.UserUID
+                    } into aliasLeftJoin
+                from aliasEntry in aliasLeftJoin.DefaultIfEmpty()
                 where
                     userToOther.UserUID == userid
                 select new
                 {
+                    Alias = aliasEntry == null ? string.Empty : aliasEntry.AliasUID,
                     userToOther.IsPaused,
                     OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
                     userToOther.OtherUserUID,
@@ -121,6 +131,7 @@ namespace MareSynchronosServer.Hubs
 
             return (await query.ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
             {
+                VanityUID = f.Alias,
                 IsPaused = f.IsPaused,
                 OtherUID = f.OtherUserUID,
                 IsSynced = f.IsSynced,
@@ -170,18 +181,25 @@ namespace MareSynchronosServer.Hubs
         [HubMethodName(Api.SendUserPairedClientAddition)]
         public async Task SendPairedClientAddition(string uid)
         {
+            string otherUserUid = uid;
             if (uid == AuthenticatedUserId) return;
             uid = uid.Trim();
             var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
 
+            var potentialAlias = _dbContext.Aliases.SingleOrDefault(u => u.AliasUID == uid);
+            if (potentialAlias != null)
+            {
+                otherUserUid = potentialAlias.UserUID;
+            }
+
             var otherUser = await _dbContext.Users
-                .SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
+                .SingleOrDefaultAsync(u => u.UID == otherUserUid).ConfigureAwait(false);
             var existingEntry =
                 await _dbContext.ClientPairs.AsNoTracking()
                     .FirstOrDefaultAsync(p =>
-                        p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid).ConfigureAwait(false);
+                        p.User.UID == AuthenticatedUserId && p.OtherUser.UID == otherUserUid).ConfigureAwait(false);
             if (otherUser == null || existingEntry != null) return;
-            _logger.LogInformation("User {AuthenticatedUserId} adding {uid} to whitelist", AuthenticatedUserId, uid);
+            _logger.LogInformation("User {AuthenticatedUserId} adding {uid} to whitelist", AuthenticatedUserId, otherUserUid);
             ClientPair wl = new ClientPair()
             {
                 IsPaused = false,
@@ -190,7 +208,7 @@ namespace MareSynchronosServer.Hubs
             };
             await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-            var otherEntry = OppositeEntry(uid);
+            var otherEntry = OppositeEntry(otherUserUid);
             await Clients.User(user.UID)
                 .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                 {
@@ -201,7 +219,7 @@ namespace MareSynchronosServer.Hubs
                 }, string.Empty).ConfigureAwait(false);
             if (otherEntry != null)
             {
-                await Clients.User(uid).SendAsync(Api.OnUserUpdateClientPairs,
+                await Clients.User(otherUserUid).SendAsync(Api.OnUserUpdateClientPairs,
                     new ClientPairDto()
                     {
                         OtherUID = user.UID,
@@ -219,7 +237,7 @@ namespace MareSynchronosServer.Hubs
                 }
             }
 
-            await _metricsClient.IncGaugeAsync(new GaugeRequest() {GaugeName = MetricsAPI.GaugePairs, Value = 1}).ConfigureAwait(false);
+            await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairs, Value = 1 }).ConfigureAwait(false);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
