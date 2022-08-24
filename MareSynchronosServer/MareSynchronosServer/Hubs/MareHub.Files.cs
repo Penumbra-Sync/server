@@ -2,9 +2,11 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Google.Protobuf;
+using Grpc.Core;
 using MareSynchronos.API;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Models;
@@ -38,7 +40,11 @@ namespace MareSynchronosServer.Hubs
             var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
             var request = new DeleteFilesRequest();
             request.Hash.AddRange(ownFiles.Select(f => f.Hash));
-            _ = await _fileServiceClient.DeleteFilesAsync(request).ConfigureAwait(false);
+            Metadata headers = new Metadata()
+                {
+                    { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                };
+            _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -52,7 +58,11 @@ namespace MareSynchronosServer.Hubs
 
             FileSizeRequest request = new FileSizeRequest();
             request.Hash.AddRange(hashes);
-            var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request).ConfigureAwait(false);
+            Metadata headers = new Metadata()
+                {
+                    { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                };
+            var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request, headers).ConfigureAwait(false);
 
             foreach (var hash in grpcResponse.HashToFileSize)
             {
@@ -201,7 +211,11 @@ namespace MareSynchronosServer.Hubs
                 File.Delete(tempFileName);
                 req.Hash = computedHashString;
                 req.Uploader = AuthenticatedUserId;
-                _ = await _fileServiceClient.UploadFileAsync(req).ConfigureAwait(false);
+                Metadata headers = new Metadata()
+                {
+                    { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                };
+                _ = await _fileServiceClient.UploadFileAsync(req, headers).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

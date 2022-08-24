@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Linq;
-using System.Security.Policy;
 using System.Threading.Tasks;
 
 namespace MareSynchronosStaticFilesServer;

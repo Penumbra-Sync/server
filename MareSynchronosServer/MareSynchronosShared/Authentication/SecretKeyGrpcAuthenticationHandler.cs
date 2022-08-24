@@ -49,7 +49,8 @@ namespace MareSynchronosShared.Authentication
 
             var claims = new List<Claim>
             {
-                new(ClaimTypes.NameIdentifier, uid)
+                new(ClaimTypes.NameIdentifier, uid),
+                new(ClaimTypes.Authentication, authHeader)
             };
 
             var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
