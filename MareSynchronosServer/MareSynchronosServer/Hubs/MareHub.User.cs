@@ -177,11 +177,11 @@ namespace MareSynchronosServer.Hubs
             var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
 
             var otherUser = await _dbContext.Users
-                .SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
+                .SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
             var existingEntry =
                 await _dbContext.ClientPairs.AsNoTracking()
                     .FirstOrDefaultAsync(p =>
-                        p.User.UID == AuthenticatedUserId && p.OtherUser.UID == uid).ConfigureAwait(false);
+                        p.User.UID == AuthenticatedUserId && p.OtherUser.UID == otherUser.UID).ConfigureAwait(false);
             if (otherUser == null || existingEntry != null) return;
             _logger.LogInformation("User {AuthenticatedUserId} adding {uid} to whitelist", AuthenticatedUserId, uid);
             ClientPair wl = new ClientPair()
@@ -192,10 +192,11 @@ namespace MareSynchronosServer.Hubs
             };
             await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-            var otherEntry = OppositeEntry(uid);
+            var otherEntry = OppositeEntry(otherUser.UID);
             await Clients.User(user.UID)
                 .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
                 {
+                    VanityUID = otherUser.Alias,
                     OtherUID = otherUser.UID,
                     IsPaused = false,
                     IsPausedFromOthers = otherEntry?.IsPaused ?? false,
@@ -203,9 +204,10 @@ namespace MareSynchronosServer.Hubs
                 }, string.Empty).ConfigureAwait(false);
             if (otherEntry != null)
             {
-                await Clients.User(uid).SendAsync(Api.OnUserUpdateClientPairs,
+                await Clients.User(otherUser.UID).SendAsync(Api.OnUserUpdateClientPairs,
                     new ClientPairDto()
                     {
+                        VanityUID = user.Alias,
                         OtherUID = user.UID,
                         IsPaused = otherEntry.IsPaused,
                         IsPausedFromOthers = false,
