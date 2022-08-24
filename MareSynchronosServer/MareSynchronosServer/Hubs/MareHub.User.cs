@@ -113,7 +113,7 @@ namespace MareSynchronosServer.Hubs
                     userToOther.UserUID == userid
                 select new
                 {
-                    otherEntry.OtherUser.Alias,
+                    userToOther.OtherUser.Alias,
                     userToOther.IsPaused,
                     OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
                     userToOther.OtherUserUID,

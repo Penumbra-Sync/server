@@ -166,7 +166,7 @@ public class DiscordBot : IHostedService
                     while (!hasValidUid)
                     {
                         var uid = GenerateRandomString(10);
-                        if (db.Users.Any(u => u.UID == uid)) continue;
+                        if (db.Users.Any(u => u.UID == uid || u.Alias == uid)) continue;
                         user.UID = uid;
                         hasValidUid = true;
                     }
