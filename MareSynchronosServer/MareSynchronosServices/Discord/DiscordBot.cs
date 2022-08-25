@@ -99,6 +99,14 @@ public class DiscordBot : IHostedService
                     verificationQueue.Enqueue(arg);
                 }
             }
+            else if (arg.Data.Name == "setvanityuid")
+            {
+                EmbedBuilder eb = new();
+                var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
+                eb = await HandleVanityUid(eb, arg.User.Id, newUid);
+
+                await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            }
             else
             {
                 await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
@@ -108,6 +116,44 @@ public class DiscordBot : IHostedService
         {
             semaphore.Release();
         }
+    }
+
+    private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid)
+    {
+        using var scope = services.CreateScope();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        var lodestoneUser = await db.LodeStoneAuth.Include("User").SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
+        if (lodestoneUser == null)
+        {
+            eb.WithTitle("Failed to set Vanity UID");
+            eb.WithDescription("You do not have a registered account on this server.");
+            return eb;
+        }
+
+        var uidExists = await db.Users.AnyAsync(u => u.UID == newUid || u.Alias == newUid).ConfigureAwait(false);
+        if (uidExists)
+        {
+            eb.WithTitle("Failed to set Vanity UID");
+            eb.WithDescription("This UID is already taken.");
+            return eb;
+        }
+
+        Regex rgx = new("[A-Z0-9]{10}", RegexOptions.ECMAScript);
+        if (!rgx.Match(newUid).Success || newUid.Length != 10)
+        {
+            eb.WithTitle("Failed to set Vanity UID");
+            eb.WithDescription("The Vanity UID must be 10 characters long and only contain uppercase letters A-Z and numbers 0-9.");
+            return eb;
+        }
+
+        var user = lodestoneUser.User;
+        user.Alias = newUid;
+        db.Update(user);
+        await db.SaveChangesAsync();
+
+        eb.WithTitle("Vanity UID set");
+        eb.WithDescription("Your Vanity UID was set to **" + newUid + "**." + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
+        return eb;
     }
 
     private async Task DeletePreviousUserAccount(ulong id)
@@ -347,10 +393,16 @@ public class DiscordBot : IHostedService
         verify.WithName("verify");
         verify.WithDescription("Finishes the registration process for the Mare Synchronos server of this Discord");
 
+        var vanityuid = new SlashCommandBuilder();
+        vanityuid.WithName("setvanityuid");
+        vanityuid.WithDescription("Sets your Vanity UID.");
+        vanityuid.AddOption("vanity_uid", ApplicationCommandOptionType.String, "Desired Vanity UID", isRequired: true);
+
         try
         {
             await discordClient.CreateGlobalApplicationCommandAsync(register.Build()).ConfigureAwait(false);
             await discordClient.CreateGlobalApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
+            await discordClient.CreateGlobalApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
