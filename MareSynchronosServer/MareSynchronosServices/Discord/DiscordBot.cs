@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -34,8 +35,11 @@ public class DiscordBot : IHostedService
     ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
     private CancellationTokenSource? verificationTaskCts;
     private CancellationTokenSource? updateStatusCts;
+    private CancellationTokenSource? vanityUpdateCts;
     private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
     private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
+    private ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
+    private ulong vanityCommandId;
 
     private SemaphoreSlim semaphore;
 
@@ -121,7 +125,27 @@ public class DiscordBot : IHostedService
     private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid)
     {
         using var scope = services.CreateScope();
-        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
+
+        if (LastVanityChange.TryGetValue(id, out var lastChange))
+        {
+            var timeRemaining = DateTime.UtcNow.Subtract(lastChange);
+            if (timeRemaining.TotalHours < 24)
+            {
+                eb.WithTitle(("Failed to set Vanity UID"));
+                eb.WithDescription(
+                    $"You can only change your vanity UID once every 24h. Your last change is {timeRemaining} ago.");
+            }
+        }
+
+        Regex rgx = new("[A-Z0-9]{10}", RegexOptions.ECMAScript);
+        if (!rgx.Match(newUid).Success || newUid.Length != 10)
+        {
+            eb.WithTitle("Failed to set Vanity UID");
+            eb.WithDescription("The Vanity UID must be 10 characters long and only contain uppercase letters A-Z and numbers 0-9.");
+            return eb;
+        }
+
         var lodestoneUser = await db.LodeStoneAuth.Include("User").SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
         if (lodestoneUser == null)
         {
@@ -138,18 +162,12 @@ public class DiscordBot : IHostedService
             return eb;
         }
 
-        Regex rgx = new("[A-Z0-9]{10}", RegexOptions.ECMAScript);
-        if (!rgx.Match(newUid).Success || newUid.Length != 10)
-        {
-            eb.WithTitle("Failed to set Vanity UID");
-            eb.WithDescription("The Vanity UID must be 10 characters long and only contain uppercase letters A-Z and numbers 0-9.");
-            return eb;
-        }
-
         var user = lodestoneUser.User;
         user.Alias = newUid;
         db.Update(user);
         await db.SaveChangesAsync();
+
+        LastVanityChange[id] = DateTime.UtcNow;
 
         eb.WithTitle("Vanity UID set");
         eb.WithDescription("Your Vanity UID was set to **" + newUid + "**." + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
@@ -402,7 +420,8 @@ public class DiscordBot : IHostedService
         {
             await discordClient.CreateGlobalApplicationCommandAsync(register.Build()).ConfigureAwait(false);
             await discordClient.CreateGlobalApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
-            await discordClient.CreateGlobalApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
+            var vanityCommand = await discordClient.CreateGlobalApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
+            vanityCommandId = vanityCommand.Id;
         }
         catch (Exception ex)
         {
@@ -432,6 +451,7 @@ public class DiscordBot : IHostedService
 
             _ = ProcessQueueWork();
             _ = UpdateStatusAsync();
+            _ = RemoveUsersNotInVanityRole();
         }
     }
 
@@ -459,17 +479,60 @@ public class DiscordBot : IHostedService
         }
     }
 
+    private async Task RemoveUsersNotInVanityRole()
+    {
+        vanityUpdateCts = new();
+        while (!vanityUpdateCts.IsCancellationRequested)
+        {
+            var guild = discordClient.Guilds.FirstOrDefault();
+            if (guild == null)
+            {
+                await Task.Delay(TimeSpan.FromMinutes(30), vanityUpdateCts.Token).ConfigureAwait(false);
+                continue;
+            }
+
+            var commands = await discordClient.Rest.GetGuildApplicationCommands(guild.Id).ConfigureAwait(false);
+            var permissions = await commands.Single(c => c.Id == vanityCommandId).GetCommandPermission().ConfigureAwait(false);
+            var allowedRoleIds = (from perm in permissions.Permissions where perm.TargetType == ApplicationCommandPermissionTarget.Role where perm.Permission select perm.TargetId).ToList();
+
+            await using var scope = services.CreateAsyncScope();
+            await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
+            {
+                var restGuild = await discordClient.Rest.GetGuildAsync(guild.Id);
+                var aliasedUsers = db.LodeStoneAuth.Include("User")
+                    .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias));
+
+                foreach (var lodestoneAuth in aliasedUsers)
+                {
+                    var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
+                    if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
+                    {
+                        logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
+                        //lodestoneAuth.User.Alias = string.Empty;
+                        //db.Update(lodestoneAuth.User);
+                    }
+
+                    await Task.Delay(100);
+                }
+
+                await db.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            await Task.Delay(TimeSpan.FromMinutes(30), vanityUpdateCts.Token).ConfigureAwait(false);
+        }
+    }
+
     private async Task UpdateStatusAsync()
     {
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
             await using var scope = services.CreateAsyncScope();
-            await using var db = scope.ServiceProvider.GetService<MareDbContext>();
-
-            var users = db.Users.Count(c => c.CharacterIdentification != null);
-
-            await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users")).ConfigureAwait(false);
+            await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
+            {
+                var users = db.Users.Count(c => c.CharacterIdentification != null);
+                await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users")).ConfigureAwait(false);
+            }
 
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         }
