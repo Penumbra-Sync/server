@@ -118,7 +118,7 @@ public class SecretKeyAuthenticationHandler
                     return new AuthReply() { Success = false, Uid = string.Empty };
                 }
 
-                metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
+                metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
             }
         }
 
