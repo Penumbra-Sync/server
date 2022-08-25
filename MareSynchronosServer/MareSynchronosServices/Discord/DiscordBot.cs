@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
+using Discord.Rest;
 using Discord.WebSocket;
 using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Data;
@@ -40,6 +41,7 @@ public class DiscordBot : IHostedService
     private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
     private ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     private ulong vanityCommandId;
+    private Task cleanUpUserTask = null;
 
     private SemaphoreSlim semaphore;
 
@@ -418,14 +420,30 @@ public class DiscordBot : IHostedService
 
         try
         {
-            await discordClient.CreateGlobalApplicationCommandAsync(register.Build()).ConfigureAwait(false);
-            await discordClient.CreateGlobalApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
-            var vanityCommand = await discordClient.CreateGlobalApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
-            vanityCommandId = vanityCommand.Id;
+            await discordClient.Rest.DeleteAllGlobalCommandsAsync().ConfigureAwait(false);
+
+            var guild = (await discordClient.Rest.GetGuildsAsync()).First();
+            var commands = await guild.GetApplicationCommandsAsync();
+            if (!commands.Any(c => c.Name.Contains("setvanityuid")))
+            {
+                await guild.CreateApplicationCommandAsync(register.Build()).ConfigureAwait(false);
+                await guild.CreateApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
+                var vanityCommand = await guild.CreateApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
+                vanityCommandId = vanityCommand.Id;
+            }
+            else
+            {
+                vanityCommandId = commands.First(c => c.Name.Contains("setvanityuid")).Id;
+            }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to create command");
+        }
+
+        if (cleanUpUserTask == null)
+        {
+            cleanUpUserTask = RemoveUsersNotInVanityRole();
         }
     }
 
@@ -451,7 +469,6 @@ public class DiscordBot : IHostedService
 
             _ = ProcessQueueWork();
             _ = UpdateStatusAsync();
-            _ = RemoveUsersNotInVanityRole();
         }
     }
 
@@ -484,42 +501,82 @@ public class DiscordBot : IHostedService
         vanityUpdateCts = new();
         while (!vanityUpdateCts.IsCancellationRequested)
         {
-            logger.LogInformation($"Cleaning up Vanity UIDs");
-            var guild = discordClient.Guilds.FirstOrDefault();
-            if (guild == null)
+            try
             {
-                await Task.Delay(TimeSpan.FromMinutes(30), vanityUpdateCts.Token).ConfigureAwait(false);
-                continue;
-            }
-
-            var commands = await discordClient.Rest.GetGuildApplicationCommands(guild.Id).ConfigureAwait(false);
-            var permissions = await commands.Single(c => c.Id == vanityCommandId).GetCommandPermission().ConfigureAwait(false);
-            var allowedRoleIds = (from perm in permissions.Permissions where perm.TargetType == ApplicationCommandPermissionTarget.Role where perm.Permission select perm.TargetId).ToList();
-
-            await using var scope = services.CreateAsyncScope();
-            await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
-            {
-                var restGuild = await discordClient.Rest.GetGuildAsync(guild.Id);
-                var aliasedUsers = db.LodeStoneAuth.Include("User")
-                    .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias));
-
-                foreach (var lodestoneAuth in aliasedUsers)
+                logger.LogInformation($"Cleaning up Vanity UIDs");
+                var guild = discordClient.Guilds.FirstOrDefault();
+                if (guild == null)
                 {
-                    var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
-                    if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
-                    {
-                        logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
-                        //lodestoneAuth.User.Alias = string.Empty;
-                        //db.Update(lodestoneAuth.User);
-                    }
-
-                    await Task.Delay(100);
+                    logger.LogInformation($"Guild was null");
+                    throw new Exception("Guild is null");
                 }
 
-                await db.SaveChangesAsync().ConfigureAwait(false);
+                logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
+                var restGuild = await discordClient.Rest.GetGuildAsync(guild.Id);
+                var vanityCommand = await restGuild.GetSlashCommandAsync(vanityCommandId).ConfigureAwait(false);
+                GuildApplicationCommandPermission commandPermissions = null;
+                try
+                {
+                    logger.LogInformation($"Getting command permissions");
+                    commandPermissions = await vanityCommand.GetCommandPermission().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error getting command permissions");
+                    throw new Exception("Can't get command permissions");
+                }
+
+                logger.LogInformation($"Getting allowed role ids from permissions");
+                List<ulong> allowedRoleIds = new();
+                try
+                {
+                    allowedRoleIds = (from perm in commandPermissions.Permissions where perm.TargetType == ApplicationCommandPermissionTarget.Role where perm.Permission select perm.TargetId).ToList();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error resolving permissions to roles");
+                }
+
+                logger.LogInformation($"Found allowed role ids: {string.Join(", ", allowedRoleIds)}");
+
+                if (allowedRoleIds.Any())
+                {
+                    await using var scope = services.CreateAsyncScope();
+                    await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
+                    {
+                        var aliasedUsers = db.LodeStoneAuth.Include("User")
+                            .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias));
+
+                        foreach (var lodestoneAuth in aliasedUsers)
+                        {
+                            var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
+                            logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+
+                            if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
+                            {
+                                logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
+                                lodestoneAuth.User.Alias = string.Empty;
+                                db.Update(lodestoneAuth.User);
+                            }
+
+                            await Task.Delay(100);
+                        }
+
+                        await db.SaveChangesAsync().ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("No roles for command defined, no cleanup performed");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Something failed during checking vanity user uids");
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(30), vanityUpdateCts.Token).ConfigureAwait(false);
+            logger.LogInformation("Vanity UID cleanup complete");
+            await Task.Delay(TimeSpan.FromHours(12), vanityUpdateCts.Token).ConfigureAwait(false);
         }
     }
 
