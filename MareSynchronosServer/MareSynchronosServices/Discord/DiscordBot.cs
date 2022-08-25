@@ -484,6 +484,7 @@ public class DiscordBot : IHostedService
         vanityUpdateCts = new();
         while (!vanityUpdateCts.IsCancellationRequested)
         {
+            logger.LogInformation($"Cleaning up Vanity UIDs");
             var guild = discordClient.Guilds.FirstOrDefault();
             if (guild == null)
             {

@@ -1,3 +1,4 @@
+using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
@@ -30,13 +31,31 @@ public class Startup
 
         var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
 
+        var defaultMethodConfig = new MethodConfig
+        {
+            Names = { MethodName.Default },
+            RetryPolicy = new RetryPolicy
+            {
+                MaxAttempts = 100,
+                InitialBackoff = TimeSpan.FromSeconds(1),
+                MaxBackoff = TimeSpan.FromSeconds(5),
+                BackoffMultiplier = 1.5,
+            }
+        };
+
         services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
         {
             c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
         });
         services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
         {
             c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
         });
 
         services.AddDbContextPool<MareDbContext>(options =>
