@@ -92,7 +92,7 @@ public class Startup
 
         app.UseRouting();
 
-        var metricServer = new KestrelMetricServer(4982);
+        var metricServer = new KestrelMetricServer(4981);
         metricServer.Start();
 
         app.UseAuthentication();

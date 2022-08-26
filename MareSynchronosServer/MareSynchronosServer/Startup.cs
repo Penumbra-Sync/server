@@ -146,7 +146,7 @@ namespace MareSynchronosServer
 
             app.UseWebSockets();
 
-            var metricServer = new KestrelMetricServer(4981);
+            var metricServer = new KestrelMetricServer(4980);
             metricServer.Start();
 
             app.UseAuthentication();
