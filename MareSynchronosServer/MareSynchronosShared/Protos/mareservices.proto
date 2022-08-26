@@ -11,7 +11,7 @@ service AuthService {
 }
 
 service FileService {
-	rpc UploadFile (UploadFileRequest) returns (Empty);
+	rpc UploadFile (stream UploadFileRequest) returns (Empty);
 	rpc GetFileSizes (FileSizeRequest) returns (FileSizeResponse);
 	rpc DeleteFiles (DeleteFilesRequest) returns (Empty);
 }

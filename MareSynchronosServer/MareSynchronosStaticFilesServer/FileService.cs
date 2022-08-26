@@ -27,21 +27,33 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
         _metricsClient = metricsClient;
     }
 
-    public override async Task<Empty> UploadFile(UploadFileRequest request, ServerCallContext context)
+    public override async Task<Empty> UploadFile(IAsyncStreamReader<UploadFileRequest> requestStream, ServerCallContext context)
     {
-        var filePath = Path.Combine(_basePath, request.Hash);
-        var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == request.Hash && f.UploaderUID == request.Uploader);
+        await requestStream.MoveNext();
+        var uploadMsg = requestStream.Current;
+        var filePath = Path.Combine(_basePath, uploadMsg.Hash);
+        using var fileWriter = File.OpenWrite(filePath);
+        var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader);
         if (file != null)
         {
-            var byteData = request.FileData.ToArray();
-            await File.WriteAllBytesAsync(filePath, byteData);
+            await fileWriter.WriteAsync(uploadMsg.FileData.ToArray());
+
+            while (await requestStream.MoveNext())
+            {
+                await fileWriter.WriteAsync(requestStream.Current.FileData.ToArray());
+            }
+
+            await fileWriter.FlushAsync();
+            fileWriter.Close();
+
+            var fileSize = new FileInfo(filePath).Length;
             file.Uploaded = true;
 
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
-            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, byteData.Length);
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, fileSize);
 
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
-            _logger.LogInformation("User {user} uploaded file {hash}", request.Uploader, request.Hash);
+            _logger.LogInformation("User {user} uploaded file {hash}", uploadMsg.Uploader, uploadMsg.Hash);
         }
 
         return new Empty();

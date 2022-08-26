@@ -206,16 +206,25 @@ namespace MareSynchronosServer.Hubs
                     return;
                 }
 
-                UploadFileRequest req = new();
-                req.FileData = ByteString.CopyFrom(await File.ReadAllBytesAsync(tempFileName).ConfigureAwait(false));
-                File.Delete(tempFileName);
-                req.Hash = computedHashString;
-                req.Uploader = AuthenticatedUserId;
                 Metadata headers = new Metadata()
                 {
                     { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
                 };
-                _ = await _fileServiceClient.UploadFileAsync(req, headers).ConfigureAwait(false);
+                var streamingCall = _fileServiceClient.UploadFile(headers);
+                using var tempFileStream = new FileStream(tempFileName, FileMode.Open, FileAccess.Read);
+                int size = 1024 * 1024;
+                byte[] data = new byte[size];
+                int readBytes;
+                while ((readBytes = tempFileStream.Read(data, 0, size)) > 0)
+                {
+                    await streamingCall.RequestStream.WriteAsync(new UploadFileRequest()
+                    {
+                        FileData = ByteString.CopyFrom(data, 0, readBytes),
+                        Hash = computedHashString,
+                        Uploader = AuthenticatedUserId
+                    }).ConfigureAwait(false);
+                }
+                await streamingCall.RequestStream.CompleteAsync();
             }
             catch (Exception ex)
             {

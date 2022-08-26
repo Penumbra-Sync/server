@@ -85,7 +85,7 @@ namespace MareSynchronosServices
 
                     _logger.LogInformation("Cleaning up users older than {usersOlderThanDays} days", usersOlderThanDays);
 
-                    var allUsers = dbContext.Users.ToList();
+                    var allUsers = dbContext.Users.Where(u => string.IsNullOrEmpty(u.Alias)).ToList();
                     List<User> usersToRemove = new();
                     foreach (var user in allUsers)
                     {
