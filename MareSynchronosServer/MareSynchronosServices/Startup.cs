@@ -1,16 +1,15 @@
-using MareSynchronosServer;
 using MareSynchronosServices.Authentication;
 using MareSynchronosServices.Discord;
-using MareSynchronosServices.Metrics;
 using MareSynchronosServices.Services;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
+using System.Collections.Generic;
 
 namespace MareSynchronosServices;
 
@@ -34,7 +33,16 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, Configuration.GetValue("DbContextPoolSize", 1024));
 
-        services.AddSingleton<MareMetrics>();
+        services.AddSingleton(new MareMetrics(new List<string> {
+            MetricsAPI.CounterAuthenticationRequests,
+            MetricsAPI.CounterAuthenticationFailures,
+            MetricsAPI.CounterAuthenticationCacheHits,
+            MetricsAPI.CounterAuthenticationSuccesses
+        }, new List<string> 
+        {
+            MetricsAPI.GaugeUsersRegistered
+        }));
+
         services.AddSingleton<SecretKeyAuthenticationHandler>();
         services.AddSingleton<CleanupService>();
         services.AddTransient(_ => Configuration);
@@ -47,13 +55,12 @@ public class Startup
     {
         app.UseRouting();
 
-        var metricServer = new KestrelMetricServer(4980);
+        var metricServer = new KestrelMetricServer(4982);
         metricServer.Start();
 
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapGrpcService<AuthenticationService>();
-            endpoints.MapGrpcService<MetricsService>();
         });
     }
 }

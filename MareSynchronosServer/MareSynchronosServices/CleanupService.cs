@@ -1,5 +1,4 @@
 ﻿using MareSynchronosServices.Authentication;
-using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -140,9 +139,9 @@ namespace MareSynchronosServices
                 .Where(u => u.OtherUser.UID == user.UID).ToList();
 
 
-            metrics.DecGaugeBy(MetricsAPI.GaugePairs, ownPairData.Count + otherPairData.Count);
-            metrics.DecGaugeBy(MetricsAPI.GaugePairsPaused, ownPairData.Count + ownPairData.Count(c => c.IsPaused));
-            metrics.DecGaugeBy(MetricsAPI.GaugeUsersRegistered, ownPairData.Count + 1);
+            metrics.DecGauge(MetricsAPI.GaugePairs, ownPairData.Count + otherPairData.Count);
+            metrics.DecGauge(MetricsAPI.GaugePairsPaused, ownPairData.Count + ownPairData.Count(c => c.IsPaused));
+            metrics.DecGauge(MetricsAPI.GaugeUsersRegistered, ownPairData.Count + 1);
 
             dbContext.RemoveRange(otherPairData);
             dbContext.Remove(auth);

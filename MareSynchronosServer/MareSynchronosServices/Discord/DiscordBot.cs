@@ -9,9 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
-using Discord.Rest;
 using Discord.WebSocket;
-using MareSynchronosServices.Metrics;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -262,7 +260,7 @@ public class DiscordBot : IHostedService
 
                     logger.LogInformation("User registered: {userUID}", user.UID);
 
-                    metrics.IncGaugeBy(MetricsAPI.GaugeUsersRegistered, 1);
+                    metrics.IncGauge(MetricsAPI.GaugeUsersRegistered, 1);
 
                     lodestoneAuth.StartedAt = null;
                     lodestoneAuth.User = user;

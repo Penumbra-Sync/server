@@ -16,16 +16,16 @@ namespace MareSynchronosServer;
 
 public class SystemInfoService : IHostedService, IDisposable
 {
-    private readonly MetricsService.MetricsServiceClient metricsClient;
+    private readonly MareMetrics _mareMetrics;
     private readonly IServiceProvider _services;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MetricsService.MetricsServiceClient metricsClient, IServiceProvider services, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IServiceProvider services, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
-        this.metricsClient = metricsClient;
+        _mareMetrics = mareMetrics;
         _services = services;
         _logger = logger;
         _hubContext = hubContext;
@@ -48,10 +48,8 @@ public class SystemInfoService : IHostedService, IDisposable
         using var scope = _services.CreateScope();
         using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-        metricsClient.SetGauge(new SetGaugeRequest()
-        { GaugeName = MetricsAPI.GaugeAvailableWorkerThreads, Value = workerThreads });
-        metricsClient.SetGauge(new SetGaugeRequest()
-        { GaugeName = MetricsAPI.GaugeAvailableIOWorkerThreads, Value = ioThreads });
+        _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
+        _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
         var users = db.Users.Count(c => c.CharacterIdentification != null);
 

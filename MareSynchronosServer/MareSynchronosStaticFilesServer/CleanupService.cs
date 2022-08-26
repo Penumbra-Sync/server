@@ -16,13 +16,13 @@ namespace MareSynchronosStaticFilesServer;
 
 public class CleanupService : IHostedService, IDisposable
 {
-    private readonly MetricsService.MetricsServiceClient _metrics;
+    private readonly MareMetrics _metrics;
     private readonly ILogger<CleanupService> _logger;
     private readonly IServiceProvider _services;
     private readonly IConfiguration _configuration;
     private Timer? _timer;
 
-    public CleanupService(MetricsService.MetricsServiceClient metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
+    public CleanupService(MareMetrics metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
     {
         _metrics = metrics;
         _logger = logger;
@@ -30,31 +30,22 @@ public class CleanupService : IHostedService, IDisposable
         _configuration = configuration.GetRequiredSection("MareSynchronos");
     }
 
-    public async Task StartAsync(CancellationToken cancellationToken)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Cleanup Service started");
 
-        _ = Task.Run(async () =>
-        {
-            _logger.LogInformation("Calculating initial files");
+        _logger.LogInformation("Calculating initial files");
 
-            DirectoryInfo dir = new DirectoryInfo(_configuration["CacheDirectory"]);
-            var allFiles = dir.GetFiles();
-            await _metrics.SetGaugeAsync(new SetGaugeRequest()
-            {
-                GaugeName = MetricsAPI.GaugeFilesTotalSize,
-                Value = allFiles.Sum(f => f.Length)
-            });
-            await _metrics.SetGaugeAsync(new SetGaugeRequest()
-            {
-                GaugeName = MetricsAPI.GaugeFilesTotal,
-                Value = allFiles.Length
-            });
+        DirectoryInfo dir = new DirectoryInfo(_configuration["CacheDirectory"]);
+        var allFiles = dir.GetFiles();
+        _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
 
-            _logger.LogInformation("Initial file calculation finished, starting periodic cleanup task");
+        _logger.LogInformation("Initial file calculation finished, starting periodic cleanup task");
 
-            _timer = new Timer(CleanUp, null, TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(10));
-        });
+        _timer = new Timer(CleanUp, null, TimeSpan.FromSeconds(15), TimeSpan.FromMinutes(10));
+
+        return Task.CompletedTask;
     }
 
     private void CleanUp(object? state)
@@ -86,8 +77,8 @@ public class CleanupService : IHostedService, IDisposable
                 }
                 else if (fi.LastAccessTime < prevTime)
                 {
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length });
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, fi.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     _logger.LogInformation("File outdated: {fileName}", fileName);
                     dbContext.Files.Remove(file);
                     fi.Delete();
@@ -101,8 +92,8 @@ public class CleanupService : IHostedService, IDisposable
             {
                 if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
                 {
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = file.Length });
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     file.Delete();
                     _logger.LogInformation("File not in DB, deleting: {fileName}", file.FullName);
                 }
@@ -131,8 +122,8 @@ public class CleanupService : IHostedService, IDisposable
                     removedHashes.Add(oldestFile.Name.ToLower());
                     allLocalFiles.Remove(oldestFile);
                     totalCacheSizeInBytes -= oldestFile.Length;
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = oldestFile.Length });
-                    _metrics.DecGauge(new() { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 });
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, oldestFile.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     oldestFile.Delete();
                 }
 

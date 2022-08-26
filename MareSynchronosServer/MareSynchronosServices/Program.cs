@@ -1,7 +1,11 @@
 using MareSynchronosServices;
+using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System;
+using System.Linq;
 
 public class Program
 {
@@ -9,6 +13,15 @@ public class Program
     {
         var hostBuilder = CreateHostBuilder(args);
         var host = hostBuilder.Build();
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            using var dbContext = services.GetRequiredService<MareDbContext>();
+            var metrics = services.GetRequiredService<MareMetrics>();
+
+            metrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, dbContext.Users.Count());
+        }
 
         host.Run();
     }

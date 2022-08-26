@@ -1,6 +1,7 @@
 using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -10,7 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Prometheus;
 using System;
+using System.Collections.Generic;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -44,14 +47,14 @@ public class Startup
             }
         };
 
+        services.AddSingleton(new MareMetrics(new List<string> {
+        }, new List<string>
+        {
+            MetricsAPI.GaugeFilesTotalSize,
+            MetricsAPI.GaugeFilesTotal
+        }));
+
         services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
-        {
-            c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
-        });
-        services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
         {
             c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
         }).ConfigureChannel(c =>
@@ -88,6 +91,9 @@ public class Startup
         app.UseHttpLogging();
 
         app.UseRouting();
+
+        var metricServer = new KestrelMetricServer(4982);
+        metricServer.Start();
 
         app.UseAuthentication();
         app.UseAuthorization();

@@ -19,7 +19,7 @@ namespace MareSynchronosServer.Hubs
 {
     public partial class MareHub : Hub
     {
-        private readonly MetricsService.MetricsServiceClient _metricsClient;
+        private readonly MareMetrics _mareMetrics;
         private readonly AuthService.AuthServiceClient _authServiceClient;
         private readonly FileService.FileServiceClient _fileServiceClient;
         private readonly SystemInfoService _systemInfoService;
@@ -27,10 +27,10 @@ namespace MareSynchronosServer.Hubs
         private readonly ILogger<MareHub> _logger;
         private readonly MareDbContext _dbContext;
         private readonly Uri cdnFullUri;
-        public MareHub(MetricsService.MetricsServiceClient metricsClient, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
+        public MareHub(MareMetrics mareMetrics, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
             MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor)
         {
-            _metricsClient = metricsClient;
+            _mareMetrics = mareMetrics;
             _authServiceClient = authServiceClient;
             _fileServiceClient = fileServiceClient;
             _systemInfoService = systemInfoService;
@@ -44,7 +44,7 @@ namespace MareSynchronosServer.Hubs
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         public async Task<ConnectionDto> Heartbeat(string characterIdentification)
         {
-            await _metricsClient.IncreaseCounterAsync(new() { CounterName = MetricsAPI.CounterInitializedConnections, Value = 1 }).ConfigureAwait(false);
+            _mareMetrics.IncCounter(MetricsAPI.CounterInitializedConnections);
 
             var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
 
@@ -66,7 +66,7 @@ namespace MareSynchronosServer.Hubs
                 }
                 else if (string.IsNullOrEmpty(user.CharacterIdentification))
                 {
-                    await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugeAuthorizedConnections, Value = 1 }).ConfigureAwait(false);
+                    _mareMetrics.IncGauge(MetricsAPI.GaugeAuthorizedConnections);
                 }
 
                 user.LastLoggedIn = DateTime.UtcNow;
@@ -91,18 +91,18 @@ namespace MareSynchronosServer.Hubs
         public override async Task OnConnectedAsync()
         {
             _logger.LogInformation("Connection from {ip}", contextAccessor.GetIpAddress());
-            await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugeConnections, Value = 1 }).ConfigureAwait(false);
+            _mareMetrics.IncGauge(MetricsAPI.GaugeConnections);
             await base.OnConnectedAsync().ConfigureAwait(false);
         }
 
         public override async Task OnDisconnectedAsync(Exception exception)
         {
-            await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugeConnections, Value = 1 }).ConfigureAwait(false);
+            _mareMetrics.DecGauge(MetricsAPI.GaugeConnections);
 
             var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
             if (user != null && !string.IsNullOrEmpty(user.CharacterIdentification))
             {
-                await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugeAuthorizedConnections, Value = 1 }).ConfigureAwait(false);
+                _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
 
                 _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
 

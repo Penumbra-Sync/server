@@ -17,9 +17,9 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
     private readonly string _basePath;
     private readonly MareDbContext _mareDbContext;
     private readonly ILogger<FileService> _logger;
-    private readonly MetricsService.MetricsServiceClient _metricsClient;
+    private readonly MareMetrics _metricsClient;
 
-    public FileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<FileService> logger, MetricsService.MetricsServiceClient metricsClient)
+    public FileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<FileService> logger, MareMetrics metricsClient)
     {
         _basePath = configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"];
         _mareDbContext = mareDbContext;
@@ -37,10 +37,8 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
             await File.WriteAllBytesAsync(filePath, byteData);
             file.Uploaded = true;
 
-            await _metricsClient.IncGaugeAsync(new GaugeRequest()
-            { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = byteData.Length }).ConfigureAwait(false);
-            await _metricsClient.IncGaugeAsync(new GaugeRequest()
-            { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 }).ConfigureAwait(false);
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, byteData.Length);
 
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
             _logger.LogInformation("User {user} uploaded file {hash}", request.Uploader, request.Hash);
@@ -62,10 +60,8 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
                 {
                     _mareDbContext.Files.Remove(file);
 
-                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
-                    { GaugeName = MetricsAPI.GaugeFilesTotalSize, Value = fi.Length }).ConfigureAwait(false);
-                    await _metricsClient.DecGaugeAsync(new GaugeRequest()
-                    { GaugeName = MetricsAPI.GaugeFilesTotal, Value = 1 }).ConfigureAwait(false);
+                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotal, 1);
+                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotalSize, fi.Length);
                 }
             }
             catch (Exception ex)

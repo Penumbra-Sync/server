@@ -10,13 +10,6 @@ service AuthService {
   rpc ClearUnauthorized (Empty) returns (Empty);
 }
 
-service MetricsService {
-	rpc IncreaseCounter (IncreaseCounterRequest) returns (Empty);
-	rpc SetGauge (SetGaugeRequest) returns (Empty);
-	rpc DecGauge (GaugeRequest) returns (Empty);
-	rpc IncGauge (GaugeRequest) returns (Empty);
-}
-
 service FileService {
 	rpc UploadFile (UploadFileRequest) returns (Empty);
 	rpc GetFileSizes (FileSizeRequest) returns (FileSizeResponse);
@@ -41,21 +34,6 @@ message FileSizeRequest {
 
 message FileSizeResponse {
 	map<string, int64> hashToFileSize = 1;
-}
-
-message GaugeRequest {
-	string gaugeName = 1;
-	double value = 2;
-}
-
-message SetGaugeRequest {
-	string gaugeName = 1;
-	double value = 2;
-}
-
-message IncreaseCounterRequest {
-	string counterName = 1;
-	double value = 2;
 }
 
 message RemoveAuthRequest {

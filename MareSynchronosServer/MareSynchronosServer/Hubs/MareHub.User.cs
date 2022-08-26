@@ -55,12 +55,9 @@ namespace MareSynchronosServer.Hubs
                     }, userEntry.CharacterIdentification).ConfigureAwait(false);
             }
 
-            await _metricsClient.DecGaugeAsync(new GaugeRequest()
-            { GaugeName = MetricsAPI.GaugePairs, Value = ownPairData.Count + otherPairData.Count }).ConfigureAwait(false);
-            await _metricsClient.DecGaugeAsync(new GaugeRequest()
-            { GaugeName = MetricsAPI.GaugePairsPaused, Value = ownPairData.Count(c => c.IsPaused) }).ConfigureAwait(false);
-            await _metricsClient.DecGaugeAsync(new GaugeRequest()
-            { GaugeName = MetricsAPI.GaugeUsersRegistered, Value = 1 }).ConfigureAwait(false);
+            _mareMetrics.DecGauge(MetricsAPI.GaugePairs, ownPairData.Count + otherPairData.Count);
+            _mareMetrics.DecGauge(MetricsAPI.GaugePairsPaused, ownPairData.Count(c => c.IsPaused));
+            _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
 
             _dbContext.RemoveRange(otherPairData);
             _dbContext.Remove(userEntry);
@@ -162,17 +159,15 @@ namespace MareSynchronosServer.Hubs
 
             await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, user.CharacterIdentification).ConfigureAwait(false);
 
-            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
-            { CounterName = MetricsAPI.CounterUserPushData, Value = 1 }).ConfigureAwait(false);
-            await _metricsClient.IncreaseCounterAsync(new IncreaseCounterRequest()
-            { CounterName = MetricsAPI.CounterUserPushDataTo, Value = otherEntries.Count }).ConfigureAwait(false);
+            _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
+            _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, otherEntries.Count);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendUserPairedClientAddition)]
         public async Task SendPairedClientAddition(string uid)
         {
-            if (uid == AuthenticatedUserId) return;
+            if (uid == AuthenticatedUserId || string.IsNullOrWhiteSpace(uid)) return;
             uid = uid.Trim();
             var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
 
@@ -223,7 +218,7 @@ namespace MareSynchronosServer.Hubs
                 }
             }
 
-            await _metricsClient.IncGaugeAsync(new GaugeRequest() {GaugeName = MetricsAPI.GaugePairs, Value = 1}).ConfigureAwait(false);
+            _mareMetrics.IncGauge(MetricsAPI.GaugePairs);
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -263,11 +258,11 @@ namespace MareSynchronosServer.Hubs
 
             if (isPaused)
             {
-                await _metricsClient.IncGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
+                _mareMetrics.IncGauge(MetricsAPI.GaugePairsPaused);
             }
             else
             {
-                await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairsPaused, Value = 1 }).ConfigureAwait(false);
+                _mareMetrics.DecGauge(MetricsAPI.GaugePairsPaused);
             }
         }
 
@@ -311,7 +306,7 @@ namespace MareSynchronosServer.Hubs
                 }
             }
 
-            await _metricsClient.DecGaugeAsync(new GaugeRequest() { GaugeName = MetricsAPI.GaugePairs, Value = 1 }).ConfigureAwait(false);
+            _mareMetrics.DecGauge(MetricsAPI.GaugePairs);
         }
 
         private ClientPair OppositeEntry(string otherUID) =>

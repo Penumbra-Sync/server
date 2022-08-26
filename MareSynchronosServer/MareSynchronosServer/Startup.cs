@@ -16,6 +16,9 @@ using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
 using Grpc.Net.Client.Configuration;
+using Prometheus;
+using MareSynchronosShared.Metrics;
+using System.Collections.Generic;
 
 namespace MareSynchronosServer
 {
@@ -60,14 +63,23 @@ namespace MareSynchronosServer
                 }
             };
 
+            services.AddSingleton(new MareMetrics(new List<string>
+            {
+                MetricsAPI.CounterInitializedConnections,
+                MetricsAPI.CounterUserPushData,
+                MetricsAPI.CounterUserPushDataTo,
+                MetricsAPI.CounterUsersRegisteredDeleted,
+            }, new List<string>
+            {
+                MetricsAPI.GaugeAuthorizedConnections,
+                MetricsAPI.GaugeConnections,
+                MetricsAPI.GaugePairs,
+                MetricsAPI.GaugePairsPaused,
+                MetricsAPI.GaugeAvailableIOWorkerThreads,
+                MetricsAPI.GaugeAvailableWorkerThreads
+            }));
+
             services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
-            {
-                c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
-            }).ConfigureChannel(c =>
-            {
-                c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
-            });
-            services.AddGrpcClient<MetricsService.MetricsServiceClient>(c =>
             {
                 c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
             }).ConfigureChannel(c =>
@@ -133,6 +145,9 @@ namespace MareSynchronosServer
             app.UseRouting();
 
             app.UseWebSockets();
+
+            var metricServer = new KestrelMetricServer(4981);
+            metricServer.Start();
 
             app.UseAuthentication();
             app.UseAuthorization();

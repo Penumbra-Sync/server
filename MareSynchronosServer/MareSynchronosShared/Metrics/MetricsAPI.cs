@@ -8,6 +8,7 @@ public class MetricsAPI
     public const string GaugeAvailableWorkerThreads = "mare_available_threadpool";
     public const string GaugeAvailableIOWorkerThreads = "mare_available_threadpool_io";
     public const string GaugeUsersRegistered = "mare_users_registered";
+    public const string CounterUsersRegisteredDeleted = "mare_users_registered_deleted";
     public const string GaugePairs = "mare_pairs";
     public const string GaugePairsPaused = "mare_pairs_paused";
     public const string GaugeFilesTotal = "mare_files";
