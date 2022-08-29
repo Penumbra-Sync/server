@@ -225,12 +225,18 @@ namespace MareSynchronosServer.Hubs
                     }).ConfigureAwait(false);
                 }
                 await streamingCall.RequestStream.CompleteAsync();
+                tempFileStream.Close();
+                await tempFileStream.DisposeAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Upload failed");
                 _dbContext.Remove(relatedFile);
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                File.Delete(tempFileName);
             }
         }
     }
