@@ -138,6 +138,7 @@ namespace MareSynchronosServices
             var otherPairData = dbContext.ClientPairs.Include(u => u.User)
                 .Where(u => u.OtherUser.UID == user.UID).ToList();
 
+            _logger.LogInformation("User purged: {uid}", user.UID);
 
             metrics.DecGauge(MetricsAPI.GaugePairs, ownPairData.Count + otherPairData.Count);
             metrics.DecGauge(MetricsAPI.GaugePairsPaused, ownPairData.Count + ownPairData.Count(c => c.IsPaused));

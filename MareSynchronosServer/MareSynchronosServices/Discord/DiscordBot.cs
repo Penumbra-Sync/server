@@ -71,8 +71,11 @@ public class DiscordBot : IHostedService
         {
             if (arg.Data.Name == "register")
             {
+                logger.LogInformation("{user} called register", arg.User.Id);
+
                 if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                 {
+                    logger.LogInformation("{user} called register with overwrite_old_account", arg.User.Id);
                     await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
                 }
 
@@ -84,6 +87,7 @@ public class DiscordBot : IHostedService
             }
             else if (arg.Data.Name == "verify")
             {
+                logger.LogInformation("{user} called verify", arg.User.Id);
                 EmbedBuilder eb = new();
                 if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
                 {
@@ -105,6 +109,8 @@ public class DiscordBot : IHostedService
             }
             else if (arg.Data.Name == "setvanityuid")
             {
+                logger.LogInformation("{user} called setvanityuid", arg.User.Id);
+
                 EmbedBuilder eb = new();
                 var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
                 eb = await HandleVanityUid(eb, arg.User.Id, newUid);
@@ -247,7 +253,7 @@ public class DiscordBot : IHostedService
                         user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
                     }
 
-                    var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(GenerateRandomString(64)))).Replace("-", "");
+                    var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(GenerateRandomString(64) + DateTime.UtcNow.ToString()))).Replace("-", "");
                     var auth = new Auth()
                     {
                         HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
