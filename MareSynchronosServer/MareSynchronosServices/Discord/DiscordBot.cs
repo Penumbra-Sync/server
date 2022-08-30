@@ -69,51 +69,66 @@ public class DiscordBot : IHostedService
         await semaphore.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (arg.Data.Name == "register")
+            switch (arg.Data.Name)
             {
-                if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
+                case "register":
                 {
-                    await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
-                }
+                    if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
+                    {
+                        await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
+                    }
 
-                var modal = new ModalBuilder();
-                modal.WithTitle("Verify with Lodestone");
-                modal.WithCustomId("register_modal");
-                modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-                await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
-            }
-            else if (arg.Data.Name == "verify")
-            {
-                EmbedBuilder eb = new();
-                if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
-                {
-                    eb.WithTitle("Already queued for verfication");
-                    eb.WithDescription("You are already queued for verification. Please wait.");
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                    var modal = new ModalBuilder();
+                    modal.WithTitle("Verify with Lodestone");
+                    modal.WithCustomId("register_modal");
+                    modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
+                    await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+                    break;
                 }
-                else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
+                case "recover":
                 {
-                    eb.WithTitle("Cannot verify registration");
-                    eb.WithDescription("You need to **/register** first before you can **/verify**");
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                    var modal = new ModalBuilder();
+                    modal.WithTitle("Verify with Lodestone");
+                    modal.WithCustomId("recover_modal");
+                    modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
+                    await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+                    break;
                 }
-                else
+                case "verify":
                 {
-                    await arg.DeferAsync(ephemeral: true).ConfigureAwait(false);
-                    verificationQueue.Enqueue(arg);
-                }
-            }
-            else if (arg.Data.Name == "setvanityuid")
-            {
-                EmbedBuilder eb = new();
-                var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
-                eb = await HandleVanityUid(eb, arg.User.Id, newUid);
+                    EmbedBuilder eb = new();
+                    if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
+                    {
+                        eb.WithTitle("Already queued for verfication");
+                        eb.WithDescription("You are already queued for verification. Please wait.");
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                    }
+                    else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
+                    {
+                        eb.WithTitle("Cannot verify registration");
+                        eb.WithDescription("You need to **/register** first before you can **/verify**");
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await arg.DeferAsync(ephemeral: true).ConfigureAwait(false);
+                        verificationQueue.Enqueue(arg);
+                    }
 
-                await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-            }
-            else
-            {
-                await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
+                    break;
+                }
+                case "setvanityuid":
+                {
+                    EmbedBuilder eb = new();
+                    var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
+                    eb = await HandleVanityUid(eb, arg.User.Id, newUid);
+
+                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                    break;
+                }
+                default:
+                    await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
+                    break;
             }
         }
         finally
@@ -196,10 +211,19 @@ public class DiscordBot : IHostedService
 
     private async Task DiscordClient_ModalSubmitted(SocketModal arg)
     {
-        if (arg.Data.CustomId == "register_modal")
-        {
-            var embed = await HandleRegisterModalAsync(arg).ConfigureAwait(false);
-            await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        switch (arg.Data.CustomId) {
+            case "register_modal":
+            {
+                var embed = await HandleRegisterModalAsync(arg).ConfigureAwait(false);
+                await arg.RespondAsync(embeds: new Embed[] {embed}, ephemeral: true).ConfigureAwait(false);
+                break;
+            }
+            case "recover_modal":
+            {
+                var embed = await HandleRecoverModalAsync(arg).ConfigureAwait(false);
+                await arg.RespondAsync(embeds: new Embed[] {embed}, ephemeral: true).ConfigureAwait(false);
+                break;
+            }
         }
     }
 
@@ -295,6 +319,59 @@ public class DiscordBot : IHostedService
         }
 
         return embedBuilder.Build();
+    }
+
+    private async Task<Embed> HandleRecoverModalAsync(SocketModal arg)
+    {
+        var embed = new EmbedBuilder();
+
+        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.Data.Components.Single(c => c.CustomId == "lodestoneurl").Value);
+        if (lodestoneId == null)
+        {
+            embed.WithTitle("Invalid Lodestone URL");
+            embed.WithDescription("The lodestone URL was not valid. It should have following format:" + Environment.NewLine
+                + "https://eu.finalfantasyxiv.com/lodestone/character/YOUR_LODESTONE_ID/");
+        }
+        else
+        {
+            // check if userid is already in db
+            using var scope = services.CreateScope();
+            using var sha256 = SHA256.Create();
+
+            var hashedLodestoneId = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(lodestoneId.ToString()))).Replace("-", "");
+
+            await using var db = scope.ServiceProvider.GetService<MareDbContext>();
+            var existingLodestoneAuth = await db.LodeStoneAuth.Include("User")
+                .FirstOrDefaultAsync(a => a.DiscordId == arg.User.Id && a.HashedLodestoneId == hashedLodestoneId)
+                .ConfigureAwait(false);
+
+            // check if discord id or lodestone id is banned
+            if (existingLodestoneAuth == null)
+            {
+                embed.WithTitle("Recovery failed");
+                embed.WithDescription("This DiscordID or Lodestone account pair does not exist.");
+            }
+            else
+            {
+                string lodestoneAuth = await GenerateLodestoneAuth(arg.User.Id, hashedLodestoneId, db).ConfigureAwait(false);
+                // check if lodestone id is already in db
+                embed.WithTitle("Authorize your character");
+                embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + $"**{lodestoneAuth}**"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + "Once added and saved, use command **/verify** to finish registration and receive a secret key to use for Mare Synchronos."
+                                      + Environment.NewLine
+                                      + "You can delete the entry from your profile after verification."
+                                      + Environment.NewLine + Environment.NewLine
+                                      + "The verification will expire in approximately 15 minutes. If you fail to **/verify** the registration will be invalidated and you have to **/register** again.");
+                DiscordLodestoneMapping[arg.User.Id] = lodestoneId.ToString();
+            }
+        }
+
+        return embed.Build();
     }
 
     private async Task<Embed> HandleRegisterModalAsync(SocketModal arg)
@@ -416,6 +493,10 @@ public class DiscordBot : IHostedService
         vanityuid.WithDescription("Sets your Vanity UID.");
         vanityuid.AddOption("vanity_uid", ApplicationCommandOptionType.String, "Desired Vanity UID", isRequired: true);
 
+        var recover = new SlashCommandBuilder();
+        recover.WithName("recover");
+        recover.WithDescription("Allows you to recover your account by generating a new secret key");
+
         try
         {
             await discordClient.Rest.DeleteAllGlobalCommandsAsync().ConfigureAwait(false);
@@ -426,6 +507,7 @@ public class DiscordBot : IHostedService
             {
                 await guild.CreateApplicationCommandAsync(register.Build()).ConfigureAwait(false);
                 await guild.CreateApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
+                await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
                 var vanityCommand = await guild.CreateApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
                 vanityCommandId = vanityCommand.Id;
             }
