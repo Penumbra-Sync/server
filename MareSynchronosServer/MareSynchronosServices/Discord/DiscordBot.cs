@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Discord;
 using Discord.WebSocket;
+using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -72,60 +73,60 @@ public class DiscordBot : IHostedService
             switch (arg.Data.Name)
             {
                 case "register":
-                {
-                    if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
                     {
-                        await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
-                    }
+                        if (arg.Data.Options.FirstOrDefault(f => f.Name == "overwrite_old_account") != null)
+                        {
+                            await DeletePreviousUserAccount(arg.User.Id).ConfigureAwait(false);
+                        }
 
-                    var modal = new ModalBuilder();
-                    modal.WithTitle("Verify with Lodestone");
-                    modal.WithCustomId("register_modal");
-                    modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-                    await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
-                    break;
-                }
+                        var modal = new ModalBuilder();
+                        modal.WithTitle("Verify with Lodestone");
+                        modal.WithCustomId("register_modal");
+                        modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
+                        await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+                        break;
+                    }
                 case "recover":
-                {
-                    var modal = new ModalBuilder();
-                    modal.WithTitle("Verify with Lodestone");
-                    modal.WithCustomId("recover_modal");
-                    modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-                    await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
-                    break;
-                }
+                    {
+                        var modal = new ModalBuilder();
+                        modal.WithTitle("Verify with Lodestone");
+                        modal.WithCustomId("recover_modal");
+                        modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
+                        await arg.RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+                        break;
+                    }
                 case "verify":
-                {
-                    EmbedBuilder eb = new();
-                    if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
                     {
-                        eb.WithTitle("Already queued for verfication");
-                        eb.WithDescription("You are already queued for verification. Please wait.");
-                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-                    }
-                    else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
-                    {
-                        eb.WithTitle("Cannot verify registration");
-                        eb.WithDescription("You need to **/register** first before you can **/verify**");
-                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await arg.DeferAsync(ephemeral: true).ConfigureAwait(false);
-                        verificationQueue.Enqueue(arg);
-                    }
+                        EmbedBuilder eb = new();
+                        if (verificationQueue.Any(u => u.User.Id == arg.User.Id))
+                        {
+                            eb.WithTitle("Already queued for verfication");
+                            eb.WithDescription("You are already queued for verification. Please wait.");
+                            await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                        }
+                        else if (!DiscordLodestoneMapping.ContainsKey(arg.User.Id))
+                        {
+                            eb.WithTitle("Cannot verify registration");
+                            eb.WithDescription("You need to **/register** first before you can **/verify**");
+                            await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await arg.DeferAsync(ephemeral: true).ConfigureAwait(false);
+                            verificationQueue.Enqueue(arg);
+                        }
 
-                    break;
-                }
+                        break;
+                    }
                 case "setvanityuid":
-                {
-                    EmbedBuilder eb = new();
-                    var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
-                    eb = await HandleVanityUid(eb, arg.User.Id, newUid);
+                    {
+                        EmbedBuilder eb = new();
+                        var newUid = (string)arg.Data.Options.First(f => f.Name == "vanity_uid").Value;
+                        eb = await HandleVanityUid(eb, arg.User.Id, newUid);
 
-                    await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-                    break;
-                }
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                        break;
+                    }
                 default:
                     await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
                     break;
@@ -211,19 +212,20 @@ public class DiscordBot : IHostedService
 
     private async Task DiscordClient_ModalSubmitted(SocketModal arg)
     {
-        switch (arg.Data.CustomId) {
+        switch (arg.Data.CustomId)
+        {
             case "register_modal":
-            {
-                var embed = await HandleRegisterModalAsync(arg).ConfigureAwait(false);
-                await arg.RespondAsync(embeds: new Embed[] {embed}, ephemeral: true).ConfigureAwait(false);
-                break;
-            }
+                {
+                    var embed = await HandleRegisterModalAsync(arg).ConfigureAwait(false);
+                    await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+                    break;
+                }
             case "recover_modal":
-            {
-                var embed = await HandleRecoverModalAsync(arg).ConfigureAwait(false);
-                await arg.RespondAsync(embeds: new Embed[] {embed}, ephemeral: true).ConfigureAwait(false);
-                break;
-            }
+                {
+                    var embed = await HandleRecoverModalAsync(arg).ConfigureAwait(false);
+                    await arg.RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+                    break;
+                }
         }
     }
 
@@ -375,6 +377,9 @@ public class DiscordBot : IHostedService
 
                 await db.Auth.AddAsync(auth).ConfigureAwait(false);
                 await db.SaveChangesAsync().ConfigureAwait(false);
+
+                var authHandler = scope.ServiceProvider.GetService<SecretKeyAuthenticationHandler>();
+                authHandler.RemoveAuthentication(existingLodestoneAuth.User.UID);
             }
         }
 
@@ -510,10 +515,16 @@ public class DiscordBot : IHostedService
 
             var guild = (await discordClient.Rest.GetGuildsAsync()).First();
             var commands = await guild.GetApplicationCommandsAsync();
-            if (!commands.Any(c => c.Name.Contains("setvanityuid")))
+            if (!commands.Any(c => c.Name.Contains("register")))
             {
                 await guild.CreateApplicationCommandAsync(register.Build()).ConfigureAwait(false);
+            }
+            if (!commands.Any(c => c.Name.Contains("verify")))
+            {
                 await guild.CreateApplicationCommandAsync(verify.Build()).ConfigureAwait(false);
+            }
+            if (!commands.Any(c => c.Name.Contains("setvanityuid")))
+            {
                 await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
                 var vanityCommand = await guild.CreateApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
                 vanityCommandId = vanityCommand.Id;
@@ -521,6 +532,10 @@ public class DiscordBot : IHostedService
             else
             {
                 vanityCommandId = commands.First(c => c.Name.Contains("setvanityuid")).Id;
+            }
+            if (!commands.Any(c => c.Name.Contains("recover")))
+            {
+                await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
