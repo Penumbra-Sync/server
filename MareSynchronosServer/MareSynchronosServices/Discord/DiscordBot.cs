@@ -334,7 +334,6 @@ public class DiscordBot : IHostedService
         }
         else
         {
-            // check if userid is already in db
             using var scope = services.CreateScope();
             using var sha256 = SHA256.Create();
 
@@ -346,28 +345,36 @@ public class DiscordBot : IHostedService
                 .ConfigureAwait(false);
 
             // check if discord id or lodestone id is banned
-            if (existingLodestoneAuth == null)
+            if (existingLodestoneAuth == null || existingLodestoneAuth.User == null)
             {
                 embed.WithTitle("Recovery failed");
                 embed.WithDescription("This DiscordID or Lodestone account pair does not exist.");
             }
             else
             {
-                string lodestoneAuth = await GenerateLodestoneAuth(arg.User.Id, hashedLodestoneId, db).ConfigureAwait(false);
-                // check if lodestone id is already in db
-                embed.WithTitle("Authorize your character");
-                embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
+                var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID);
+                if (previousAuth != null)
+                {
+                    db.Auth.Remove(previousAuth);
+                }
+
+                var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(GenerateRandomString(64) + DateTime.UtcNow.ToString()))).Replace("-", "");
+                var auth = new Auth()
+                {
+                    HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
+                        .Replace("-", ""),
+                    User = existingLodestoneAuth.User,
+                };
+
+                embed.WithTitle("Recovery successful");
+                embed.WithDescription("This is your new private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
                                       + Environment.NewLine + Environment.NewLine
-                                      + $"**{lodestoneAuth}**"
+                                      + $"**{computedHash}**"
                                       + Environment.NewLine + Environment.NewLine
-                                      + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
-                                      + Environment.NewLine + Environment.NewLine
-                                      + "Once added and saved, use command **/verify** to finish registration and receive a secret key to use for Mare Synchronos."
-                                      + Environment.NewLine
-                                      + "You can delete the entry from your profile after verification."
-                                      + Environment.NewLine + Environment.NewLine
-                                      + "The verification will expire in approximately 15 minutes. If you fail to **/verify** the registration will be invalidated and you have to **/register** again.");
-                DiscordLodestoneMapping[arg.User.Id] = lodestoneId.ToString();
+                                      + "Enter this key in Mare Synchronos and hit save to connect to the service.");
+
+                await db.Auth.AddAsync(auth).ConfigureAwait(false);
+                await db.SaveChangesAsync().ConfigureAwait(false);
             }
         }
 
