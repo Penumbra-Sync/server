@@ -4,6 +4,7 @@ using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 
@@ -33,6 +34,11 @@ public class Program
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);
+                webBuilder.ConfigureLogging((ctx, builder) =>
+                {
+                    builder.AddConfiguration(ctx.Configuration.GetSection("Logging"));
+                    builder.AddFile(o => o.RootPath = AppContext.BaseDirectory);
+                });
                 webBuilder.UseStartup<Startup>();
             });
 }
