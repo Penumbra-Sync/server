@@ -22,8 +22,8 @@ namespace MareSynchronosServer
                 var services = scope.ServiceProvider;
                 using var context = services.GetRequiredService<MareDbContext>();
 
-                var noDbActions = Environment.GetEnvironmentVariable("NODBACTIONS");
-                if (string.IsNullOrEmpty(noDbActions) || noDbActions == "0")
+                var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
+                if (string.IsNullOrEmpty(secondaryServer) || secondaryServer == "0")
                 {
                     context.Database.Migrate();
                     context.SaveChanges();

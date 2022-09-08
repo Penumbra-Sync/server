@@ -123,7 +123,10 @@ namespace MareSynchronosServer
             var redis = mareConfig.GetValue<string>("RedisConnectionString", string.Empty);
             if (!string.IsNullOrEmpty(redis))
             {
-                signalRserviceBuilder.AddStackExchangeRedis(redis);
+                signalRserviceBuilder.AddStackExchangeRedis(redis, options =>
+                {
+                    options.Configuration.ChannelPrefix = "MareSynchronos";
+                });
             }
         }
 

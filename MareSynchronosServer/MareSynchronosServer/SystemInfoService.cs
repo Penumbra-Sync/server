@@ -6,6 +6,7 @@ using MareSynchronos.API;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,27 +46,33 @@ public class SystemInfoService : IHostedService, IDisposable
         ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
         _logger.LogInformation("ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available", workerThreads, ioThreads);
 
-        using var scope = _services.CreateScope();
-        using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
-
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
-        var users = db.Users.Count(c => c.CharacterIdentification != null);
 
-        SystemInfoDto = new SystemInfoDto()
+        var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
+        if (secondaryServer == "1")
         {
-            CacheUsage = 0,
-            CpuUsage = 0,
-            RAMUsage = 0,
-            NetworkIn = 0,
-            NetworkOut = 0,
-            OnlineUsers = users,
-            UploadedFiles = 0
-        };
+            using var scope = _services.CreateScope();
+            using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-        _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
+            var users = db.Users.Count(c => c.CharacterIdentification != null);
+
+            SystemInfoDto = new SystemInfoDto()
+            {
+                CacheUsage = 0,
+                CpuUsage = 0,
+                RAMUsage = 0,
+                NetworkIn = 0,
+                NetworkOut = 0,
+                OnlineUsers = users,
+                UploadedFiles = 0
+            };
+
+            _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
+        }
     }
+
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
