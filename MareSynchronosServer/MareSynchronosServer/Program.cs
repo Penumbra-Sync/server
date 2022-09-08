@@ -17,25 +17,29 @@ namespace MareSynchronosServer
         {
             var hostBuilder = CreateHostBuilder(args);
             var host = hostBuilder.Build();
-
             using (var scope = host.Services.CreateScope())
             {
                 var services = scope.ServiceProvider;
                 using var context = services.GetRequiredService<MareDbContext>();
-                context.Database.Migrate();
-                context.SaveChanges();
 
-                // clean up residuals
-                var users = context.Users;
-                foreach (var user in users)
+                var noDbActions = Environment.GetEnvironmentVariable("NODBACTIONS");
+                if (string.IsNullOrEmpty(noDbActions) || noDbActions == "0")
                 {
-                    user.CharacterIdentification = null;
+                    context.Database.Migrate();
+                    context.SaveChanges();
+
+                    // clean up residuals
+                    var users = context.Users;
+                    foreach (var user in users)
+                    {
+                        user.CharacterIdentification = null;
+                    }
+                    var looseFiles = context.Files.Where(f => f.Uploaded == false);
+                    var unfinishedRegistrations = context.LodeStoneAuth.Where(c => c.StartedAt != null);
+                    context.RemoveRange(unfinishedRegistrations);
+                    context.RemoveRange(looseFiles);
+                    context.SaveChanges();
                 }
-                var looseFiles = context.Files.Where(f => f.Uploaded == false);
-                var unfinishedRegistrations = context.LodeStoneAuth.Where(c => c.StartedAt != null);
-                context.RemoveRange(unfinishedRegistrations);
-                context.RemoveRange(looseFiles);
-                context.SaveChanges();
 
                 var metrics = services.GetRequiredService<MareMetrics>();
 

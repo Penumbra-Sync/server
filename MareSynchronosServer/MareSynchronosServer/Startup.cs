@@ -112,7 +112,7 @@ namespace MareSynchronosServer
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
-            services.AddSignalR(hubOptions =>
+            var signalRserviceBuilder = services.AddSignalR(hubOptions =>
             {
                 hubOptions.MaximumReceiveMessageSize = long.MaxValue;
                 hubOptions.EnableDetailedErrors = true;
@@ -120,6 +120,11 @@ namespace MareSynchronosServer
                 hubOptions.StreamBufferCapacity = 200;
                 hubOptions.AddFilter<SignalRLimitFilter>();
             });
+            var redis = mareConfig.GetValue<string>("RedisConnectionString", string.Empty);
+            if (!string.IsNullOrEmpty(redis))
+            {
+                signalRserviceBuilder.AddStackExchangeRedis(redis);
+            }
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
