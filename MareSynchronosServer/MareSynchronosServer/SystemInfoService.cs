@@ -51,7 +51,7 @@ public class SystemInfoService : IHostedService, IDisposable
 
 
         var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
-        if (secondaryServer == "1")
+        if (secondaryServer == "0")
         {
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
