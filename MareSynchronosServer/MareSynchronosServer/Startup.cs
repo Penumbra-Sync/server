@@ -120,7 +120,7 @@ namespace MareSynchronosServer
                 hubOptions.StreamBufferCapacity = 200;
                 hubOptions.AddFilter<SignalRLimitFilter>();
             });
-            var redis = mareConfig.GetValue<string>("RedisConnectionString", string.Empty);
+            var redis = mareConfig.GetValue("RedisConnectionString", string.Empty);
             if (!string.IsNullOrEmpty(redis))
             {
                 signalRserviceBuilder.AddStackExchangeRedis(redis, options =>
