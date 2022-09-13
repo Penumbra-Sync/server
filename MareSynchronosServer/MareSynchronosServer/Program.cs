@@ -29,11 +29,6 @@ namespace MareSynchronosServer
                     context.SaveChanges();
 
                     // clean up residuals
-                    var users = context.Users;
-                    foreach (var user in users)
-                    {
-                        user.CharacterIdentification = null;
-                    }
                     var looseFiles = context.Files.Where(f => f.Uploaded == false);
                     var unfinishedRegistrations = context.LodeStoneAuth.Where(c => c.StartedAt != null);
                     context.RemoveRange(unfinishedRegistrations);

@@ -14,6 +14,7 @@ using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +27,7 @@ public class DiscordBot : IHostedService
 {
     private readonly CleanupService cleanupService;
     private readonly MareMetrics metrics;
+    private readonly IClientIdentificationService clientService;
     private readonly IServiceProvider services;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DiscordBot> logger;
@@ -44,10 +46,11 @@ public class DiscordBot : IHostedService
 
     private SemaphoreSlim semaphore;
 
-    public DiscordBot(CleanupService cleanupService, MareMetrics metrics, IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
+    public DiscordBot(CleanupService cleanupService, MareMetrics metrics, IClientIdentificationService clientService, IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
     {
         this.cleanupService = cleanupService;
         this.metrics = metrics;
+        this.clientService = clientService;
         this.services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
         this.logger = logger;
@@ -687,13 +690,7 @@ public class DiscordBot : IHostedService
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
-            await using var scope = services.CreateAsyncScope();
-            await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
-            {
-                var users = db.Users.Count(c => c.CharacterIdentification != null);
-                await discordClient.SetActivityAsync(new Game("Mare for " + users + " Users")).ConfigureAwait(false);
-            }
-
+            await discordClient.SetActivityAsync(new Game("Mare for " + clientService.GetOnlineUsers() + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         }
     }

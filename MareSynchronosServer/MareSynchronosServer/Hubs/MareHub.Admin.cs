@@ -16,8 +16,8 @@ namespace MareSynchronosServer.Hubs
 
         private bool IsModerator => _dbContext.Users.Single(b => b.UID == AuthenticatedUserId).IsModerator || IsAdmin;
 
-        private List<string> OnlineAdmins => _dbContext.Users.Where(u => !string.IsNullOrEmpty(u.CharacterIdentification) && (u.IsModerator || u.IsAdmin))
-                                .Select(u => u.UID).ToList();
+        private List<string> OnlineAdmins => _dbContext.Users.Where(u => (u.IsModerator || u.IsAdmin)).Select(u => u.UID).ToList();
+
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
         [HubMethodName(Api.SendAdminChangeModeratorStatus)]
         public async Task ChangeModeratorStatus(string uid, bool isModerator)
@@ -101,13 +101,14 @@ namespace MareSynchronosServer.Hubs
         {
             if (!IsModerator) return null;
 
-            return await _dbContext.Users.AsNoTracking().Where(b => !string.IsNullOrEmpty(b.CharacterIdentification)).Select(b => new OnlineUserDto
+            var users = await _dbContext.Users.AsNoTracking().ToListAsync().ConfigureAwait(false);
+            return users.Where(c => !string.IsNullOrEmpty(_clientIdentService.GetCharacterIdentForUid(c.UID))).Select(b => new OnlineUserDto
             {
-                CharacterNameHash = b.CharacterIdentification,
+                CharacterNameHash = _clientIdentService.GetCharacterIdentForUid(b.UID),
                 UID = b.UID,
                 IsModerator = b.IsModerator,
                 IsAdmin = b.IsAdmin
-            }).ToListAsync().ConfigureAwait(false);
+            }).ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -134,11 +135,10 @@ namespace MareSynchronosServer.Hubs
 
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
             await Clients.Users(OnlineAdmins).SendAsync(Api.OnAdminUpdateOrAddBannedUser, dto).ConfigureAwait(false);
-            var bannedUser =
-                await _dbContext.Users.SingleOrDefaultAsync(u => u.CharacterIdentification == dto.CharacterHash).ConfigureAwait(false);
-            if (bannedUser != null)
+            var bannedUser = _clientIdentService.GetUidForCharacterIdent(dto.CharacterHash);
+            if (!string.IsNullOrEmpty(bannedUser))
             {
-                await Clients.User(bannedUser.UID).SendAsync(Api.OnAdminForcedReconnect).ConfigureAwait(false);
+                await Clients.User(bannedUser).SendAsync(Api.OnAdminForcedReconnect).ConfigureAwait(false);
             }
         }
 

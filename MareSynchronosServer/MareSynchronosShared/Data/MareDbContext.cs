@@ -45,7 +45,7 @@ public class MareDbContext : DbContext
     {
         modelBuilder.Entity<Auth>().ToTable("auth");
         modelBuilder.Entity<User>().ToTable("users");
-        modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
+        //modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
         modelBuilder.Entity<FileCache>().ToTable("file_caches");
         modelBuilder.Entity<FileCache>().HasIndex(c => c.UploaderUID);
         modelBuilder.Entity<ClientPair>().ToTable("client_pairs");

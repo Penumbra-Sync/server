@@ -1,32 +1,32 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Models;
-using MareSynchronosShared.Protos;
+using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronosServer;
+namespace MareSynchronosServer.Services;
 
 public class SystemInfoService : IHostedService, IDisposable
 {
     private readonly MareMetrics _mareMetrics;
+    private readonly IClientIdentificationService clientIdentService;
     private readonly IServiceProvider _services;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IServiceProvider services, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IClientIdentificationService clientIdentService, IServiceProvider services, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
+        this.clientIdentService = clientIdentService;
         _services = services;
         _logger = logger;
         _hubContext = hubContext;
@@ -56,8 +56,6 @@ public class SystemInfoService : IHostedService, IDisposable
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            var users = db.Users.Count(c => c.CharacterIdentification != null);
-
             SystemInfoDto = new SystemInfoDto()
             {
                 CacheUsage = 0,
@@ -65,7 +63,7 @@ public class SystemInfoService : IHostedService, IDisposable
                 RAMUsage = 0,
                 NetworkIn = 0,
                 NetworkOut = 0,
-                OnlineUsers = users,
+                OnlineUsers = clientIdentService.GetOnlineUsers(),
                 UploadedFiles = 0
             };
 

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
 using System.Collections.Generic;
+using MareSynchronosShared.Services;
 
 namespace MareSynchronosServices;
 
@@ -49,6 +50,24 @@ public class Startup
         services.AddHostedService(provider => provider.GetService<CleanupService>());
         services.AddHostedService<DiscordBot>();
         services.AddGrpc();
+
+        // add redis related options
+        var redis = Configuration.GetSection("MareSynchronos").GetValue("RedisConnectionString", string.Empty);
+        if (!string.IsNullOrEmpty(redis))
+        {
+            services.AddStackExchangeRedisCache(opt =>
+            {
+                opt.Configuration = redis;
+                opt.InstanceName = "MareSynchronos";
+            });
+            services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
+            services.AddHostedService(p => p.GetService<DistributedClientIdentificationService>());
+        }
+        else
+        {
+            services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
+            services.AddHostedService(p => p.GetService<LocalClientIdentificationService>());
+        }
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

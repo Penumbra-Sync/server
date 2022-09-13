@@ -19,6 +19,8 @@ using Grpc.Net.Client.Configuration;
 using Prometheus;
 using MareSynchronosShared.Metrics;
 using System.Collections.Generic;
+using MareSynchronosServer.Services;
+using MareSynchronosShared.Services;
 
 namespace MareSynchronosServer
 {
@@ -101,18 +103,18 @@ namespace MareSynchronosServer
                 options.EnableThreadSafetyChecks(false);
             }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
+            
             services.AddHostedService(provider => provider.GetService<SystemInfoService>());
 
             services.AddAuthentication(options =>
-                {
-                    options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
-                })
-                .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { });
+            {
+                options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
+            }).AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, _ => { });
             services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
             services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
-            var signalRserviceBuilder = services.AddSignalR(hubOptions =>
+            var signalRServiceBuilder = services.AddSignalR(hubOptions =>
             {
                 hubOptions.MaximumReceiveMessageSize = long.MaxValue;
                 hubOptions.EnableDetailedErrors = true;
@@ -120,13 +122,28 @@ namespace MareSynchronosServer
                 hubOptions.StreamBufferCapacity = 200;
                 hubOptions.AddFilter<SignalRLimitFilter>();
             });
+
+            // add redis related options
             var redis = mareConfig.GetValue("RedisConnectionString", string.Empty);
             if (!string.IsNullOrEmpty(redis))
             {
-                signalRserviceBuilder.AddStackExchangeRedis(redis, options =>
+                signalRServiceBuilder.AddStackExchangeRedis(redis, options =>
                 {
                     options.Configuration.ChannelPrefix = "MareSynchronos";
                 });
+
+                services.AddStackExchangeRedisCache(opt =>
+                {
+                    opt.Configuration = redis;
+                    opt.InstanceName = "MareSynchronos";
+                });
+                services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
+                services.AddHostedService(p => p.GetService<DistributedClientIdentificationService>());
+            }
+            else
+            {
+                services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
+                services.AddHostedService(p => p.GetService<LocalClientIdentificationService>());
             }
         }
 

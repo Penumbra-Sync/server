@@ -76,7 +76,7 @@ namespace MareSynchronosServer.Hubs
                     IsForbidden = forbiddenFile != null,
                     Hash = hash.Key,
                     Size = hash.Value,
-                    Url = new Uri(cdnFullUri, hash.Key.ToUpperInvariant()).ToString()
+                    Url = new Uri(_cdnFullUri, hash.Key.ToUpperInvariant()).ToString()
                 });
             }
 
