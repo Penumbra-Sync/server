@@ -21,6 +21,7 @@ using MareSynchronosShared.Metrics;
 using System.Collections.Generic;
 using MareSynchronosServer.Services;
 using MareSynchronosShared.Services;
+using System.Net.Http;
 
 namespace MareSynchronosServer
 {
@@ -84,6 +85,10 @@ namespace MareSynchronosServer
             }).ConfigureChannel(c =>
             {
                 c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+                c.HttpHandler = new SocketsHttpHandler()
+                {
+                    EnableMultipleHttp2Connections = true
+                };
             });
             services.AddGrpcClient<FileService.FileServiceClient>(c =>
             {
