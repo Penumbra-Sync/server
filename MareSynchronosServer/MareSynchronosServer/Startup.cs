@@ -108,9 +108,6 @@ namespace MareSynchronosServer
                 options.EnableThreadSafetyChecks(false);
             }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
-            
-            services.AddHostedService(provider => provider.GetService<SystemInfoService>());
-
             services.AddAuthentication(options =>
             {
                 options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
@@ -143,13 +140,15 @@ namespace MareSynchronosServer
                     opt.InstanceName = "MareSynchronos";
                 });
                 services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
-                services.AddHostedService(p => p.GetService<DistributedClientIdentificationService>());
+                services.AddHostedService(p => p.GetService<IClientIdentificationService>());
             }
             else
             {
                 services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
-                services.AddHostedService(p => p.GetService<LocalClientIdentificationService>());
+                services.AddHostedService(p => p.GetService<IClientIdentificationService>());
             }
+
+            services.AddHostedService(provider => provider.GetService<SystemInfoService>());
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

@@ -61,12 +61,12 @@ public class Startup
                 opt.InstanceName = "MareSynchronos";
             });
             services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<DistributedClientIdentificationService>());
+            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
         }
         else
         {
             services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<LocalClientIdentificationService>());
+            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
         }
     }
 
