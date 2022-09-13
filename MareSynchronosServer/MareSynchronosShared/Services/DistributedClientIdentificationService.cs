@@ -56,9 +56,7 @@ public class DistributedClientIdentificationService : BaseClientIdentificationSe
         base.MarkUserOnline(uid, charaIdent);
         distributedCache.Set(RedisPrefix + uid, Encoding.UTF8.GetBytes(charaIdent), new DistributedCacheEntryOptions()
         {
-            AbsoluteExpiration = DateTimeOffset.MaxValue,
-            AbsoluteExpirationRelativeToNow = TimeSpan.MaxValue,
-            SlidingExpiration = TimeSpan.MaxValue,
+            AbsoluteExpiration = DateTime.Now.AddDays(7)
         });
     }
 
