@@ -58,7 +58,7 @@ public class Startup
             services.AddStackExchangeRedisCache(opt =>
             {
                 opt.Configuration = redis;
-                opt.InstanceName = "MareSynchronos";
+                opt.InstanceName = "MareSynchronosCache:";
             });
             services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
             services.AddHostedService(p => p.GetService<IClientIdentificationService>());

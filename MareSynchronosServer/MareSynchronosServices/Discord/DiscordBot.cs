@@ -690,7 +690,9 @@ public class DiscordBot : IHostedService
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
-            await discordClient.SetActivityAsync(new Game("Mare for " + clientService.GetOnlineUsers() + " Users")).ConfigureAwait(false);
+            var onlineUsers = clientService.GetOnlineUsers();
+            logger.LogInformation("Users online: " + onlineUsers);
+            await discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         }
     }

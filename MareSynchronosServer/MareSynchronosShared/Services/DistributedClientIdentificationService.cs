@@ -2,6 +2,7 @@
 using MareSynchronosShared.Metrics;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace MareSynchronosShared.Services;
@@ -9,21 +10,31 @@ namespace MareSynchronosShared.Services;
 public class DistributedClientIdentificationService : BaseClientIdentificationService
 {
     private readonly IDistributedCache distributedCache;
+    private readonly ILogger<DistributedClientIdentificationService> logger;
     private readonly IConfiguration configuration;
     private const string RedisPrefix = "uidcache:";
 
-    public DistributedClientIdentificationService(MareMetrics metrics, IDistributedCache distributedCache, IConfiguration configuration) : base(metrics)
+    public DistributedClientIdentificationService(MareMetrics metrics, IDistributedCache distributedCache, IConfiguration configuration, ILogger<DistributedClientIdentificationService> logger) : base(metrics)
     {
         this.distributedCache = distributedCache;
+        this.logger = logger;
         this.configuration = configuration.GetSection("MareSynchronos");
     }
 
     public override int GetOnlineUsers()
     {
-        var redis = configuration.GetValue<string>("RedisConnectionString");
-        var conn = ConnectionMultiplexer.Connect(redis);
-        var endpoint = conn.GetEndPoints().First();
-        return conn.GetServer(endpoint).Keys(pattern: RedisPrefix + "*").Count();
+        try
+        {
+            var redis = configuration.GetValue<string>("RedisConnectionString");
+            var conn = ConnectionMultiplexer.Connect(redis);
+            var endpoint = conn.GetEndPoints().First();
+            return conn.GetServer(endpoint).Keys(pattern: "*" + RedisPrefix + "*").Count();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error during GetOnlineUsers");
+            return 0;
+        }
     }
 
     public override string? GetCharacterIdentForUid(string uid)
