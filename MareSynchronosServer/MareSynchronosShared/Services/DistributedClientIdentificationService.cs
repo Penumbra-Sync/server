@@ -54,7 +54,12 @@ public class DistributedClientIdentificationService : BaseClientIdentificationSe
     public override void MarkUserOnline(string uid, string charaIdent)
     {
         base.MarkUserOnline(uid, charaIdent);
-        distributedCache.Set(RedisPrefix + uid, Encoding.UTF8.GetBytes(charaIdent));
+        distributedCache.Set(RedisPrefix + uid, Encoding.UTF8.GetBytes(charaIdent), new DistributedCacheEntryOptions()
+        {
+            AbsoluteExpiration = DateTimeOffset.MaxValue,
+            AbsoluteExpirationRelativeToNow = TimeSpan.MaxValue,
+            SlidingExpiration = TimeSpan.MaxValue,
+        });
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)

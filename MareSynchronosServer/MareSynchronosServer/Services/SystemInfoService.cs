@@ -17,17 +17,15 @@ public class SystemInfoService : IHostedService, IDisposable
 {
     private readonly MareMetrics _mareMetrics;
     private readonly IClientIdentificationService clientIdentService;
-    private readonly IServiceProvider _services;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IClientIdentificationService clientIdentService, IServiceProvider services, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         this.clientIdentService = clientIdentService;
-        _services = services;
         _logger = logger;
         _hubContext = hubContext;
     }
@@ -53,9 +51,6 @@ public class SystemInfoService : IHostedService, IDisposable
         var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
         if (string.IsNullOrEmpty(secondaryServer) || secondaryServer == "0")
         {
-            using var scope = _services.CreateScope();
-            using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
-
             SystemInfoDto = new SystemInfoDto()
             {
                 CacheUsage = 0,
