@@ -160,7 +160,7 @@ namespace MareSynchronosServer.Hubs
 
             var otherEntries = await query.ToListAsync().ConfigureAwait(false);
             otherEntries =
-                otherEntries.Where(c => visibleCharacterIds.Select(c => c.ToLowerInvariant()).Contains(_clientIdentService.GetCharacterIdentForUid(c).ToLowerInvariant())).ToList();
+                otherEntries.Where(c => visibleCharacterIds.Select(c => c.ToLowerInvariant()).Contains(_clientIdentService.GetCharacterIdentForUid(c)?.ToLowerInvariant() ?? "")).ToList();
             var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
             await Clients.Users(otherEntries).SendAsync(Api.OnUserReceiveCharacterData, characterCache, ownIdent).ConfigureAwait(false);
