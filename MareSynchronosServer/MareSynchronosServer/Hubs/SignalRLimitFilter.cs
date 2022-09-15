@@ -15,8 +15,8 @@ public class SignalRLimitFilter : IHubFilter
     private readonly IRateLimitProcessor _processor;
     private readonly IHttpContextAccessor accessor;
     private readonly ILogger<SignalRLimitFilter> logger;
-    private static readonly SemaphoreSlim ConnectionLimiterSemaphore = new(5);
-    private static readonly SemaphoreSlim DisconnectLimiterSemaphore = new(5);
+    private static readonly SemaphoreSlim ConnectionLimiterSemaphore = new(10);
+    private static readonly SemaphoreSlim DisconnectLimiterSemaphore = new(10);
 
     public SignalRLimitFilter(
         IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor, ILogger<SignalRLimitFilter> logger)
@@ -77,7 +77,7 @@ public class SignalRLimitFilter : IHubFilter
 
         try
         {
-            await Task.Delay(250).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
             await next(context).ConfigureAwait(false);
         }
         catch (Exception ex)
