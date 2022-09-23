@@ -56,28 +56,29 @@ public class SignalRLimitFilter : IHubFilter
     public async Task OnConnectedAsync(HubLifetimeContext context, Func<HubLifetimeContext, Task> next)
     {
         await ConnectionLimiterSemaphore.WaitAsync().ConfigureAwait(false);
-        var ip = accessor.GetIpAddress();
-        var client = new ClientRequestIdentity
-        {
-            ClientIp = ip,
-            Path = "Connect",
-            HttpVerb = "ws",
-        };
-        foreach (var rule in await _processor.GetMatchingRulesAsync(client).ConfigureAwait(false))
-        {
-            var counter = await _processor.ProcessRequestAsync(client, rule).ConfigureAwait(false);
-            if (counter.Count > rule.Limit)
-            {
-                var retry = counter.Timestamp.RetryAfterFrom(rule);
-                logger.LogWarning("Connection rate limit triggered from {ip}", ip);
-                ConnectionLimiterSemaphore.Release();
-                throw new HubException($"Connection rate limit {retry}");
-            }
-        }
-
         try
         {
-            await Task.Delay(100).ConfigureAwait(false);
+            var ip = accessor.GetIpAddress();
+            var client = new ClientRequestIdentity
+            {
+                ClientIp = ip,
+                Path = "Connect",
+                HttpVerb = "ws",
+            };
+            foreach (var rule in await _processor.GetMatchingRulesAsync(client).ConfigureAwait(false))
+            {
+                var counter = await _processor.ProcessRequestAsync(client, rule).ConfigureAwait(false);
+                if (counter.Count > rule.Limit)
+                {
+                    var retry = counter.Timestamp.RetryAfterFrom(rule);
+                    logger.LogWarning("Connection rate limit triggered from {ip}", ip);
+                    ConnectionLimiterSemaphore.Release();
+                    throw new HubException($"Connection rate limit {retry}");
+                }
+            }
+
+
+            await Task.Delay(25).ConfigureAwait(false);
             await next(context).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -102,7 +103,7 @@ public class SignalRLimitFilter : IHubFilter
         try
         {
             await next(context, exception).ConfigureAwait(false);
-            await Task.Delay(250).ConfigureAwait(false);
+            await Task.Delay(25).ConfigureAwait(false);
         }
         catch (Exception e)
         {
