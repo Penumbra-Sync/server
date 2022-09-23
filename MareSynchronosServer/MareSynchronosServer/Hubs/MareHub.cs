@@ -110,6 +110,8 @@ public partial class MareHub : Hub
 
             _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
 
+
+            // todo: refactor and also send to groups
             var query =
                 from userToOther in _dbContext.ClientPairs
                 join otherToUser in _dbContext.ClientPairs

@@ -71,24 +71,15 @@ namespace MareSynchronosServer.Hubs
         {
             _logger.LogInformation("User {AuthenticatedUserId} requested online characters", AuthenticatedUserId);
 
-            var ownUser = await GetAuthenticatedUserUntrackedAsync().ConfigureAwait(false);
+            var userPairs = await GetAllUserPairs(AuthenticatedUserId);
+            var ownGroups = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == AuthenticatedUserId).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
+            var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupUserUID != AuthenticatedUserId && ownGroups.Contains(p.GroupGID)).DistinctBy(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
+            var groupPairsWithoutUserPairs = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
+            var usersToSendOnlineTo = userPairs.Where(u => !u.UserPausedOther && u.OtherPausedUser).Select(u => u.UserUID).Concat(groupPairsWithoutUserPairs);
+            var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
-            var otherUsers = await _dbContext.ClientPairs.AsNoTracking()
-                .Include(u => u.User)
-                .Include(u => u.OtherUser)
-                .Where(w => w.User.UID == ownUser.UID && !w.IsPaused)
-                //.Where(w => !string.IsNullOrEmpty(w.OtherUser.CharacterIdentification))
-                .Select(e => e.OtherUser).ToListAsync().ConfigureAwait(false);
-            var otherOnlineUsers =
-                otherUsers.Where(u => !string.IsNullOrEmpty(_clientIdentService.GetCharacterIdentForUid(u.UID)));
-            var otherEntries = await _dbContext.ClientPairs.AsNoTracking()
-                .Include(u => u.User)
-                .Where(u => otherOnlineUsers.Any(e => e == u.User) && u.OtherUser == ownUser && !u.IsPaused)
-                .ToListAsync().ConfigureAwait(false);
-            var ownIdent = _clientIdentService.GetCharacterIdentForUid(ownUser.UID);
-
-            await Clients.Users(otherEntries.Select(e => e.User.UID)).SendAsync(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
-            return otherEntries.Select(e => _clientIdentService.GetCharacterIdentForUid(e.User.UID)).Distinct().ToList();
+            await Clients.Users(usersToSendOnlineTo).SendAsync(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
+            return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Distinct().ToList();
         }
 
         [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
