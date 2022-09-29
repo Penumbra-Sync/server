@@ -4,9 +4,9 @@ namespace MareSynchronosShared.Services;
 
 public interface IClientIdentificationService : IHostedService
 {
-    int GetOnlineUsers();
-    string? GetUidForCharacterIdent(string characterIdent);
-    string? GetCharacterIdentForUid(string uid);
-    void MarkUserOnline(string uid, string charaIdent);
-    void MarkUserOffline(string uid);
+    Task<int> GetOnlineUsers();
+    Task<string?> GetUidForCharacterIdent(string characterIdent);
+    Task<string?> GetCharacterIdentForUid(string uid);
+    Task MarkUserOnline(string uid, string charaIdent);
+    Task MarkUserOffline(string uid);
 }

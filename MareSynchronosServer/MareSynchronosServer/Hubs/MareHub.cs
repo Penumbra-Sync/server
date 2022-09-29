@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -62,7 +63,7 @@ public partial class MareHub : Hub
         if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
         {
             var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId).ConfigureAwait(false));
-            var existingIdent = _clientIdentService.GetCharacterIdentForUid(userId);
+            var existingIdent = await _clientIdentService.GetCharacterIdentForUid(userId).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(existingIdent) && characterIdentification != existingIdent)
             {
                 return new ConnectionDto()
@@ -72,7 +73,7 @@ public partial class MareHub : Hub
             }
 
             user.LastLoggedIn = DateTime.UtcNow;
-            _clientIdentService.MarkUserOnline(user.UID, characterIdentification);
+            await _clientIdentService.MarkUserOnline(user.UID, characterIdentification).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             return new ConnectionDto
@@ -101,46 +102,88 @@ public partial class MareHub : Hub
     {
         _mareMetrics.DecGauge(MetricsAPI.GaugeConnections);
 
-        var userCharaIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+        var userCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(userCharaIdent))
         {
-            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId)!.ConfigureAwait(false);
             _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
 
             _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
 
+            await SendDataToAllPairedUsers(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent);
 
-            // todo: refactor and also send to groups
-            var query =
-                from userToOther in _dbContext.ClientPairs
-                join otherToUser in _dbContext.ClientPairs
-                    on new
-                    {
-                        user = userToOther.UserUID,
-                        other = userToOther.OtherUserUID
+            _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == AuthenticatedUserId));
 
-                    } equals new
-                    {
-                        user = otherToUser.OtherUserUID,
-                        other = otherToUser.UserUID
-                    }
-                where
-                    userToOther.UserUID == user.UID
-                    && !userToOther.IsPaused
-                    && !otherToUser.IsPaused
-                select otherToUser.UserUID;
-            var otherEntries = await query.ToListAsync().ConfigureAwait(false);
-
-            await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent).ConfigureAwait(false);
-
-            _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == user.UID));
-
-            _clientIdentService.MarkUserOffline(user.UID);
+            await _clientIdentService.MarkUserOffline(AuthenticatedUserId).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
+    }
+
+    private IEnumerable<string> GetGroupUsersNotInUserPairs(List<UserPair> userPairs, List<GroupPair> groupPairs)
+    {
+        var uid = AuthenticatedUserId;
+        return groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)).Select(p => p.GroupUserUID);
+    }
+
+    private async Task<List<UserPair>> GetAllUserPairs(string uid, bool includePaused = true)
+    {
+        var query =
+            from userToOther in _dbContext.ClientPairs
+            join otherToUser in _dbContext.ClientPairs
+                on new
+                {
+                    user = userToOther.UserUID,
+                    other = userToOther.OtherUserUID
+
+                } equals new
+                {
+                    user = otherToUser.OtherUserUID,
+                    other = otherToUser.UserUID
+                }
+            where
+                userToOther.UserUID == uid
+                && (includePaused || (!includePaused && !userToOther.IsPaused && !otherToUser.IsPaused))
+            select new UserPair { UserUID = userToOther.UserUID, OtherUserUID = otherToUser.UserUID, UserPausedOther = userToOther.IsPaused, OtherPausedUser = otherToUser.IsPaused };
+
+        return await query.ToListAsync().ConfigureAwait(false);
+    }
+
+    private async Task<List<string>> GetAllNotPausedPairedOrGroupedUsers()
+    {
+        var userPairs = await GetAllUserPairs(AuthenticatedUserId);
+        var groupPairs = await GetGroupPairs();
+        if (groupPairs.Any())
+        {
+            var groupPairsWithoutUserPairs = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
+            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.UserUID).Concat(groupPairsWithoutUserPairs).ToList();
+        }
+        else
+        {
+            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.UserUID).ToList();
+        }
+    }
+
+    private async Task<List<GroupPair>> GetGroupPairs(string? uid = null, bool includePaused = false)
+    {
+        uid ??= AuthenticatedUserId;
+        var ownGroups = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == uid
+            && (includePaused || (!includePaused && !g.IsPaused))).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
+        if (ownGroups.Any())
+        {
+            return await _dbContext.GroupPairs.Where(p => p.GroupUserUID != uid && ownGroups.Contains(p.GroupGID)).DistinctBy(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
+        }
+
+        return new List<GroupPair>();
+    }
+
+    private async Task<List<string>> SendDataToAllPairedUsers(string apiMethod, object arg)
+    {
+        var usersToSendDataTo = await GetAllNotPausedPairedOrGroupedUsers();
+        await Clients.Users(usersToSendDataTo).SendAsync(apiMethod, arg).ConfigureAwait(false);
+
+        return usersToSendDataTo;
     }
 
     protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";

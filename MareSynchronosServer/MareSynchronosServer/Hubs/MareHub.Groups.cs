@@ -5,7 +5,6 @@ using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Pipelines.Sockets.Unofficial.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -144,7 +143,7 @@ namespace MareSynchronosServer.Hubs
             {
                 var ownUserPairs = await GetAllUserPairs(pair.GroupUserUID);
                 var sendOfflineTo = GetGroupUsersNotInUserPairs(ownUserPairs, groupPairs);
-                var selfIdent = _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID);
+                var selfIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
                 await Clients.Users(sendOfflineTo).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, selfIdent).ConfigureAwait(false);
             }
 
@@ -199,7 +198,7 @@ namespace MareSynchronosServer.Hubs
             });
 
             var userPairs = await GetAllUserPairs(AuthenticatedUserId);
-            var clientIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+            var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
             await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
         }
 
@@ -245,7 +244,7 @@ namespace MareSynchronosServer.Hubs
             });
 
             var userPairs = await GetAllUserPairs(AuthenticatedUserId);
-            var clientIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+            var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
             await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
         }
 
@@ -268,7 +267,7 @@ namespace MareSynchronosServer.Hubs
             });
 
             var userPairs = await GetAllUserPairs(AuthenticatedUserId);
-            var clientIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+            var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
             await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
         }
 
@@ -293,25 +292,24 @@ namespace MareSynchronosServer.Hubs
             });
 
             var userPairs = await GetAllUserPairs(uid);
-            var userIdent = _clientIdentService.GetCharacterIdentForUid(uid);
-            if (userIdent != null)
+            var userIdent = await _clientIdentService.GetCharacterIdentForUid(uid).ConfigureAwait(false);
+            if (userIdent == null) return;
+
+            // send offline state to everyone
+            await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+
+            await Clients.User(uid).SendAsync(Api.OnGroupChange, new GroupDto()
             {
-                // send offline state to everyone
-                await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+                GID = gid,
+                IsDeleted = true,
+            });
 
-                await Clients.User(uid).SendAsync(Api.OnGroupChange, new GroupDto()
+            foreach (var item in groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)))
+            {
+                var ident = await _clientIdentService.GetCharacterIdentForUid(item.GroupUserUID).ConfigureAwait(false);
+                if (ident != null)
                 {
-                    GID = gid,
-                    IsDeleted = true,
-                });
-
-                foreach (var item in groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)))
-                {
-                    var ident = _clientIdentService.GetCharacterIdentForUid(item.GroupUserUID);
-                    if (ident != null)
-                    {
-                        await Clients.User(uid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident);
-                    }
+                    await Clients.User(uid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident);
                 }
             }
         }
@@ -350,34 +348,6 @@ namespace MareSynchronosServer.Hubs
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             return true;
-        }
-
-        private IEnumerable<string> GetGroupUsersNotInUserPairs(List<UserPair> userPairs, List<GroupPair> groupPairs)
-        {
-            var uid = AuthenticatedUserId;
-            return groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)).Select(p => p.GroupUserUID);
-        }
-
-        private async Task<List<UserPair>> GetAllUserPairs(string uid)
-        {
-            var query =
-                from userToOther in _dbContext.ClientPairs
-                join otherToUser in _dbContext.ClientPairs
-                    on new
-                    {
-                        user = userToOther.UserUID,
-                        other = userToOther.OtherUserUID
-
-                    } equals new
-                    {
-                        user = otherToUser.OtherUserUID,
-                        other = otherToUser.UserUID
-                    }
-                where
-                    userToOther.UserUID == uid
-                select new UserPair { UserUID = userToOther.UserUID, OtherUserUID = otherToUser.UserUID, UserPausedOther = userToOther.IsPaused, OtherPausedUser = otherToUser.IsPaused };
-
-            return await query.ToListAsync().ConfigureAwait(false);
         }
 
         private record UserPair
