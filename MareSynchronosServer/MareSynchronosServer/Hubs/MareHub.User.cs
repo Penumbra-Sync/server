@@ -208,8 +208,6 @@ namespace MareSynchronosServer.Hubs
             pair.IsPaused = isPaused;
             _dbContext.Update(pair);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-            var selfCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-            var otherCharaIdent = await _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID).ConfigureAwait(false);
             var otherEntry = OppositeEntry(otherUserUid);
 
             await Clients.User(AuthenticatedUserId)
@@ -229,6 +227,22 @@ namespace MareSynchronosServer.Hubs
                     IsPausedFromOthers = isPaused,
                     IsSynced = true
                 }).ConfigureAwait(false);
+
+                var selfCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+                var otherCharaIdent = await _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID).ConfigureAwait(false);
+
+                if (selfCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
+
+                if (isPaused)
+                {
+                    await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, otherCharaIdent).ConfigureAwait(false);
+                    await Clients.User(otherUserUid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, selfCharaIdent).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, otherCharaIdent).ConfigureAwait(false);
+                    await Clients.User(otherUserUid).SendAsync(Api.OnUserAddOnlinePairedPlayer, selfCharaIdent).ConfigureAwait(false);
+                }
             }
         }
 
