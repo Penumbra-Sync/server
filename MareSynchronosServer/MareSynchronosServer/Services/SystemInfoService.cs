@@ -58,7 +58,7 @@ public class SystemInfoService : IHostedService, IDisposable
                 RAMUsage = 0,
                 NetworkIn = 0,
                 NetworkOut = 0,
-                OnlineUsers = clientIdentService.GetOnlineUsers(),
+                OnlineUsers = clientIdentService.GetOnlineUsers().Result,
                 UploadedFiles = 0
             };
 

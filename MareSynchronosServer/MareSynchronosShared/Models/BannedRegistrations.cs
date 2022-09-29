@@ -1,11 +1,10 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace MareSynchronosShared.Models
+namespace MareSynchronosShared.Models;
+
+public class BannedRegistrations
 {
-    public class BannedRegistrations
-    {
-        [Key]
-        [MaxLength(100)]
-        public string DiscordIdOrLodestoneAuth { get; set; }
-    }
+    [Key]
+    [MaxLength(100)]
+    public string DiscordIdOrLodestoneAuth { get; set; }
 }
