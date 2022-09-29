@@ -122,6 +122,7 @@ namespace MareSynchronosServer
                 hubOptions.EnableDetailedErrors = true;
                 hubOptions.MaximumParallelInvocationsPerClient = 10;
                 hubOptions.StreamBufferCapacity = 200;
+                hubOptions.ClientTimeoutInterval = 10;
                 hubOptions.AddFilter<SignalRLimitFilter>();
             });
 
