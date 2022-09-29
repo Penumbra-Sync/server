@@ -79,7 +79,8 @@ public partial class MareHub : Hub
             return new ConnectionDto
             {
                 ServerVersion = Api.Version,
-                UID = string.IsNullOrEmpty(user.Alias) ? user.UID : user.Alias,
+                UID = user.UID,
+                Alias = user.Alias,
                 IsModerator = user.IsModerator,
                 IsAdmin = user.IsAdmin
             };
@@ -121,9 +122,9 @@ public partial class MareHub : Hub
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
     }
 
-    private IEnumerable<string> GetGroupUsersNotInUserPairs(List<UserPair> userPairs, List<GroupPair> groupPairs)
+    private IEnumerable<string> GetGroupUsersNotInUserPairs(List<UserPair> userPairs, List<GroupPair> groupPairs, string? uid = null)
     {
-        var uid = AuthenticatedUserId;
+        uid ??= AuthenticatedUserId;
         return groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)).Select(p => p.GroupUserUID);
     }
 
@@ -157,11 +158,11 @@ public partial class MareHub : Hub
         if (groupPairs.Any())
         {
             var groupPairsWithoutUserPairs = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
-            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.UserUID).Concat(groupPairsWithoutUserPairs).ToList();
+            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.OtherUserUID).Concat(groupPairsWithoutUserPairs).ToList();
         }
         else
         {
-            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.UserUID).ToList();
+            return userPairs.Where(u => !u.UserPausedOther && !u.OtherPausedUser).Select(u => u.OtherUserUID).ToList();
         }
     }
 
@@ -172,7 +173,8 @@ public partial class MareHub : Hub
             && (includePaused || (!includePaused && !g.IsPaused))).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
         if (ownGroups.Any())
         {
-            return await _dbContext.GroupPairs.Where(p => p.GroupUserUID != uid && ownGroups.Contains(p.GroupGID)).DistinctBy(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
+            var result = await _dbContext.GroupPairs.Where(p => p.GroupUserUID != uid && ownGroups.Contains(p.GroupGID)).ToListAsync().ConfigureAwait(false);
+            return result.DistinctBy(g => g.GroupUserUID).ToList();
         }
 
         return new List<GroupPair>();

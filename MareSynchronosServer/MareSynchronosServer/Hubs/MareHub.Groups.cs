@@ -5,6 +5,7 @@ using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -18,18 +19,20 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupCreate)]
     public async Task<GroupCreatedDto> CreateGroup()
     {
+        _logger.LogInformation("User {user} creating group", AuthenticatedUserId);
         var existingGroupsByUser = _dbContext.Groups.Count(u => u.OwnerUID == AuthenticatedUserId);
-        if (existingGroupsByUser >= 3)
+        var existingJoinedGroups = _dbContext.GroupPairs.Count(u => u.GroupUserUID == AuthenticatedUserId);
+        if (existingGroupsByUser >= 3 || existingJoinedGroups >= 6)
         {
-            throw new System.Exception("Max groups for user is 3");
+            throw new System.Exception("Max groups for user is 3, max joined groups is 6");
         }
 
         var gid = StringUtils.GenerateRandomString(12);
-        while (await _dbContext.Groups.AnyAsync(g => g.GID == "G-" + gid).ConfigureAwait(false))
+        while (await _dbContext.Groups.AnyAsync(g => g.GID == "MSS-" + gid).ConfigureAwait(false))
         {
             gid = StringUtils.GenerateRandomString(12);
         }
-        gid = "G-" + gid;
+        gid = "MSS-" + gid;
 
         var passwd = StringUtils.GenerateRandomString(16);
         var sha = SHA256.Create();
@@ -65,6 +68,8 @@ public partial class MareHub
             InvitesEnabled = true
         });
 
+        _logger.LogInformation("User {user} created group: {groupid}", AuthenticatedUserId, gid);
+
         return new GroupCreatedDto()
         {
             GID = newGroup.GID,
@@ -76,7 +81,9 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupGetGroups)]
     public async Task<List<GroupDto>> GetGroups()
     {
-        var groups = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
+        _logger.LogInformation("User {user} requesting groups", AuthenticatedUserId);
+
+        var groups = await _dbContext.GroupPairs.Include(g => g.Group).Include(g => g.Group.Owner).Where(g => g.GroupUserUID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
 
         return groups.Select(g => new GroupDto()
         {
@@ -92,11 +99,13 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupGetUsersInGroup)]
     public async Task<List<GroupPairDto>> GetUsersInGroup(string gid)
     {
+        _logger.LogInformation("User {user} requesting users in group {gid}", AuthenticatedUserId, gid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         var existingPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         if (group == null || existingPair == null) return new List<GroupPairDto>();
 
-        var allPairs = await _dbContext.GroupPairs.Where(g => g.GroupGID == gid && g.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
+        var allPairs = await _dbContext.GroupPairs.Include(g => g.GroupUser).Where(g => g.GroupGID == gid && g.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
         return allPairs.Select(p => new GroupPairDto()
         {
             GroupGID = gid,
@@ -132,6 +141,8 @@ public partial class MareHub
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || group.OwnerUID != AuthenticatedUserId) return;
 
+        _logger.LogInformation("User {uid} deleted {gid}", AuthenticatedUserId, gid);
+
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).ToListAsync().ConfigureAwait(false);
         await Clients.Users(groupPairs.Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
         {
@@ -141,10 +152,10 @@ public partial class MareHub
 
         foreach (var pair in groupPairs)
         {
-            var ownUserPairs = await GetAllUserPairs(pair.GroupUserUID);
-            var sendOfflineTo = GetGroupUsersNotInUserPairs(ownUserPairs, groupPairs);
-            var selfIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
-            await Clients.Users(sendOfflineTo).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, selfIdent).ConfigureAwait(false);
+            var groupUserPairs = await GetAllUserPairs(pair.GroupUserUID);
+            var groupUserPairsNotInPrivatePairs = GetGroupUsersNotInUserPairs(groupUserPairs, groupPairs, pair.GroupUserUID).Where(f => f != pair.GroupUserUID).ToList();
+            var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
+            await Clients.Users(groupUserPairsNotInPrivatePairs).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
         }
 
         _dbContext.RemoveRange(groupPairs);
@@ -153,19 +164,17 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendGroupJoin)]
-    public async Task GroupJoin(string gid, string password)
+    [HubMethodName(Api.InvokeGroupJoin)]
+    public async Task<bool> GroupJoin(string gid, string password)
     {
-        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
+        _logger.LogInformation("User {user} attempting to join group {gid}", AuthenticatedUserId, gid);
+        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);
         var existingPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         var hashedPw = StringUtils.Sha256String(password);
-        if (group == null || !group.InvitesEnabled || group.HashedPassword != hashedPw || existingPair != null) return;
-
         var existingUserCount = await _dbContext.GroupPairs.CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
-        if (existingUserCount >= 100)
-        {
-            throw new System.Exception("Group is full");
-        }
+        var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
+        if (group == null || group.HashedPassword != hashedPw || existingPair != null || existingUserCount >= 100 || !group.InvitesEnabled || joinedGroups >= 6)
+            return false;
 
         GroupPair newPair = new()
         {
@@ -176,10 +185,12 @@ public partial class MareHub
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        _logger.LogInformation("User {user} successfully joined group {gid}", AuthenticatedUserId, gid);
+
         await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = group.GID,
-            OwnedBy = AuthenticatedUserId,
+            OwnedBy = group.OwnerUID,
             IsDeleted = false,
             IsPaused = false,
             InvitesEnabled = true
@@ -199,13 +210,25 @@ public partial class MareHub
 
         var userPairs = await GetAllUserPairs(AuthenticatedUserId);
         var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
+        await Clients.Users(otherUsers).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in otherUsers)
+        {
+            var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(ident))
+            {
+                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, ident);
+            }
+        }
+
+        return true;
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     [HubMethodName(Api.SendGroupLeave)]
     public async Task GroupLeave(string gid)
     {
+        _logger.LogInformation("User {user} leaving group {gid}", AuthenticatedUserId, gid);
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         if (groupPair == null) return;
 
@@ -213,17 +236,20 @@ public partial class MareHub
 
         _dbContext.GroupPairs.Remove(groupPair);
 
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).ToListAsync().ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID && p.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
 
-        if (groupPair.GroupUserUID == AuthenticatedUserId)
+        if (group.OwnerUID == AuthenticatedUserId)
         {
-            var newOwner = await _dbContext.GroupPairs.FirstOrDefaultAsync(g => g.GroupGID == gid).ConfigureAwait(false);
+            var newOwner = await _dbContext.GroupPairs.FirstOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID != AuthenticatedUserId).ConfigureAwait(false);
             if (newOwner == null)
             {
+                _logger.LogInformation("Group {gid} has no new owner, deleting", gid);
                 _dbContext.Remove(group);
             }
             else
             {
+                _logger.LogInformation("Group {gid} has new owner {uid}", gid, newOwner.GroupUserUID);
+
                 group.OwnerUID = newOwner.GroupUserUID;
 
                 await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
@@ -236,6 +262,8 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        _logger.LogInformation("User {user} left group {gid}", AuthenticatedUserId, gid);
+
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = group.GID,
@@ -243,9 +271,24 @@ public partial class MareHub
             UserUID = AuthenticatedUserId,
         });
 
+        await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
+        {
+            GID = group.GID,
+            IsDeleted = true
+        });
+
         var userPairs = await GetAllUserPairs(AuthenticatedUserId);
         var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
+        await Clients.Users(otherUsers).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in otherUsers)
+        {
+            var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(ident))
+            {
+                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident);
+            }
+        }
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -258,7 +301,7 @@ public partial class MareHub
         groupPair.IsPaused = isPaused;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).ToListAsync();
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.GroupUserUID != AuthenticatedUserId).ToListAsync();
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = gid,
@@ -274,7 +317,16 @@ public partial class MareHub
 
         var userPairs = await GetAllUserPairs(AuthenticatedUserId);
         var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
+        await Clients.Users(otherUsers).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in otherUsers)
+        {
+            var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(ident))
+            {
+                await Clients.User(AuthenticatedUserId).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, ident);
+            }
+        }
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -302,7 +354,7 @@ public partial class MareHub
         if (userIdent == null) return;
 
         // send offline state to everyone
-        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs, uid)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
 
         await Clients.User(uid).SendAsync(Api.OnGroupChange, new GroupDto()
         {
@@ -345,10 +397,13 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupChangePassword)]
     public async Task<bool> ChangeGroupPassword(string gid, string password)
     {
+        _logger.LogInformation("User {user} attempts to change password for {gid}", AuthenticatedUserId, gid);
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || group.OwnerUID != AuthenticatedUserId) return false;
 
         if (password.Length < 10) return false;
+
+        _logger.LogInformation("User {user} changed password for {gid}", AuthenticatedUserId, gid);
 
         group.HashedPassword = StringUtils.Sha256String(password);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);

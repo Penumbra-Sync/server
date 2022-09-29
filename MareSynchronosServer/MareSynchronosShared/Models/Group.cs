@@ -5,7 +5,7 @@ namespace MareSynchronosShared.Models;
 public class Group
 {
     [Key]
-    [MaxLength(14)]
+    [MaxLength(20)]
     public string GID { get; set; }
     public string OwnerUID { get; set; }
     public User Owner { get; set; }

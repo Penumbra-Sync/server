@@ -70,7 +70,7 @@ public partial class MareHub
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
         var usersToSendOnlineTo = await SendDataToAllPairedUsers(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e)).Select(t => t.Result).Distinct().ToList();
+        return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e)).Select(t => t.Result).Where(t => !string.IsNullOrEmpty(t)).Distinct().ToList();
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -120,6 +120,7 @@ public partial class MareHub
         _logger.LogInformation("User {AuthenticatedUserId} pushing character data to {visibleCharacterIds} visible clients", AuthenticatedUserId, visibleCharacterIds.Count);
 
         var allPairedUsers = await GetAllNotPausedPairedOrGroupedUsers().ConfigureAwait(false);
+
         var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, async f => await _clientIdentService.GetCharacterIdentForUid(f))
             .Where(f => visibleCharacterIds.Contains(f.Value.Result));
 
@@ -293,7 +294,9 @@ public partial class MareHub
         var userGroupPairs = await GetGroupPairs().ConfigureAwait(false);
         bool isInCallerGroup = userGroupPairs.Any(u => u.GroupUserUID == otherUserUid);
         var otherUserGroupPairs = await GetGroupPairs(otherUserUid).ConfigureAwait(false);
-        bool isInOtherUserGroup = userGroupPairs.Any(u => u.GroupUserUID == AuthenticatedUserId);
+        bool isInOtherUserGroup = otherUserGroupPairs.Any(u => u.GroupUserUID == AuthenticatedUserId);
+
+        _logger.LogInformation("CalledHadPaused:{p1}, OtherHadPaused:{p2}, IsInCallerGroup:{g1}, IsInOtherGroup:{g2}", callerHadPaused, otherHadPaused, isInCallerGroup, isInOtherUserGroup);
 
         // if neither user had paused each other and both are in unpaused groups, state will be online for both, do nothing
         if (!callerHadPaused && !otherHadPaused && isInCallerGroup && isInOtherUserGroup) return;
