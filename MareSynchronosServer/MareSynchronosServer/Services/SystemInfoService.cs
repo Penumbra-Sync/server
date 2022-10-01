@@ -42,7 +42,7 @@ public class SystemInfoService : IHostedService, IDisposable
     private void PushSystemInfo(object state)
     {
         ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
-        _logger.LogInformation("ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available", workerThreads, ioThreads);
+        //_logger.LogInformation("ThreadPool: {workerThreads} workers available, {ioThreads} IO workers available", workerThreads, ioThreads);
 
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);

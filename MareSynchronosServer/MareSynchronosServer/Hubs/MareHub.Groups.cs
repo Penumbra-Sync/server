@@ -152,10 +152,12 @@ public partial class MareHub
 
         foreach (var pair in groupPairs)
         {
-            var groupUserPairs = await GetAllUserPairs(pair.GroupUserUID);
-            var groupUserPairsNotInPrivatePairs = GetGroupUsersNotInUserPairs(groupUserPairs, groupPairs, pair.GroupUserUID).Where(f => f != pair.GroupUserUID).ToList();
-            var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
-            await Clients.Users(groupUserPairsNotInPrivatePairs).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+            var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID);
+            if (users.Any())
+            {
+                var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
+                await Clients.Users(users).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+            }
         }
 
         _dbContext.RemoveRange(groupPairs);
@@ -208,11 +210,15 @@ public partial class MareHub
             UserAlias = self.Alias
         });
 
-        var userPairs = await GetAllUserPairs(AuthenticatedUserId);
+        var allUserPairs = await GetAllPairedClientsWithPauseState();
+
+        var groupUsersPausedInAnyOtherGroup = GetGroupUsersPausedInAnyOtherGroup(allUserPairs, groupPairs);
+
+        if (!groupUsersPausedInAnyOtherGroup.Any()) return true;
+
         var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
-        await Clients.Users(otherUsers).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
-        foreach (var user in otherUsers)
+        await Clients.Users(groupUsersPausedInAnyOtherGroup).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in groupUsersPausedInAnyOtherGroup)
         {
             var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(ident))
@@ -234,9 +240,9 @@ public partial class MareHub
 
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
 
-        _dbContext.GroupPairs.Remove(groupPair);
-
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID && p.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
+
+        _dbContext.GroupPairs.Remove(groupPair);
 
         if (group.OwnerUID == AuthenticatedUserId)
         {
@@ -277,11 +283,15 @@ public partial class MareHub
             IsDeleted = true
         });
 
-        var userPairs = await GetAllUserPairs(AuthenticatedUserId);
+        var allUserPairs = await GetAllPairedClientsWithPauseState();
+
+        var groupUsersNotPausedInAnyOtherGroup = GetGroupUsersNotUnpausedInAnyOtherGroup(allUserPairs, groupPairs);
+
+        if (!groupUsersNotPausedInAnyOtherGroup.Any()) return;
+
         var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
-        await Clients.Users(otherUsers).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
-        foreach (var user in otherUsers)
+        await Clients.Users(groupUsersNotPausedInAnyOtherGroup).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in groupUsersNotPausedInAnyOtherGroup)
         {
             var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(ident))
@@ -315,18 +325,74 @@ public partial class MareHub
             IsPaused = isPaused
         });
 
-        var userPairs = await GetAllUserPairs(AuthenticatedUserId);
-        var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        var otherUsers = GetGroupUsersNotInUserPairs(userPairs, groupPairs);
-        await Clients.Users(otherUsers).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
-        foreach (var user in otherUsers)
+        var allUserPairs = await GetAllPairedClientsWithPauseState();
+
+        if (isPaused)
         {
-            var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(ident))
+
+            var groupUsersNotPausedInAnyOtherGroup = GetGroupUsersNotUnpausedInAnyOtherGroup(allUserPairs, groupPairs);
+
+            if (groupUsersNotPausedInAnyOtherGroup.Any())
             {
-                await Clients.User(AuthenticatedUserId).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, ident);
+                var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+                await Clients.Users(groupUsersNotPausedInAnyOtherGroup).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+                foreach (var user in groupUsersNotPausedInAnyOtherGroup)
+                {
+                    var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(ident))
+                    {
+                        await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident);
+                    }
+                }
             }
         }
+        else
+        {
+            var groupUsersPausedInAnyOtherGroup = GetGroupUsersPausedInAnyOtherGroup(allUserPairs, groupPairs);
+
+            if (groupUsersPausedInAnyOtherGroup.Any())
+            {
+                var clientIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+                await Clients.Users(groupUsersPausedInAnyOtherGroup).SendAsync(Api.OnUserAddOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+                foreach (var user in groupUsersPausedInAnyOtherGroup)
+                {
+                    var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(ident))
+                    {
+                        await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, ident);
+                    }
+                }
+            }
+        }
+    }
+
+    private List<string> GetGroupUsersNotUnpausedInAnyOtherGroup(List<PausedEntry> allUserPairs, List<GroupPair> groupPairs)
+    {
+        return groupPairs
+            .Where(g => !allUserPairs.Any(p => p.UID == g.GroupUserUID && p.IsDirectlyPaused != PauseInfo.NoConnection))
+            .Where(g => !allUserPairs.Any(p => p.UID == g.GroupUserUID && p.IsPausedExcludingGroup(g.GroupGID) == PauseInfo.Unpaused))
+            .Select(p => p.GroupUserUID).ToList();
+    }
+
+    private List<string> GetGroupUsersPausedInAnyOtherGroup(List<PausedEntry> allUserPairs, List<GroupPair> groupPairs)
+    {
+        var groupUsersNotDirectConnected = groupPairs
+            .Where(g => !allUserPairs.Any(p => p.UID == g.GroupUserUID && p.IsDirectlyPaused != PauseInfo.NoConnection)).ToList();
+        List<string> groupUsersPausedInAnyOtherGroup = new();
+        foreach (var item in groupUsersNotDirectConnected)
+        {
+            foreach (var pair in allUserPairs)
+            {
+                _logger.LogInformation("{uid} pausedPerGroup: {group} pausedExcluding: {exclude}", pair.UID, pair.IsPausedPerGroup, pair.IsPausedExcludingGroup(item.GroupGID));
+                if (pair.UID == item.GroupUserUID && pair.IsPausedPerGroup is PauseInfo.Unpaused && pair.IsPausedExcludingGroup(item.GroupGID) is PauseInfo.Paused or PauseInfo.NoConnection)
+                {
+                    groupUsersPausedInAnyOtherGroup.Add(item.GroupUserUID);
+                    break;
+                }
+            }
+        }
+
+        return groupUsersPausedInAnyOtherGroup;
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -349,12 +415,8 @@ public partial class MareHub
             UserUID = uid,
         });
 
-        var userPairs = await GetAllUserPairs(uid);
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(uid).ConfigureAwait(false);
         if (userIdent == null) return;
-
-        // send offline state to everyone
-        await Clients.Users(GetGroupUsersNotInUserPairs(userPairs, groupPairs, uid)).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
 
         await Clients.User(uid).SendAsync(Api.OnGroupChange, new GroupDto()
         {
@@ -362,10 +424,18 @@ public partial class MareHub
             IsDeleted = true,
         });
 
-        foreach (var item in groupPairs.Where(a => !a.IsPaused && a.GroupUserUID != uid && !userPairs.Any(p => p.OtherUserUID == a.GroupUserUID)))
+        var allUserPairs = await GetAllPairedClientsWithPauseState(uid);
+
+        var groupUsersNotPausedInAnyOtherGroup = GetGroupUsersNotUnpausedInAnyOtherGroup(allUserPairs, groupPairs);
+
+        if (!groupUsersNotPausedInAnyOtherGroup.Any()) return;
+
+        var clientIdent = await _clientIdentService.GetCharacterIdentForUid(uid).ConfigureAwait(false);
+        await Clients.Users(groupUsersNotPausedInAnyOtherGroup).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, clientIdent).ConfigureAwait(false);
+        foreach (var user in groupUsersNotPausedInAnyOtherGroup)
         {
-            var ident = await _clientIdentService.GetCharacterIdentForUid(item.GroupUserUID).ConfigureAwait(false);
-            if (ident != null)
+            var ident = await _clientIdentService.GetCharacterIdentForUid(user).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(ident))
             {
                 await Clients.User(uid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident);
             }
