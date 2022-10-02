@@ -3,11 +3,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Hubs;
-using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

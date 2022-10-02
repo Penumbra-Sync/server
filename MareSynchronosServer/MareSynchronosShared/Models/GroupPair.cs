@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace MareSynchronosShared.Models;
+﻿namespace MareSynchronosShared.Models;
 
 public class GroupPair
 {
@@ -13,4 +7,5 @@ public class GroupPair
     public string GroupUserUID { get; set; }
     public User GroupUser { get; set; }
     public bool IsPaused { get; set; }
+    public bool IsPinned { get; set; }
 }

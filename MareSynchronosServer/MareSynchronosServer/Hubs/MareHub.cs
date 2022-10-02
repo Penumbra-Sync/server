@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Metadata.Ecma335;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
@@ -19,7 +17,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -166,7 +163,8 @@ public partial class MareHub : Hub
     {
         uid ??= AuthenticatedUserId;
         var result = await GetAllPairedClientsWithPauseState(uid).ConfigureAwait(false);
-        return result.Where(p => p.IsPausedExcludingGroup(excludedGid) == PauseInfo.Unpaused).Select(p => p.UID).ToList();
+        return result.Where(p => p.IsDirectlyPaused is PauseInfo.NoConnection or PauseInfo.Unpaused &&
+            p.IsPausedExcludingGroup(excludedGid) == PauseInfo.Unpaused).Select(p => p.UID).ToList();
     }
 
     private async Task<List<string>> GetAllPairedUnpausedUsers(string? uid = null)
@@ -174,29 +172,6 @@ public partial class MareHub : Hub
         uid ??= AuthenticatedUserId;
         var ret = await GetAllPairedClientsWithPauseState(uid).ConfigureAwait(false);
         return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
-    }
-
-    private async Task<List<UserPair>> GetAllUserPairs(string uid, bool includePaused = true)
-    {
-        var query =
-            from userToOther in _dbContext.ClientPairs
-            join otherToUser in _dbContext.ClientPairs
-                on new
-                {
-                    user = userToOther.UserUID,
-                    other = userToOther.OtherUserUID
-
-                } equals new
-                {
-                    user = otherToUser.OtherUserUID,
-                    other = otherToUser.UserUID
-                }
-            where
-                userToOther.UserUID == uid
-                && (includePaused || (!includePaused && !userToOther.IsPaused && !otherToUser.IsPaused))
-            select new UserPair { UserUID = userToOther.UserUID, OtherUserUID = otherToUser.UserUID, UserPausedOther = userToOther.IsPaused, OtherPausedUser = otherToUser.IsPaused };
-
-        return await query.ToListAsync().ConfigureAwait(false);
     }
 
     private async Task<List<string>> SendDataToAllPairedUsers(string apiMethod, object arg)

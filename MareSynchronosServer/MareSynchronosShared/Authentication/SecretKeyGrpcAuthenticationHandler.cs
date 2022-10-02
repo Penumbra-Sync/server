@@ -1,14 +1,9 @@
 ﻿using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Encodings.Web;
 using MareSynchronosServer;
-using MareSynchronosShared.Data;
-using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ISystemClock = Microsoft.AspNetCore.Authentication.ISystemClock;

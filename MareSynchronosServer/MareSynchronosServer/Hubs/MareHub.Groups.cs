@@ -50,7 +50,8 @@ public partial class MareHub
         {
             GroupGID = newGroup.GID,
             GroupUserUID = AuthenticatedUserId,
-            IsPaused = false
+            IsPaused = false,
+            IsPinned = true
         };
 
         await _dbContext.Groups.AddAsync(newGroup).ConfigureAwait(false);
@@ -112,7 +113,8 @@ public partial class MareHub
             IsPaused = p.IsPaused,
             IsRemoved = false,
             UserUID = p.GroupUser.UID,
-            UserAlias = p.GroupUser.Alias
+            UserAlias = p.GroupUser.Alias,
+            IsPinned = p.IsPinned
         }).ToList();
     }
 
@@ -153,7 +155,7 @@ public partial class MareHub
         foreach (var pair in groupPairs)
         {
             var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID);
-            if (users.Any())
+            if (!users.Any())
             {
                 var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
                 await Clients.Users(users).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
@@ -207,7 +209,8 @@ public partial class MareHub
             IsPaused = false,
             IsRemoved = false,
             UserUID = AuthenticatedUserId,
-            UserAlias = self.Alias
+            UserAlias = self.Alias,
+            IsPinned = false
         });
 
         var allUserPairs = await GetAllPairedClientsWithPauseState();
@@ -479,6 +482,54 @@ public partial class MareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return true;
+    }
+
+    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [HubMethodName(Api.SendGroupChangePinned)]
+    public async Task ChangePinned(string gid, string uid, bool isPinned)
+    {
+        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
+        if (group != null || group.OwnerUID != AuthenticatedUserId) return;
+        var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
+        if (groupPair == null) return;
+
+        groupPair.IsPinned = isPinned;
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
+
+        await Clients.Users(groupPairs).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+        {
+            GroupGID = gid,
+            UserUID = uid,
+            IsPinned = isPinned
+        }).ConfigureAwait(false);
+    }
+
+    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [HubMethodName(Api.SendGroupClear)]
+    public async Task ClearGroup(string gid)
+    {
+        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
+        if (group != null || group.OwnerUID != AuthenticatedUserId) return;
+
+        var notPinnedPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.IsPinned == false).ToListAsync().ConfigureAwait(false);
+
+        await Clients.Users(notPinnedPairs.Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
+        {
+            GID = group.GID,
+            IsDeleted = true,
+        });
+
+        foreach (var pair in notPinnedPairs)
+        {
+            var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID);
+            if (!users.Any())
+            {
+                var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
+                await Clients.Users(users).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+            }
+        }
     }
 
     private record UserPair
