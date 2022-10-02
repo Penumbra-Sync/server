@@ -79,8 +79,7 @@ public partial class MareHub : Hub
             return new ConnectionDto
             {
                 ServerVersion = Api.Version,
-                UID = user.UID,
-                Alias = user.Alias,
+                UID = string.IsNullOrEmpty(user.Alias) ? user.UID : user.Alias,
                 IsModerator = user.IsModerator,
                 IsAdmin = user.IsAdmin
             };
@@ -149,14 +148,8 @@ public partial class MareHub : Hub
                                  })
                             ).ToListAsync().ConfigureAwait(false);
 
-        var result = query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
+        return query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
             (key, g) => new PausedEntry { UID = key, PauseStates = g.Select(p => new PauseState() { GID = p.GID == "DIRECT" ? null : p.GID, IsPaused = p.PauseState }).ToList() }).ToList();
-        _logger.LogInformation("{id} getallpairedclientswithpausestate", uid);
-        foreach (var entry in result)
-        {
-            _logger.LogInformation("{id}: {uid}, direct: {direct}, group: {group}, overall: {paused}", uid, entry.UID, entry.IsDirectlyPaused, entry.IsPausedPerGroup, entry.IsPaused);
-        }
-        return result;
     }
 
     private async Task<List<string>> GetUnpausedUsersExcludingGroup(string excludedGid, string? uid = null)
@@ -221,6 +214,13 @@ public record PausedEntry
 
             return result;
         }
+    }
+
+    public PauseInfo IsPausedForSpecificGroup(string gid)
+    {
+        var state = pauseStatesWithoutDirect.SingleOrDefault(g => g.GID == gid);
+        if (state == null) return PauseInfo.NoConnection;
+        return state.IsPaused ? PauseInfo.Paused : PauseInfo.NoConnection;
     }
 
     public PauseInfo IsPausedExcludingGroup(string gid)

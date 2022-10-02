@@ -27,6 +27,7 @@ public partial class MareHub
         var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync().ConfigureAwait(false);
         var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid).ConfigureAwait(false);
         var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid).ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == userid).ToListAsync().ConfigureAwait(false);
 
         if (lodestone != null)
         {
@@ -52,6 +53,16 @@ public partial class MareHub
                     OtherUID = userid,
                     IsRemoved = true
                 }, charaIdent).ConfigureAwait(false);
+        }
+
+        foreach (var pair in groupPairs)
+        {
+            await Clients.User(pair.GroupUserUID).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+            {
+                GroupGID = pair.GroupGID,
+                IsRemoved = true,
+                UserUID = userid
+            });
         }
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
