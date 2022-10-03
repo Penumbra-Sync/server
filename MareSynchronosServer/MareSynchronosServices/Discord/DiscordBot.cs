@@ -169,7 +169,7 @@ public class DiscordBot : IHostedService
             }
         }
 
-        Regex rgx = new(@"[_\-a-zA-Z0-9]{10}", RegexOptions.ECMAScript);
+        Regex rgx = new(@"[_\-a-zA-Z0-9]{5,20}", RegexOptions.ECMAScript);
         if (!rgx.Match(newGid).Success || newGid.Length < 5 || newGid.Length > 20)
         {
             eb.WithTitle("Failed to set Vanity Syncshell Id");
@@ -236,11 +236,11 @@ public class DiscordBot : IHostedService
             }
         }
 
-        Regex rgx = new(@"[_\-a-zA-Z0-9]{10}", RegexOptions.ECMAScript);
-        if (!rgx.Match(newUid).Success || newUid.Length != 10)
+        Regex rgx = new(@"[_\-a-zA-Z0-9]{5,15}", RegexOptions.ECMAScript);
+        if (!rgx.Match(newUid).Success || newUid.Length < 5 || newUid.Length > 15)
         {
             eb.WithTitle("Failed to set Vanity UID");
-            eb.WithDescription("The Vanity UID must be 10 characters long and only contain letters A-Z, numbers 0-9, as well as - and _.");
+            eb.WithDescription("The Vanity UID must be between 5 and 20 characters and only contain letters A-Z, numbers 0-9, as well as - and _.");
             return eb;
         }
 
