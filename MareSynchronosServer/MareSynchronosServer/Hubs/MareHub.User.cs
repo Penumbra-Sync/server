@@ -58,12 +58,7 @@ public partial class MareHub
 
         foreach (var pair in groupPairs)
         {
-            await Clients.User(pair.GroupUserUID).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
-            {
-                GroupGID = pair.GroupGID,
-                IsRemoved = true,
-                UserUID = userid
-            }).ConfigureAwait(false);
+            await GroupLeave(pair.GroupGID).ConfigureAwait(false);
         }
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);

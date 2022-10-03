@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using System.Globalization;
 using MareSynchronos.API;
 using MareSynchronosServer.Utils;
+using System.Security.Claims;
 
 namespace MareSynchronosServer.Hubs;
 

@@ -1,6 +1,7 @@
 ﻿using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Data;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
@@ -247,57 +248,39 @@ public partial class MareHub
         _dbContext.GroupPairs.Remove(groupPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        bool groupHasMigrated = false;
         bool ownerHasLeft = string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal);
         if (ownerHasLeft)
         {
-            var groupUsers = await _dbContext.GroupPairs.Include(g => g.GroupUser).Where(g => g.GroupGID == gid && g.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
-            if (!groupUsers.Any())
+            if (!groupPairs.Any())
             {
                 _logger.LogInformation("Group {gid} has no new owner, deleting", gid);
                 _dbContext.Remove(group);
             }
             else
             {
-                foreach (var potentialNewOwner in groupUsers)
-                {
-                    var newOwnerOwnedGroups = await _dbContext.Groups.CountAsync(g => g.OwnerUID == potentialNewOwner.GroupUserUID).ConfigureAwait(false);
-                    if (newOwnerOwnedGroups >= _maxExistingGroupsByUser)
-                    {
-                        continue;
-                    }
-                    groupHasMigrated = true;
-                    group.OwnerUID = potentialNewOwner.GroupUserUID;
-                    group.Alias = string.Empty;
-                    _logger.LogInformation("Group {gid} has new owner {uid}", gid, potentialNewOwner.GroupUserUID);
+                var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(_dbContext, group, groupPairs, _maxExistingGroupsByUser).ConfigureAwait(false);
 
+                if (groupHasMigrated.Item1)
+                {
                     await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
-                        OwnedBy = potentialNewOwner.GroupUserUID,
-                        Alias = group.Alias
+                        OwnedBy = groupHasMigrated.Item2,
+                        Alias = string.Empty
                     }).ConfigureAwait(false);
                 }
-
-                if (!groupHasMigrated)
+                else
                 {
-                    _logger.LogInformation("Group {gid} has no new owner, removing group", gid);
-
-                    _dbContext.GroupPairs.RemoveRange(groupUsers);
-                    _dbContext.Groups.Remove(group);
-
-                    await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
                     await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
                         IsDeleted = true
                     }).ConfigureAwait(false);
 
-                    await SendGroupDeletedToAll(groupUsers).ConfigureAwait(false);
-
-                    return;
+                    await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
                 }
+
+                return;
             }
         }
 
@@ -427,6 +410,8 @@ public partial class MareHub
         groupPair.IsPinned = true;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        _logger.LogInformation("{uid} changed ownership of {gid} to {otheruser}", AuthenticatedUserId, gid, uid);
+
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
 
         await Clients.Users(groupPairs).SendAsync(Api.OnGroupChange, new GroupDto()
@@ -499,6 +484,8 @@ public partial class MareHub
             GID = group.GID,
             IsDeleted = true,
         }).ConfigureAwait(false);
+
+        _logger.LogInformation("{uid} is clearing group {gid}", AuthenticatedUserId, gid);
 
         var notPinned = groupPairs.Where(g => !g.IsPinned).ToList();
 
