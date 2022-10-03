@@ -804,7 +804,7 @@ public class DiscordBot : IHostedService
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
-            var onlineUsers = clientService.GetOnlineUsers();
+            var onlineUsers = await clientService.GetOnlineUsers();
             logger.LogInformation("Users online: " + onlineUsers);
             await discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);

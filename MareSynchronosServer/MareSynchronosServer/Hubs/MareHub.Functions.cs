@@ -23,7 +23,7 @@ public partial class MareHub
                            where otherUserPair.OtherUserUID == uid && userPair.UserUID == uid
                            select new
                            {
-                               UID = Convert.ToString(userPair.OtherUserUID, CultureInfo.InvariantCulture),
+                               UID = Convert.ToString(userPair.OtherUserUID),
                                GID = "DIRECT",
                                PauseState = (userPair.IsPaused || otherUserPair.IsPaused)
                            })
@@ -35,8 +35,8 @@ public partial class MareHub
                                      && otherGroupPair.GroupUserUID != uid
                                  select new
                                  {
-                                     UID = Convert.ToString(otherGroupPair.GroupUserUID, CultureInfo.InvariantCulture),
-                                     GID = Convert.ToString(otherGroupPair.GroupGID, CultureInfo.InvariantCulture),
+                                     UID = Convert.ToString(otherGroupPair.GroupUserUID),
+                                     GID = Convert.ToString(otherGroupPair.GroupGID),
                                      PauseState = (userGroupPair.IsPaused || otherGroupPair.IsPaused)
                                  })
                             ).ToListAsync().ConfigureAwait(false);
