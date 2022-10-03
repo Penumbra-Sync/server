@@ -71,7 +71,7 @@ public partial class MareHub
             IsDeleted = false,
             IsPaused = false,
             InvitesEnabled = true
-        });
+        }).ConfigureAwait(false);
 
         _logger.LogInformation("User {user} created group: {groupid}", AuthenticatedUserId, gid);
 
@@ -127,17 +127,17 @@ public partial class MareHub
     public async Task GroupChangeInviteState(string gid, bool enabled)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
         group.InvitesEnabled = enabled;
-        await _dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToList();
         await Clients.Users(groupPairs).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = gid,
             InvitesEnabled = enabled,
-        });
+        }).ConfigureAwait(false);
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -145,7 +145,7 @@ public partial class MareHub
     public async Task GroupDelete(string gid)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
         _logger.LogInformation("User {uid} deleted {gid}", AuthenticatedUserId, gid);
 
@@ -154,11 +154,11 @@ public partial class MareHub
         {
             GID = group.GID,
             IsDeleted = true,
-        });
+        }).ConfigureAwait(false);
 
         foreach (var pair in groupPairs)
         {
-            var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID);
+            var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID).ConfigureAwait(false);
             if (!users.Any())
             {
                 var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
@@ -181,7 +181,7 @@ public partial class MareHub
         var hashedPw = StringUtils.Sha256String(password);
         var existingUserCount = await _dbContext.GroupPairs.CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
         var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
-        if (group == null || group.HashedPassword != hashedPw || existingPair != null || existingUserCount >= 100 || !group.InvitesEnabled || joinedGroups >= MaxJoinedGroupsByUser)
+        if (group == null || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal) || existingPair != null || existingUserCount >= 100 || !group.InvitesEnabled || joinedGroups >= MaxJoinedGroupsByUser)
             return false;
 
         GroupPair newPair = new()
@@ -203,7 +203,7 @@ public partial class MareHub
             IsPaused = false,
             Alias = group.Alias,
             InvitesEnabled = true
-        });
+        }).ConfigureAwait(false);
 
         var self = _dbContext.Users.Single(u => u.UID == AuthenticatedUserId);
 
@@ -216,14 +216,14 @@ public partial class MareHub
             UserUID = AuthenticatedUserId,
             UserAlias = self.Alias,
             IsPinned = false
-        });
+        }).ConfigureAwait(false);
 
-        var allUserPairs = await GetAllPairedClientsWithPauseState();
+        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
         foreach (var groupUserPair in groupPairs)
         {
-            var userPair = allUserPairs.Single(p => p.UID == groupUserPair.GroupUserUID);
+            var userPair = allUserPairs.Single(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
             if (userPair.IsPausedExcludingGroup(gid) is PauseInfo.Unpaused) continue;
             if (userPair.IsPausedPerGroup is PauseInfo.Paused) continue;
@@ -231,8 +231,8 @@ public partial class MareHub
             var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, groupUserIdent);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserAddOnlinePairedPlayer, userIdent);
+                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserAddOnlinePairedPlayer, userIdent).ConfigureAwait(false);
             }
         }
 
@@ -255,7 +255,7 @@ public partial class MareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         bool groupHasMigrated = false;
-        bool ownerHasLeft = group.OwnerUID == AuthenticatedUserId;
+        bool ownerHasLeft = string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal);
         if (ownerHasLeft)
         {
             var groupUsers = await _dbContext.GroupPairs.Include(g => g.GroupUser).Where(g => g.GroupGID == gid && g.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
@@ -283,7 +283,7 @@ public partial class MareHub
                         GID = group.GID,
                         OwnedBy = potentialNewOwner.GroupUserUID,
                         Alias = group.Alias
-                    });
+                    }).ConfigureAwait(false);
                 }
 
                 if (!groupHasMigrated)
@@ -299,18 +299,18 @@ public partial class MareHub
                     {
                         GID = group.GID,
                         IsDeleted = true
-                    });
+                    }).ConfigureAwait(false);
 
                     foreach (var pair in groupUsers)
                     {
                         var pairIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(pairIdent)) continue;
 
-                        var pairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID);
+                        var pairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);
 
-                        foreach (var groupUserPair in groupUsers.Where(g => g.GroupUserUID != pair.GroupUserUID))
+                        foreach (var groupUserPair in groupUsers.Where(g => !string.Equals(g.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
                         {
-                            var userPair = pairs.SingleOrDefault(p => p.UID == groupUserPair.GroupUserUID);
+                            var userPair = pairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
                             if (userPair != null)
                             {
                                 if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
@@ -320,8 +320,8 @@ public partial class MareHub
                             var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
                             if (!string.IsNullOrEmpty(groupUserIdent))
                             {
-                                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent);
-                                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent);
+                                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent).ConfigureAwait(false);
                             }
                         }
                     }
@@ -339,20 +339,20 @@ public partial class MareHub
             GroupGID = group.GID,
             IsRemoved = true,
             UserUID = AuthenticatedUserId,
-        });
+        }).ConfigureAwait(false);
 
         await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = group.GID,
             IsDeleted = true
-        });
+        }).ConfigureAwait(false);
 
-        var allUserPairs = await GetAllPairedClientsWithPauseState();
+        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
         foreach (var groupUserPair in groupPairs)
         {
-            var userPair = allUserPairs.SingleOrDefault(p => p.UID == groupUserPair.GroupUserUID);
+            var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair != null)
             {
                 if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
@@ -362,8 +362,8 @@ public partial class MareHub
             var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent);
+                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
             }
         }
     }
@@ -378,26 +378,26 @@ public partial class MareHub
         groupPair.IsPaused = isPaused;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.GroupUserUID != AuthenticatedUserId).ToListAsync();
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = gid,
             IsPaused = isPaused,
             UserUID = AuthenticatedUserId,
-        });
+        }).ConfigureAwait(false);
 
         await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto
         {
             GID = gid,
             IsPaused = isPaused
-        });
+        }).ConfigureAwait(false);
 
-        var allUserPairs = await GetAllPairedClientsWithPauseState();
+        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
         foreach (var groupUserPair in groupPairs)
         {
-            var userPair = allUserPairs.SingleOrDefault(p => p.UID == groupUserPair.GroupUserUID);
+            var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair != null)
             {
                 if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
@@ -407,8 +407,8 @@ public partial class MareHub
             var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(AuthenticatedUserId).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, groupUserIdent);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, userIdent);
+                await Clients.User(AuthenticatedUserId).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).SendAsync(isPaused ? Api.OnUserRemoveOnlinePairedPlayer : Api.OnUserAddOnlinePairedPlayer, userIdent).ConfigureAwait(false);
             }
         }
     }
@@ -419,7 +419,7 @@ public partial class MareHub
     public async Task GroupRemoveUser(string gid, string uid)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
 
@@ -434,7 +434,7 @@ public partial class MareHub
             GroupGID = group.GID,
             IsRemoved = true,
             UserUID = uid,
-        });
+        }).ConfigureAwait(false);
 
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(uid).ConfigureAwait(false);
         if (userIdent == null) return;
@@ -443,15 +443,15 @@ public partial class MareHub
         {
             GID = gid,
             IsDeleted = true,
-        });
+        }).ConfigureAwait(false);
 
-        var allUserPairs = await GetAllPairedClientsWithPauseState(uid);
+        var allUserPairs = await GetAllPairedClientsWithPauseState(uid).ConfigureAwait(false);
 
         foreach (var groupUserPair in groupPairs)
         {
             _logger.LogInformation("checking what to send to {uid}", groupUserPair.GroupUserUID);
 
-            var userPair = allUserPairs.SingleOrDefault(p => p.UID == groupUserPair.GroupUserUID);
+            var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair != null)
             {
                 _logger.LogInformation("existing pair from {uid} to {groupuid} was not null", uid, groupUserPair.GroupUserUID);
@@ -463,8 +463,8 @@ public partial class MareHub
             var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent);
+                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
             }
         }
     }
@@ -474,7 +474,7 @@ public partial class MareHub
     public async Task ChangeOwnership(string gid, string uid)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.Include(g => g.GroupUser).SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
         var ownedShells = await _dbContext.Groups.CountAsync(g => g.OwnerUID == uid).ConfigureAwait(false);
@@ -494,14 +494,14 @@ public partial class MareHub
             GID = gid,
             OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
             Alias = string.Empty
-        });
+        }).ConfigureAwait(false);
 
-        await Clients.Users(groupPairs.Where(p => p != uid)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+        await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = gid,
             UserUID = uid,
             IsPinned = true
-        });
+        }).ConfigureAwait(false);
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -510,7 +510,7 @@ public partial class MareHub
     {
         _logger.LogInformation("User {user} attempts to change password for {gid}", AuthenticatedUserId, gid);
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return false;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return false;
 
         if (password.Length < 10) return false;
 
@@ -527,7 +527,7 @@ public partial class MareHub
     public async Task ChangePinned(string gid, string uid, bool isPinned)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
 
@@ -537,7 +537,7 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
 
-        await Clients.Users(groupPairs.Where(p => p != uid)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+        await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = gid,
             UserUID = uid,
@@ -550,7 +550,7 @@ public partial class MareHub
     public async Task ClearGroup(string gid)
     {
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
-        if (group == null || group.OwnerUID != AuthenticatedUserId) return;
+        if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).ToListAsync().ConfigureAwait(false);
 
@@ -558,7 +558,7 @@ public partial class MareHub
         {
             GID = group.GID,
             IsDeleted = true,
-        });
+        }).ConfigureAwait(false);
 
         var notPinned = groupPairs.Where(g => !g.IsPinned).ToList();
 
@@ -572,16 +572,16 @@ public partial class MareHub
                 GroupGID = pair.GroupGID,
                 IsRemoved = true,
                 UserUID = pair.GroupUserUID
-            });
+            }).ConfigureAwait(false);
 
             var pairIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
-            var allUserPairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID);
+            var allUserPairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);
 
-            foreach (var groupUserPair in groupPairs.Where(p => p.GroupUserUID != pair.GroupUserUID))
+            foreach (var groupUserPair in groupPairs.Where(p => !string.Equals(p.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
             {
-                var userPair = allUserPairs.SingleOrDefault(p => p.UID == groupUserPair.GroupUserUID);
+                var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
                 if (userPair != null)
                 {
                     if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
@@ -591,8 +591,8 @@ public partial class MareHub
                 var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(groupUserIdent))
                 {
-                    await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent);
-                    await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent);
+                    await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+                    await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent).ConfigureAwait(false);
                 }
             }
         }

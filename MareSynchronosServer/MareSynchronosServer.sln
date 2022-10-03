@@ -11,9 +11,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MareSynchronosServerTest", 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MareSynchronosShared", "MareSynchronosShared\MareSynchronosShared.csproj", "{67B1461D-E215-4BA8-A64D-E1836724D5E6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MareSynchronosStaticFilesServer", "MareSynchronosStaticFilesServer\MareSynchronosStaticFilesServer.csproj", "{3C7F43BB-FE4C-48BC-BF42-D24E70E8FCB7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MareSynchronosStaticFilesServer", "MareSynchronosStaticFilesServer\MareSynchronosStaticFilesServer.csproj", "{3C7F43BB-FE4C-48BC-BF42-D24E70E8FCB7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MareSynchronosServices", "MareSynchronosServices\MareSynchronosServices.csproj", "{E29C8677-AB44-4950-9EB1-D8E70B710A56}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MareSynchronosServices", "MareSynchronosServices\MareSynchronosServices.csproj", "{E29C8677-AB44-4950-9EB1-D8E70B710A56}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{7D5C2B87-5CC9-4FE7-AD13-4C13F6600683}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

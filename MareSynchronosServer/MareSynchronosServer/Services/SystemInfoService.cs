@@ -9,6 +9,7 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -23,9 +24,10 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
+    private string _shardName;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IServiceProvider services, IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         _services = services;
@@ -50,20 +52,12 @@ public class SystemInfoService : IHostedService, IDisposable
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
-
-
         var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
-        if (string.IsNullOrEmpty(secondaryServer) || secondaryServer == "0")
+        if (string.IsNullOrEmpty(secondaryServer) || string.Equals(secondaryServer, "0", StringComparison.Ordinal))
         {
             SystemInfoDto = new SystemInfoDto()
             {
-                CacheUsage = 0,
-                CpuUsage = 0,
-                RAMUsage = 0,
-                NetworkIn = 0,
-                NetworkOut = 0,
                 OnlineUsers = _clientIdentService.GetOnlineUsers().Result,
-                UploadedFiles = 0
             };
 
             _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
@@ -71,7 +65,6 @@ public class SystemInfoService : IHostedService, IDisposable
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            // todo: add db context and grab pairs
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.Count());
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.Count(p => p.IsPaused));
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.Count());

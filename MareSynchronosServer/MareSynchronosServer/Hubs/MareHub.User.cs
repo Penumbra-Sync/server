@@ -62,7 +62,7 @@ public partial class MareHub
                 GroupGID = pair.GroupGID,
                 IsRemoved = true,
                 UserUID = userid
-            });
+            }).ConfigureAwait(false);
         }
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
@@ -81,7 +81,7 @@ public partial class MareHub
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
         var usersToSendOnlineTo = await SendDataToAllPairedUsers(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e)).Select(t => t.Result).Where(t => !string.IsNullOrEmpty(t)).Distinct().ToList();
+        return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e).ConfigureAwait(false)).Select(t => t.Result).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -132,8 +132,8 @@ public partial class MareHub
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
-        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, async f => await _clientIdentService.GetCharacterIdentForUid(f))
-            .Where(f => visibleCharacterIds.Contains(f.Value.Result));
+        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, async f => await _clientIdentService.GetCharacterIdentForUid(f).ConfigureAwait(false), System.StringComparer.Ordinal)
+            .Where(f => visibleCharacterIds.Contains(f.Value.Result, System.StringComparer.Ordinal));
 
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
@@ -149,7 +149,7 @@ public partial class MareHub
     {
         // don't allow adding yourself or nothing
         uid = uid.Trim();
-        if (uid == AuthenticatedUserId || string.IsNullOrWhiteSpace(uid)) return;
+        if (string.Equals(uid, AuthenticatedUserId, System.StringComparison.Ordinal) || string.IsNullOrWhiteSpace(uid)) return;
 
         // grab other user, check if it exists and if a pair already exists
         var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
@@ -203,10 +203,10 @@ public partial class MareHub
 
         // get own ident and all pairs
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(user.UID).ConfigureAwait(false);
-        var allUserPairs = await GetAllPairedClientsWithPauseState();
+        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
-        if (!otherEntry.IsPaused && allUserPairs.Any(p => p.UID == uid && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
+        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, uid, System.StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
         {
             await Clients.User(user.UID)
                 .SendAsync(Api.OnUserAddOnlinePairedPlayer, otherIdent).ConfigureAwait(false);
@@ -219,7 +219,7 @@ public partial class MareHub
     [HubMethodName(Api.SendUserPairedClientPauseChange)]
     public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
     {
-        if (otherUserUid == AuthenticatedUserId) return;
+        if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
         ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
         if (pair == null) return;
 
@@ -269,7 +269,7 @@ public partial class MareHub
     [HubMethodName(Api.SendUserPairedClientRemoval)]
     public async Task SendPairedClientRemoval(string otherUserUid)
     {
-        if (otherUserUid == AuthenticatedUserId) return;
+        if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
 
         // check if client pair even exists
         ClientPair callerPair =
@@ -309,8 +309,8 @@ public partial class MareHub
         bool otherHadPaused = oppositeClientPair.IsPaused;
         if (!callerHadPaused && otherHadPaused) return;
 
-        var allUsers = await GetAllPairedClientsWithPauseState();
-        var pauseEntry = allUsers.SingleOrDefault(f => f.UID == otherUserUid);
+        var allUsers = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
+        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, otherUserUid, System.StringComparison.Ordinal));
         var isPausedInGroup = pauseEntry == null || pauseEntry.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection;
 
         _logger.LogInformation("CalledHadPaused:{p1}, OtherHadPaused:{p2}, IsPausedInGroup:{g1}", callerHadPaused, otherHadPaused, isPausedInGroup);

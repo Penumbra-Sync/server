@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -31,6 +32,7 @@ public partial class MareHub : Hub
     private readonly ILogger<MareHub> _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _cdnFullUri;
+    private readonly string _shardName;
     public MareHub(MareMetrics mareMetrics, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor,
         IClientIdentificationService clientIdentService)
@@ -39,7 +41,9 @@ public partial class MareHub : Hub
         _authServiceClient = authServiceClient;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        _cdnFullUri = new Uri(configuration.GetRequiredSection("MareSynchronos").GetValue<string>("CdnFullUrl"));
+        var config = configuration.GetRequiredSection("MareSynchronos");
+        _cdnFullUri = new Uri(config.GetValue<string>("CdnFullUrl"));
+        _shardName = config.GetValue("ShardName", "Main");
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
         _logger = logger;
@@ -52,7 +56,7 @@ public partial class MareHub : Hub
     {
         _mareMetrics.IncCounter(MetricsAPI.CounterInitializedConnections);
 
-        var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        var userId = Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value;
 
         _logger.LogInformation("Connection from {userId}, CI: {characterIdentification}", userId, characterIdentification);
 
@@ -64,7 +68,7 @@ public partial class MareHub : Hub
         {
             var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId).ConfigureAwait(false));
             var existingIdent = await _clientIdentService.GetCharacterIdentForUid(userId).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(existingIdent) && characterIdentification != existingIdent)
+            if (!string.IsNullOrEmpty(existingIdent) && !string.Equals(characterIdentification, existingIdent, StringComparison.Ordinal))
             {
                 return new ConnectionDto()
                 {
@@ -79,6 +83,7 @@ public partial class MareHub : Hub
             return new ConnectionDto
             {
                 ServerVersion = Api.Version,
+                ShardName = _shardName,
                 UID = string.IsNullOrEmpty(user.Alias) ? user.UID : user.Alias,
                 IsModerator = user.IsModerator,
                 IsAdmin = user.IsAdmin
@@ -110,7 +115,7 @@ public partial class MareHub : Hub
 
             _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
 
-            await SendDataToAllPairedUsers(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent);
+            await SendDataToAllPairedUsers(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent).ConfigureAwait(false);
 
             _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == AuthenticatedUserId));
 
@@ -130,7 +135,7 @@ public partial class MareHub : Hub
                            where otherUserPair.OtherUserUID == uid && userPair.UserUID == uid
                            select new
                            {
-                               UID = Convert.ToString(userPair.OtherUserUID),
+                               UID = Convert.ToString(userPair.OtherUserUID, CultureInfo.InvariantCulture),
                                GID = "DIRECT",
                                PauseState = (userPair.IsPaused || otherUserPair.IsPaused)
                            })
@@ -142,14 +147,16 @@ public partial class MareHub : Hub
                                      && otherGroupPair.GroupUserUID != uid
                                  select new
                                  {
-                                     UID = Convert.ToString(otherGroupPair.GroupUserUID),
-                                     GID = Convert.ToString(otherGroupPair.GroupGID),
+                                     UID = Convert.ToString(otherGroupPair.GroupUserUID, CultureInfo.InvariantCulture),
+                                     GID = Convert.ToString(otherGroupPair.GroupGID, CultureInfo.InvariantCulture),
                                      PauseState = (userGroupPair.IsPaused || otherGroupPair.IsPaused)
                                  })
                             ).ToListAsync().ConfigureAwait(false);
 
         return query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
-            (key, g) => new PausedEntry { UID = key, PauseStates = g.Select(p => new PauseState() { GID = p.GID == "DIRECT" ? null : p.GID, IsPaused = p.PauseState }).ToList() }).ToList();
+            (key, g) => new PausedEntry { UID = key, PauseStates = g
+                .Select(p => new PauseState() { GID = string.Equals(p.GID, "DIRECT", StringComparison.Ordinal) ? null : p.GID, IsPaused = p.PauseState })
+                .ToList() }, StringComparer.Ordinal).ToList();
     }
 
     private async Task<List<string>> GetUnpausedUsersExcludingGroup(string excludedGid, string? uid = null)
@@ -169,13 +176,13 @@ public partial class MareHub : Hub
 
     private async Task<List<string>> SendDataToAllPairedUsers(string apiMethod, object arg)
     {
-        var usersToSendDataTo = await GetAllPairedUnpausedUsers();
+        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
         await Clients.Users(usersToSendDataTo).SendAsync(apiMethod, arg).ConfigureAwait(false);
 
         return usersToSendDataTo;
     }
 
-    protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
+    protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
 
     protected async Task<User> GetAuthenticatedUserUntrackedAsync()
     {
@@ -188,14 +195,14 @@ public record PausedEntry
     public string UID { get; set; }
     public List<PauseState> PauseStates { get; set; } = new();
 
-    public PauseInfo IsDirectlyPaused => pauseStateWithoutGroups == null ? PauseInfo.NoConnection
+    public PauseInfo IsDirectlyPaused => PauseStateWithoutGroups == null ? PauseInfo.NoConnection
         : PauseStates.First(g => g.GID == null).IsPaused ? PauseInfo.Paused : PauseInfo.Unpaused;
 
-    public PauseInfo IsPausedPerGroup => !pauseStatesWithoutDirect.Any() ? PauseInfo.NoConnection
-        : pauseStatesWithoutDirect.All(p => p.IsPaused) ? PauseInfo.Paused : PauseInfo.Unpaused;
+    public PauseInfo IsPausedPerGroup => !PauseStatesWithoutDirect.Any() ? PauseInfo.NoConnection
+        : PauseStatesWithoutDirect.All(p => p.IsPaused) ? PauseInfo.Paused : PauseInfo.Unpaused;
 
-    private IEnumerable<PauseState> pauseStatesWithoutDirect => PauseStates.Where(f => f.GID != null);
-    private PauseState pauseStateWithoutGroups => PauseStates.SingleOrDefault(p => p.GID == null);
+    private IEnumerable<PauseState> PauseStatesWithoutDirect => PauseStates.Where(f => f.GID != null);
+    private PauseState PauseStateWithoutGroups => PauseStates.SingleOrDefault(p => p.GID == null);
 
     public bool IsPaused
     {
@@ -218,14 +225,14 @@ public record PausedEntry
 
     public PauseInfo IsPausedForSpecificGroup(string gid)
     {
-        var state = pauseStatesWithoutDirect.SingleOrDefault(g => g.GID == gid);
+        var state = PauseStatesWithoutDirect.SingleOrDefault(g => string.Equals(g.GID, gid, StringComparison.Ordinal));
         if (state == null) return PauseInfo.NoConnection;
         return state.IsPaused ? PauseInfo.Paused : PauseInfo.NoConnection;
     }
 
     public PauseInfo IsPausedExcludingGroup(string gid)
     {
-        var states = pauseStatesWithoutDirect.Where(f => f.GID != gid).ToList();
+        var states = PauseStatesWithoutDirect.Where(f => !string.Equals(f.GID, gid, StringComparison.Ordinal)).ToList();
         if (!states.Any()) return PauseInfo.NoConnection;
         var result = states.All(p => p.IsPaused);
         if (result) return PauseInfo.Paused;

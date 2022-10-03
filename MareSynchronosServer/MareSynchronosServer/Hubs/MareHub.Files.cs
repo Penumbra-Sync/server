@@ -42,7 +42,7 @@ public partial class MareHub
         request.Hash.AddRange(ownFiles.Select(f => f.Hash));
         Metadata headers = new Metadata()
             {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
             };
         _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
     }
@@ -51,23 +51,23 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGetFilesSizes)]
     public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
     {
-        var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
+        var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash, StringComparer.Ordinal)).ToListAsync().ConfigureAwait(false);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
-            Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
+            Where(f => hashes.Contains(f.Hash, StringComparer.Ordinal)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
         FileSizeRequest request = new FileSizeRequest();
         request.Hash.AddRange(hashes);
         Metadata headers = new Metadata()
             {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
             };
         var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request, headers).ConfigureAwait(false);
 
         foreach (var hash in grpcResponse.HashToFileSize)
         {
-            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => f.Hash == hash.Key);
-            var downloadFile = allFiles.SingleOrDefault(f => f.Hash == hash.Key);
+            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, hash.Key, StringComparison.Ordinal));
+            var downloadFile = allFiles.SingleOrDefault(f => string.Equals(f.Hash, hash.Key, StringComparison.Ordinal));
 
             response.Add(new DownloadFileDto
             {
@@ -96,9 +96,9 @@ public partial class MareHub
     [HubMethodName(Api.InvokeFileSendFiles)]
     public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
     {
-        var userSentHashes = new HashSet<string>(fileListHashes.Distinct());
+        var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal), StringComparer.Ordinal);
         _logger.LogInformation("User {AuthenticatedUserId} sending files: {count}", AuthenticatedUserId, userSentHashes.Count);
-        var notCoveredFiles = new Dictionary<string, UploadFileDto>();
+        var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var uploader = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
@@ -197,7 +197,7 @@ public partial class MareHub
             using var ms = new MemoryStream(decodedFile);
             var computedHash = await sha1.ComputeHashAsync(ms).ConfigureAwait(false);
             var computedHashString = BitConverter.ToString(computedHash).Replace("-", "");
-            if (hash != computedHashString)
+            if (!string.Equals(hash, computedHashString, StringComparison.Ordinal))
             {
                 _logger.LogWarning("Computed file hash was not expected file hash. Computed: {computedHashString}, Expected {hash}", computedHashString, hash);
                 _dbContext.Remove(relatedFile);
@@ -208,7 +208,7 @@ public partial class MareHub
 
             Metadata headers = new Metadata()
             {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.Authentication)?.Value }
+                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
             };
             var streamingCall = _fileServiceClient.UploadFile(headers);
             using var tempFileStream = new FileStream(tempFileName, FileMode.Open, FileAccess.Read);
@@ -224,9 +224,9 @@ public partial class MareHub
                     Uploader = AuthenticatedUserId
                 }).ConfigureAwait(false);
             }
-            await streamingCall.RequestStream.CompleteAsync();
+            await streamingCall.RequestStream.CompleteAsync().ConfigureAwait(false);
             tempFileStream.Close();
-            await tempFileStream.DisposeAsync();
+            await tempFileStream.DisposeAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {

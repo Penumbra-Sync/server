@@ -23,7 +23,7 @@ public class Program
             using var context = services.GetRequiredService<MareDbContext>();
 
             var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
-            if (string.IsNullOrEmpty(secondaryServer) || secondaryServer == "0")
+            if (string.IsNullOrEmpty(secondaryServer) || string.Equals(secondaryServer, "0", StringComparison.Ordinal))
             {
                 context.Database.Migrate();
                 context.SaveChanges();
@@ -42,7 +42,7 @@ public class Program
             metrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, context.ClientPairs.Count(p => p.IsPaused));
         }
 
-        if (args.Length == 0 || args[0] != "dry")
+        if (args.Length == 0 || !string.Equals(args[0], "dry", StringComparison.Ordinal))
         {
             host.Run();
         }
