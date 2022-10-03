@@ -106,6 +106,13 @@ public partial class MareHub : Hub
         };
     }
 
+    [HubMethodName(Api.InvokeCheckClientHealth)]
+    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    public async Task<bool> CheckClientHealth()
+    {
+        return string.IsNullOrEmpty(await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false));
+    }
+
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("Connection from {ip}", _contextAccessor.GetIpAddress());
