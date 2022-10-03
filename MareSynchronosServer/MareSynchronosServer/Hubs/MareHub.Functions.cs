@@ -9,6 +9,7 @@ using System.Globalization;
 using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using System.Security.Claims;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -72,9 +73,11 @@ public partial class MareHub
         return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
     }
 
-    private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string ident)
+    private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
     {
+        uid ??= AuthenticatedUserId;
         var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
+        _logger.LogInformation("UserPair is null: {isnull}", userPair == null);
         if (userPair != null)
         {
             if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) return;
@@ -84,8 +87,8 @@ public partial class MareHub
         var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(groupUserIdent))
         {
-            await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-            await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, ident).ConfigureAwait(false);
+            await Clients.User(uid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
+            await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
         }
     }
 

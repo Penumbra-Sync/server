@@ -388,7 +388,8 @@ public partial class MareHub
 
         foreach (var groupUserPair in groupPairs)
         {
-            await UserGroupLeave(groupUserPair, allUserPairs, userIdent).ConfigureAwait(false);
+            _logger.LogInformation("Checking for {uid}", groupUserPair.GroupUserUID);
+            await UserGroupLeave(groupUserPair, allUserPairs, userIdent, uid).ConfigureAwait(false);
         }
     }
 

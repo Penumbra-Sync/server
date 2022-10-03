@@ -51,17 +51,17 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGetFilesSizes)]
     public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
     {
-        var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash, StringComparer.Ordinal)).ToListAsync().ConfigureAwait(false);
+        var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
-            Where(f => hashes.Contains(f.Hash, StringComparer.Ordinal)).ToListAsync().ConfigureAwait(false);
+            Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
         FileSizeRequest request = new FileSizeRequest();
         request.Hash.AddRange(hashes);
         Metadata headers = new Metadata()
-            {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
-            };
+        {
+            { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
+        };
         var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request, headers).ConfigureAwait(false);
 
         foreach (var hash in grpcResponse.HashToFileSize)
@@ -148,7 +148,7 @@ public partial class MareHub
     {
         _logger.LogInformation("User {AuthenticatedUserId} uploading file: {hash}", AuthenticatedUserId, hash);
 
-        var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && f.Uploaded == false);
+        var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && !f.Uploaded);
         if (relatedFile == null) return;
         var forbiddenFile = _dbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
         if (forbiddenFile != null) return;
