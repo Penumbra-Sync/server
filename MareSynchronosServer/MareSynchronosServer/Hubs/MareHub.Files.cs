@@ -196,7 +196,7 @@ public partial class MareHub
             using var sha1 = SHA1.Create();
             using var ms = new MemoryStream(decodedFile);
             var computedHash = await sha1.ComputeHashAsync(ms).ConfigureAwait(false);
-            var computedHashString = BitConverter.ToString(computedHash).Replace("-", "");
+            var computedHashString = BitConverter.ToString(computedHash).Replace("-", "", StringComparison.Ordinal);
             if (!string.Equals(hash, computedHashString, StringComparison.Ordinal))
             {
                 _logger.LogWarning("Computed file hash was not expected file hash. Computed: {computedHashString}, Expected {hash}", computedHashString, hash);

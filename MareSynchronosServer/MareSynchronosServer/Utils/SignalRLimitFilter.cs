@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace MareSynchronosServer.Hubs;
+namespace MareSynchronosServer.Utils;
 public class SignalRLimitFilter : IHubFilter
 {
     private readonly IRateLimitProcessor _processor;

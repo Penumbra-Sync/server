@@ -1,4 +1,5 @@
 ﻿using MareSynchronos.API;
+using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
@@ -16,9 +17,6 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    private const int MaxExistingGroupsByUser = 3;
-    private const int MaxJoinedGroupsByUser = 6;
-
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     [HubMethodName(Api.InvokeGroupCreate)]
     public async Task<GroupCreatedDto> CreateGroup()
@@ -26,9 +24,9 @@ public partial class MareHub
         _logger.LogInformation("User {user} creating group", AuthenticatedUserId);
         var existingGroupsByUser = _dbContext.Groups.Count(u => u.OwnerUID == AuthenticatedUserId);
         var existingJoinedGroups = _dbContext.GroupPairs.Count(u => u.GroupUserUID == AuthenticatedUserId);
-        if (existingGroupsByUser >= MaxExistingGroupsByUser || existingJoinedGroups >= MaxJoinedGroupsByUser)
+        if (existingGroupsByUser >= _maxExistingGroupsByUser || existingJoinedGroups >= _maxJoinedGroupsByUser)
         {
-            throw new System.Exception($"Max groups for user is {MaxExistingGroupsByUser}, max joined groups is {MaxJoinedGroupsByUser}.");
+            throw new System.Exception($"Max groups for user is {_maxExistingGroupsByUser}, max joined groups is {_maxJoinedGroupsByUser}.");
         }
 
         var gid = StringUtils.GenerateRandomString(12);
@@ -132,6 +130,8 @@ public partial class MareHub
         group.InvitesEnabled = enabled;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        _logger.LogInformation("User {uid} changed group {gid} invite state to {state}", AuthenticatedUserId, gid, enabled);
+
         var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToList();
         await Clients.Users(groupPairs).SendAsync(Api.OnGroupChange, new GroupDto()
         {
@@ -147,28 +147,21 @@ public partial class MareHub
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
-        _logger.LogInformation("User {uid} deleted {gid}", AuthenticatedUserId, gid);
+        _logger.LogInformation("User {uid} deleted group {gid}", AuthenticatedUserId, gid);
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).ToListAsync().ConfigureAwait(false);
+        _dbContext.RemoveRange(groupPairs);
+        _dbContext.Remove(group);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         await Clients.Users(groupPairs.Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = group.GID,
             IsDeleted = true,
         }).ConfigureAwait(false);
 
-        foreach (var pair in groupPairs)
-        {
-            var users = await GetUnpausedUsersExcludingGroup(gid, pair.GroupUserUID).ConfigureAwait(false);
-            if (!users.Any())
-            {
-                var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
-                await Clients.Users(users).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-            }
-        }
 
-        _dbContext.RemoveRange(groupPairs);
-        _dbContext.Remove(group);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -181,7 +174,7 @@ public partial class MareHub
         var hashedPw = StringUtils.Sha256String(password);
         var existingUserCount = await _dbContext.GroupPairs.CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
         var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
-        if (group == null || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal) || existingPair != null || existingUserCount >= 100 || !group.InvitesEnabled || joinedGroups >= MaxJoinedGroupsByUser)
+        if (group == null || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal) || existingPair != null || existingUserCount >= _maxGroupUserCount || !group.InvitesEnabled || joinedGroups >= _maxJoinedGroupsByUser)
             return false;
 
         GroupPair newPair = new()
@@ -269,7 +262,7 @@ public partial class MareHub
                 foreach (var potentialNewOwner in groupUsers)
                 {
                     var newOwnerOwnedGroups = await _dbContext.Groups.CountAsync(g => g.OwnerUID == potentialNewOwner.GroupUserUID).ConfigureAwait(false);
-                    if (newOwnerOwnedGroups >= MaxExistingGroupsByUser)
+                    if (newOwnerOwnedGroups >= _maxExistingGroupsByUser)
                     {
                         continue;
                     }
@@ -301,36 +294,12 @@ public partial class MareHub
                         IsDeleted = true
                     }).ConfigureAwait(false);
 
-                    foreach (var pair in groupUsers)
-                    {
-                        var pairIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
-                        if (string.IsNullOrEmpty(pairIdent)) continue;
-
-                        var pairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);
-
-                        foreach (var groupUserPair in groupUsers.Where(g => !string.Equals(g.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
-                        {
-                            var userPair = pairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-                            if (userPair != null)
-                            {
-                                if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
-                                if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) continue;
-                            }
-
-                            var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
-                            if (!string.IsNullOrEmpty(groupUserIdent))
-                            {
-                                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-                                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent).ConfigureAwait(false);
-                            }
-                        }
-                    }
+                    await SendGroupDeletedToAll(groupUsers).ConfigureAwait(false);
 
                     return;
                 }
             }
         }
-
 
         _logger.LogInformation("User {user} left group {gid}", AuthenticatedUserId, gid);
 
@@ -352,19 +321,7 @@ public partial class MareHub
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
         foreach (var groupUserPair in groupPairs)
         {
-            var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-            if (userPair != null)
-            {
-                if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
-                if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) continue;
-            }
-
-            var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(groupUserIdent))
-            {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
-            }
+            await UserGroupLeave(groupUserPair, allUserPairs, userIdent).ConfigureAwait(false);
         }
     }
 
@@ -413,7 +370,6 @@ public partial class MareHub
         }
     }
 
-
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     [HubMethodName(Api.SendGroupRemoveUser)]
     public async Task GroupRemoveUser(string gid, string uid)
@@ -449,23 +405,7 @@ public partial class MareHub
 
         foreach (var groupUserPair in groupPairs)
         {
-            _logger.LogInformation("checking what to send to {uid}", groupUserPair.GroupUserUID);
-
-            var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-            if (userPair != null)
-            {
-                _logger.LogInformation("existing pair from {uid} to {groupuid} was not null", uid, groupUserPair.GroupUserUID);
-
-                if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
-                if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) continue;
-            }
-
-            var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(groupUserIdent))
-            {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
-            }
+            await UserGroupLeave(groupUserPair, allUserPairs, userIdent).ConfigureAwait(false);
         }
     }
 
@@ -478,7 +418,7 @@ public partial class MareHub
         var groupPair = await _dbContext.GroupPairs.Include(g => g.GroupUser).SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
         var ownedShells = await _dbContext.Groups.CountAsync(g => g.OwnerUID == uid).ConfigureAwait(false);
-        if (ownedShells >= MaxExistingGroupsByUser) return;
+        if (ownedShells >= _maxExistingGroupsByUser) return;
 
         var prevOwner = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         prevOwner.IsPinned = false;
@@ -581,28 +521,8 @@ public partial class MareHub
 
             foreach (var groupUserPair in groupPairs.Where(p => !string.Equals(p.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
             {
-                var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-                if (userPair != null)
-                {
-                    if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
-                    if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) continue;
-                }
-
-                var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
-                if (!string.IsNullOrEmpty(groupUserIdent))
-                {
-                    await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-                    await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, pairIdent).ConfigureAwait(false);
-                }
+                await UserGroupLeave(groupUserPair, allUserPairs, pairIdent).ConfigureAwait(false);
             }
         }
-    }
-
-    private record UserPair
-    {
-        public string UserUID { get; set; }
-        public string OtherUserUID { get; set; }
-        public bool UserPausedOther { get; set; }
-        public bool OtherPausedUser { get; set; }
     }
 }
