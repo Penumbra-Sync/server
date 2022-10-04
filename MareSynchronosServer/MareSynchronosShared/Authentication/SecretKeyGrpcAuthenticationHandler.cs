@@ -1,63 +1,56 @@
 ﻿using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Encodings.Web;
 using MareSynchronosServer;
-using MareSynchronosShared.Data;
-using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ISystemClock = Microsoft.AspNetCore.Authentication.ISystemClock;
 
-namespace MareSynchronosShared.Authentication
+namespace MareSynchronosShared.Authentication;
+
+public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
+    public const string AuthScheme = "SecretKeyGrpcAuth";
 
-    public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+    private readonly AuthService.AuthServiceClient _authClient;
+    private readonly IHttpContextAccessor _accessor;
+
+    public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient, 
+        IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
     {
-        public const string AuthScheme = "SecretKeyGrpcAuth";
+        this._authClient = authClient;
+        _accessor = accessor;
+    }
 
-        private readonly AuthService.AuthServiceClient _authClient;
-        private readonly IHttpContextAccessor _accessor;
-
-        public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient, 
-            IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        if(!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
-            this._authClient = authClient;
-            _accessor = accessor;
+            authHeader = string.Empty;
+        }
+        var ip = _accessor.GetIpAddress();
+
+        var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader}).ConfigureAwait(false);
+
+        if (!authResult.Success)
+        {
+            return AuthenticateResult.Fail("Failed Authorization");
         }
 
-        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+        string uid = authResult.Uid;
+
+        var claims = new List<Claim>
         {
-            if(!Request.Headers.TryGetValue("Authorization", out var authHeader))
-            {
-                authHeader = string.Empty;
-            }
-            var ip = _accessor.GetIpAddress();
+            new(ClaimTypes.NameIdentifier, uid),
+            new(ClaimTypes.Authentication, authHeader)
+        };
 
-            var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader}).ConfigureAwait(false);
+        var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
+        var principal = new ClaimsPrincipal(identity);
+        var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
-            if (!authResult.Success)
-            {
-                return AuthenticateResult.Fail("Failed Authorization");
-            }
-
-            string uid = authResult.Uid;
-
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, uid),
-                new(ClaimTypes.Authentication, authHeader)
-            };
-
-            var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
-            var principal = new ClaimsPrincipal(identity);
-            var ticket = new AuthenticationTicket(principal, Scheme.Name);
-
-            return AuthenticateResult.Success(ticket);
-        }
+        return AuthenticateResult.Success(ticket);
     }
 }

@@ -12,40 +12,43 @@ public abstract class BaseClientIdentificationService : IClientIdentificationSer
         this.metrics = metrics;
     }
 
-    public virtual int GetOnlineUsers()
+    public virtual Task<int> GetOnlineUsers()
     {
-        return OnlineClients.Count;
+        return Task.FromResult(OnlineClients.Count);
     }
 
-    public string? GetUidForCharacterIdent(string characterIdent)
+    public Task<string?> GetUidForCharacterIdent(string characterIdent)
     {
         var result = OnlineClients.SingleOrDefault(u =>
             string.Compare(u.Value, characterIdent, StringComparison.InvariantCultureIgnoreCase) == 0);
-        return result.Equals(new KeyValuePair<string, string>()) ? null : result.Key;
+        return Task.FromResult(result.Equals(new KeyValuePair<string, string>()) ? null : result.Key);
     }
 
-    public virtual string? GetCharacterIdentForUid(string uid)
+    public virtual Task<string?> GetCharacterIdentForUid(string uid)
     {
         if (!OnlineClients.TryGetValue(uid, out var result))
         {
-            return null;
+            return Task.FromResult((string?)null);
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
-    public virtual void MarkUserOnline(string uid, string charaIdent)
+    public virtual Task MarkUserOnline(string uid, string charaIdent)
     {
         OnlineClients[uid] = charaIdent;
         metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
+        return Task.CompletedTask;
     }
 
-    public virtual void MarkUserOffline(string uid)
+    public virtual Task MarkUserOffline(string uid)
     {
         if (OnlineClients.TryRemove(uid, out _))
         {
             metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
         }
+
+        return Task.CompletedTask;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)

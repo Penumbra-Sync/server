@@ -1,23 +1,20 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace MareSynchronosShared.Models
+namespace MareSynchronosShared.Models;
+
+public class User
 {
-    public class User
-    {
-        [Key]
-        [MaxLength(10)]
-        public string UID { get; set; }
-        //[MaxLength(100)]
-        //public string CharacterIdentification { get; set; }
-        [Timestamp]
-        public byte[] Timestamp { get; set; }
+    [Key]
+    [MaxLength(10)]
+    public string UID { get; set; }
+    [Timestamp]
+    public byte[] Timestamp { get; set; }
 
-        public bool IsModerator { get; set; } = false;
+    public bool IsModerator { get; set; } = false;
 
-        public bool IsAdmin { get; set; } = false;
+    public bool IsAdmin { get; set; } = false;
 
-        public DateTime LastLoggedIn { get; set; }
-        [MaxLength(10)]
-        public string Alias { get; set; }
-    }
+    public DateTime LastLoggedIn { get; set; }
+    [MaxLength(10)]
+    public string Alias { get; set; }
 }
