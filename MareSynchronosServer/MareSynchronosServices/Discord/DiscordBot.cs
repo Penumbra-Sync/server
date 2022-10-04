@@ -161,7 +161,7 @@ public class DiscordBot : IHostedService
         if (!rgx.Match(newUid).Success || newUid.Length != 10)
         {
             eb.WithTitle("Failed to set Vanity UID");
-            eb.WithDescription("The Vanity UID must be 10 characters long and only contain uppercase letters A-Z and numbers 0-9.");
+            eb.WithDescription("The Vanity UID must be between 5 and 15 characters and only contain letters A-Z, numbers 0-9, as well as - and _.");
             return eb;
         }
 
