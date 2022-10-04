@@ -284,6 +284,8 @@ public partial class MareHub
             }
         }
 
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         _logger.LogInformation("User {user} left group {gid}", AuthenticatedUserId, gid);
 
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
@@ -407,7 +409,7 @@ public partial class MareHub
         var prevOwner = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         prevOwner.IsPinned = false;
         group.Owner = groupPair.GroupUser;
-        group.;
+        group.Alias = null;
         groupPair.IsPinned = true;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
