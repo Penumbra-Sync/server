@@ -266,7 +266,7 @@ public partial class MareHub
                     {
                         GID = group.GID,
                         OwnedBy = groupHasMigrated.Item2,
-                        Alias = string.Empty
+                        Alias = null
                     }).ConfigureAwait(false);
                 }
                 else
@@ -278,9 +278,9 @@ public partial class MareHub
                     }).ConfigureAwait(false);
 
                     await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
-                }
 
-                return;
+                    return;
+                }
             }
         }
 
@@ -407,7 +407,7 @@ public partial class MareHub
         var prevOwner = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         prevOwner.IsPinned = false;
         group.Owner = groupPair.GroupUser;
-        group.Alias = string.Empty;
+        group.;
         groupPair.IsPinned = true;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -419,7 +419,7 @@ public partial class MareHub
         {
             GID = gid,
             OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
-            Alias = string.Empty
+            Alias = null
         }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))).SendAsync(Api.OnGroupUserChange, new GroupPairDto()

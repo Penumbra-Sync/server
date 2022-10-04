@@ -45,7 +45,7 @@ public static class SharedDbFunctions
             return false;
         }
         group.OwnerUID = potentialNewOwnerUid;
-        group.Alias = string.Empty;
+        group.Alias = null;
         await context.SaveChangesAsync().ConfigureAwait(false);
         return true;
     }

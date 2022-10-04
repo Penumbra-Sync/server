@@ -284,7 +284,7 @@ public class DiscordBot : IHostedService
         {
             if (discordAuthedUser.User != null)
             {
-                cleanupService.PurgeUser(discordAuthedUser.User, db);
+                await cleanupService.PurgeUser(discordAuthedUser.User, db);
             }
             else
             {
@@ -775,7 +775,7 @@ public class DiscordBot : IHostedService
                             if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
                             {
                                 logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
-                                group.Alias = string.Empty;
+                                group.Alias = null;
                                 db.Update(group);
                             }
 
