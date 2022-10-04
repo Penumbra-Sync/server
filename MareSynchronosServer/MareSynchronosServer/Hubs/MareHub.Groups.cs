@@ -254,7 +254,8 @@ public partial class MareHub
 
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
 
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID && p.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).ToListAsync().ConfigureAwait(false);
+        var groupPairsWithoutSelf = groupPairs.Where(p => !string.Equals(p.GroupUserUID, AuthenticatedUserId, StringComparison.Ordinal)).ToList();
 
         _dbContext.GroupPairs.Remove(groupPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
@@ -268,7 +269,7 @@ public partial class MareHub
         bool ownerHasLeft = string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal);
         if (ownerHasLeft)
         {
-            if (!groupPairs.Any())
+            if (!groupPairsWithoutSelf.Any())
             {
                 _logger.LogCallInfo(Api.SendGroupLeave, gid, "Deleted");
 
@@ -276,13 +277,13 @@ public partial class MareHub
             }
             else
             {
-                var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(_dbContext, group, groupPairs, _maxExistingGroupsByUser).ConfigureAwait(false);
+                var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(_dbContext, group, groupPairsWithoutSelf, _maxExistingGroupsByUser).ConfigureAwait(false);
 
                 if (groupHasMigrated.Item1)
                 {
                     _logger.LogCallInfo(Api.SendGroupLeave, gid, "Migrated", groupHasMigrated.Item2);
 
-                    await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
+                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
                         OwnedBy = groupHasMigrated.Item2,
@@ -293,7 +294,7 @@ public partial class MareHub
                 {
                     _logger.LogCallInfo(Api.SendGroupLeave, gid, "Deleted");
 
-                    await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
+                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
                         IsDeleted = true
@@ -310,7 +311,7 @@ public partial class MareHub
 
         _logger.LogCallInfo(Api.SendGroupLeave, gid, "Success");
 
-        await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+        await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = group.GID,
             IsRemoved = true,
@@ -320,7 +321,7 @@ public partial class MareHub
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-        foreach (var groupUserPair in groupPairs)
+        foreach (var groupUserPair in groupPairsWithoutSelf)
         {
             await UserGroupLeave(groupUserPair, allUserPairs, userIdent).ConfigureAwait(false);
         }

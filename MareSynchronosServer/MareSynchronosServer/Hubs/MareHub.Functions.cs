@@ -102,7 +102,7 @@ public partial class MareHub
 
             foreach (var groupUserPair in groupUsers.Where(g => !string.Equals(g.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
             {
-                await UserGroupLeave(groupUserPair, pairs, pairIdent).ConfigureAwait(false);
+                await UserGroupLeave(groupUserPair, pairs, pairIdent, pair.GroupUserUID).ConfigureAwait(false);
             }
         }
     }
