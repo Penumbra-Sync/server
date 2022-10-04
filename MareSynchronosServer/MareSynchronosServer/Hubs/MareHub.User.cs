@@ -20,7 +20,7 @@ public partial class MareHub
     [HubMethodName(Api.SendUserDeleteAccount)]
     public async Task DeleteAccount()
     {
-        _logger.LogInformation("User {AuthenticatedUserId} deleted their account", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.SendUserDeleteAccount);
 
         string userid = AuthenticatedUserId;
         var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid).ConfigureAwait(false);
@@ -73,7 +73,8 @@ public partial class MareHub
     [HubMethodName(Api.InvokeUserGetOnlineCharacters)]
     public async Task<List<string>> GetOnlineCharacters()
     {
-        _logger.LogInformation("User {AuthenticatedUserId} requested online characters", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.InvokeUserGetOnlineCharacters);
+
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
         var usersToSendOnlineTo = await SendDataToAllPairedUsers(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
@@ -84,6 +85,8 @@ public partial class MareHub
     [HubMethodName(Api.InvokeUserGetPairedClients)]
     public async Task<List<ClientPairDto>> GetPairedClients()
     {
+        _logger.LogCallInfo(Api.InvokeUserGetPairedClients);
+
         string userid = AuthenticatedUserId;
         var query =
             from userToOther in _dbContext.ClientPairs
@@ -124,7 +127,7 @@ public partial class MareHub
     [HubMethodName(Api.InvokeUserPushCharacterDataToVisibleClients)]
     public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
-        _logger.LogInformation("User {AuthenticatedUserId} pushing character data to {visibleCharacterIds} visible clients", AuthenticatedUserId, visibleCharacterIds.Count);
+        _logger.LogCallInfo(Api.InvokeUserPushCharacterDataToVisibleClients, visibleCharacterIds.Count);
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
@@ -132,6 +135,8 @@ public partial class MareHub
             .Where(f => visibleCharacterIds.Contains(f.Value.Result, System.StringComparer.Ordinal));
 
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+
+        _logger.LogCallInfo(Api.InvokeUserPushCharacterDataToVisibleClients, visibleCharacterIds.Count, allPairedUsersDict.Count());
 
         await Clients.Users(allPairedUsersDict.Select(f => f.Key)).SendAsync(Api.OnUserReceiveCharacterData, characterCache, ownIdent).ConfigureAwait(false);
 
@@ -143,6 +148,8 @@ public partial class MareHub
     [HubMethodName(Api.SendUserPairedClientAddition)]
     public async Task SendPairedClientAddition(string uid)
     {
+        _logger.LogCallInfo(Api.SendUserPairedClientAddition, uid);
+
         // don't allow adding yourself or nothing
         uid = uid.Trim();
         if (string.Equals(uid, AuthenticatedUserId, System.StringComparison.Ordinal) || string.IsNullOrWhiteSpace(uid)) return;
@@ -157,7 +164,9 @@ public partial class MareHub
 
         // grab self create new client pair and save
         var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
-        _logger.LogInformation("User {AuthenticatedUserId} adding {uid} to whitelist", AuthenticatedUserId, uid);
+
+        _logger.LogCallInfo(Api.SendUserPairedClientAddition, uid, "Success");
+
         ClientPair wl = new ClientPair()
         {
             IsPaused = false,
@@ -215,14 +224,18 @@ public partial class MareHub
     [HubMethodName(Api.SendUserPairedClientPauseChange)]
     public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
     {
+        _logger.LogCallInfo(Api.SendUserPairedClientPauseChange, otherUserUid, isPaused);
+
         if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
         ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
         if (pair == null) return;
 
-        _logger.LogInformation("User {AuthenticatedUserId} changed pause status with {otherUserUid} to {isPaused}", AuthenticatedUserId, otherUserUid, isPaused);
         pair.IsPaused = isPaused;
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _logger.LogCallInfo(Api.SendUserPairedClientPauseChange, otherUserUid, isPaused, "Success");
+
         var otherEntry = OppositeEntry(otherUserUid);
 
         await Clients.User(AuthenticatedUserId)
@@ -265,6 +278,8 @@ public partial class MareHub
     [HubMethodName(Api.SendUserPairedClientRemoval)]
     public async Task SendPairedClientRemoval(string otherUserUid)
     {
+        _logger.LogCallInfo(Api.SendUserPairedClientRemoval, otherUserUid);
+
         if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
 
         // check if client pair even exists
@@ -274,9 +289,11 @@ public partial class MareHub
         if (callerPair == null) return;
 
         // delete from database, send update info to users pair list
-        _logger.LogInformation("User {AuthenticatedUserId} removed {uid} from whitelist", AuthenticatedUserId, otherUserUid);
         _dbContext.ClientPairs.Remove(callerPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _logger.LogCallInfo(Api.SendUserPairedClientRemoval, otherUserUid, "Success");
+
         await Clients.User(AuthenticatedUserId)
             .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
             {
@@ -308,8 +325,6 @@ public partial class MareHub
         var allUsers = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
         var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, otherUserUid, System.StringComparison.Ordinal));
         var isPausedInGroup = pauseEntry == null || pauseEntry.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection;
-
-        _logger.LogInformation("CalledHadPaused:{p1}, OtherHadPaused:{p2}, IsPausedInGroup:{g1}", callerHadPaused, otherHadPaused, isPausedInGroup);
 
         // if neither user had paused each other and both are in unpaused groups, state will be online for both, do nothing
         if (!callerHadPaused && !otherHadPaused && !isPausedInGroup) return;

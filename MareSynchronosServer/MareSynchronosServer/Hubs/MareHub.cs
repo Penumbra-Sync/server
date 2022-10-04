@@ -4,9 +4,11 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
+using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +28,7 @@ public partial class MareHub : Hub
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
     private readonly IClientIdentificationService _clientIdentService;
-    private readonly ILogger<MareHub> _logger;
+    private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _cdnFullUri;
     private readonly string _shardName;
@@ -50,7 +52,7 @@ public partial class MareHub : Hub
         _maxGroupUserCount = config.GetValue<int>("MaxGroupUserCount", 100);
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
-        _logger = logger;
+        _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
 
@@ -62,7 +64,7 @@ public partial class MareHub : Hub
 
         var userId = Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value;
 
-        _logger.LogInformation("Connection from {userId}, CI: {characterIdentification}", userId, characterIdentification);
+        _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification);
 
         await Clients.Caller.SendAsync(Api.OnUpdateSystemInfo, _systemInfoService.SystemInfoDto).ConfigureAwait(false);
 
@@ -74,6 +76,8 @@ public partial class MareHub : Hub
             var existingIdent = await _clientIdentService.GetCharacterIdentForUid(userId).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(existingIdent) && !string.Equals(characterIdentification, existingIdent, StringComparison.Ordinal))
             {
+                _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Failure", "LoggedIn");
+
                 return new ConnectionDto()
                 {
                     ServerVersion = Api.Version
@@ -83,6 +87,8 @@ public partial class MareHub : Hub
             user.LastLoggedIn = DateTime.UtcNow;
             await _clientIdentService.MarkUserOnline(user.UID, characterIdentification).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+            _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Success");
 
             return new ConnectionDto
             {
@@ -100,6 +106,8 @@ public partial class MareHub : Hub
             };
         }
 
+        _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Failure");
+
         return new ConnectionDto()
         {
             ServerVersion = Api.Version
@@ -110,12 +118,17 @@ public partial class MareHub : Hub
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     public async Task<bool> CheckClientHealth()
     {
-        return string.IsNullOrEmpty(await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false));
+        var needsReconnect = string.IsNullOrEmpty(await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false));
+        if (needsReconnect)
+        {
+            _logger.LogCallWarning(Api.InvokeCheckClientHealth, needsReconnect);
+        }
+        return needsReconnect;
     }
 
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Connection from {ip}", _contextAccessor.GetIpAddress());
+        _logger.LogCallInfo("Connect", _contextAccessor.GetIpAddress());
         _mareMetrics.IncGauge(MetricsAPI.GaugeConnections);
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
@@ -130,7 +143,7 @@ public partial class MareHub : Hub
         {
             _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
 
-            _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
+            _logger.LogCallInfo("Disconnect");
 
             await SendDataToAllPairedUsers(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent).ConfigureAwait(false);
 

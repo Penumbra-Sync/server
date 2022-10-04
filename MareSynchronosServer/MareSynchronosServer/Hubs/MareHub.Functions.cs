@@ -66,7 +66,7 @@ public partial class MareHub
         return usersToSendDataTo;
     }
 
-    protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
+    public string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
 
     protected async Task<User> GetAuthenticatedUserUntrackedAsync()
     {
@@ -77,7 +77,6 @@ public partial class MareHub
     {
         uid ??= AuthenticatedUserId;
         var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-        _logger.LogInformation("UserPair is null: {isnull}", userPair == null);
         if (userPair != null)
         {
             if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) return;

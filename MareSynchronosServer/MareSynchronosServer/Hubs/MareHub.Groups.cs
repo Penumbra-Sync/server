@@ -22,7 +22,7 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupCreate)]
     public async Task<GroupCreatedDto> CreateGroup()
     {
-        _logger.LogInformation("User {user} creating group", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.InvokeGroupCreate);
         var existingGroupsByUser = _dbContext.Groups.Count(u => u.OwnerUID == AuthenticatedUserId);
         var existingJoinedGroups = _dbContext.GroupPairs.Count(u => u.GroupUserUID == AuthenticatedUserId);
         if (existingGroupsByUser >= _maxExistingGroupsByUser || existingJoinedGroups >= _maxJoinedGroupsByUser)
@@ -72,7 +72,7 @@ public partial class MareHub
             InvitesEnabled = true
         }).ConfigureAwait(false);
 
-        _logger.LogInformation("User {user} created group: {groupid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupCreate, gid);
 
         return new GroupCreatedDto()
         {
@@ -85,7 +85,7 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupGetGroups)]
     public async Task<List<GroupDto>> GetGroups()
     {
-        _logger.LogInformation("User {user} requesting groups", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.InvokeGroupGetGroups);
 
         var groups = await _dbContext.GroupPairs.Include(g => g.Group).Include(g => g.Group.Owner).Where(g => g.GroupUserUID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
 
@@ -103,7 +103,7 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupGetUsersInGroup)]
     public async Task<List<GroupPairDto>> GetUsersInGroup(string gid)
     {
-        _logger.LogInformation("User {user} requesting users in group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupGetUsersInGroup, gid);
 
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         var existingPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
@@ -125,13 +125,15 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupChangeInviteState)]
     public async Task GroupChangeInviteState(string gid, bool enabled)
     {
+        _logger.LogCallInfo(Api.SendGroupChangeInviteState, gid, enabled.ToString());
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
         group.InvitesEnabled = enabled;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogInformation("User {uid} changed group {gid} invite state to {state}", AuthenticatedUserId, gid, enabled);
+        _logger.LogCallInfo(Api.SendGroupChangeInviteState, gid, enabled.ToString(), "Success");
 
         var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToList();
         await Clients.Users(groupPairs).SendAsync(Api.OnGroupChange, new GroupDto()
@@ -145,10 +147,12 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupDelete)]
     public async Task GroupDelete(string gid)
     {
+        _logger.LogCallInfo(Api.SendGroupDelete, gid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
-        _logger.LogInformation("User {uid} deleted group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.SendGroupDelete, gid, "Success");
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).ToListAsync().ConfigureAwait(false);
         _dbContext.RemoveRange(groupPairs);
@@ -169,13 +173,19 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupJoin)]
     public async Task<bool> GroupJoin(string gid, string password)
     {
-        _logger.LogInformation("User {user} attempting to join group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupJoin, gid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);
         var existingPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         var hashedPw = StringUtils.Sha256String(password);
         var existingUserCount = await _dbContext.GroupPairs.CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
         var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
-        if (group == null || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal) || existingPair != null || existingUserCount >= _maxGroupUserCount || !group.InvitesEnabled || joinedGroups >= _maxJoinedGroupsByUser)
+        if (group == null
+            || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal)
+            || existingPair != null
+            || existingUserCount >= _maxGroupUserCount
+            || !group.InvitesEnabled
+            || joinedGroups >= _maxJoinedGroupsByUser)
             return false;
 
         GroupPair newPair = new()
@@ -187,7 +197,7 @@ public partial class MareHub
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogInformation("User {user} successfully joined group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupJoin, gid, "Success");
 
         await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
         {
@@ -237,7 +247,8 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupLeave)]
     public async Task GroupLeave(string gid)
     {
-        _logger.LogInformation("User {user} leaving group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.SendGroupLeave, gid);
+
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         if (groupPair == null) return;
 
@@ -248,12 +259,19 @@ public partial class MareHub
         _dbContext.GroupPairs.Remove(groupPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
+        {
+            GID = group.GID,
+            IsDeleted = true
+        }).ConfigureAwait(false);
+
         bool ownerHasLeft = string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal);
         if (ownerHasLeft)
         {
             if (!groupPairs.Any())
             {
-                _logger.LogInformation("Group {gid} has no new owner, deleting", gid);
+                _logger.LogCallInfo(Api.SendGroupLeave, gid, "Deleted");
+
                 _dbContext.Remove(group);
             }
             else
@@ -262,6 +280,8 @@ public partial class MareHub
 
                 if (groupHasMigrated.Item1)
                 {
+                    _logger.LogCallInfo(Api.SendGroupLeave, gid, "Migrated", groupHasMigrated.Item2);
+
                     await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
@@ -271,6 +291,8 @@ public partial class MareHub
                 }
                 else
                 {
+                    _logger.LogCallInfo(Api.SendGroupLeave, gid, "Deleted");
+
                     await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupChange, new GroupDto()
                     {
                         GID = group.GID,
@@ -286,19 +308,13 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogInformation("User {user} left group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.SendGroupLeave, gid, "Success");
 
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
         {
             GroupGID = group.GID,
             IsRemoved = true,
             UserUID = AuthenticatedUserId,
-        }).ConfigureAwait(false);
-
-        await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
-        {
-            GID = group.GID,
-            IsDeleted = true
         }).ConfigureAwait(false);
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
@@ -314,11 +330,15 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupPause)]
     public async Task GroupChangePauseState(string gid, bool isPaused)
     {
+        _logger.LogCallInfo(Api.SendGroupPause, gid, isPaused);
+
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         if (groupPair == null) return;
 
         groupPair.IsPaused = isPaused;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _logger.LogCallInfo(Api.SendGroupPause, gid, isPaused, "Success");
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.GroupUserUID != AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
@@ -359,12 +379,14 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupRemoveUser)]
     public async Task GroupRemoveUser(string gid, string uid)
     {
+        _logger.LogCallInfo(Api.SendGroupRemoveUser, gid, uid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
 
-        _logger.LogInformation("{id} removed {uid} from {gid}", AuthenticatedUserId, uid, gid);
+        _logger.LogCallInfo(Api.SendGroupRemoveUser, gid, uid, "Success");
 
         _dbContext.GroupPairs.Remove(groupPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
@@ -390,7 +412,6 @@ public partial class MareHub
 
         foreach (var groupUserPair in groupPairs)
         {
-            _logger.LogInformation("Checking for {uid}", groupUserPair.GroupUserUID);
             await UserGroupLeave(groupUserPair, allUserPairs, userIdent, uid).ConfigureAwait(false);
         }
     }
@@ -399,6 +420,8 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupChangeOwner)]
     public async Task ChangeOwnership(string gid, string uid)
     {
+        _logger.LogCallInfo(Api.SendGroupChangeOwner, gid, uid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.Include(g => g.GroupUser).SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
@@ -413,7 +436,7 @@ public partial class MareHub
         groupPair.IsPinned = true;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogInformation("{uid} changed ownership of {gid} to {otheruser}", AuthenticatedUserId, gid, uid);
+        _logger.LogCallInfo(Api.SendGroupChangeOwner, gid, uid, "Success");
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
 
@@ -436,13 +459,14 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGroupChangePassword)]
     public async Task<bool> ChangeGroupPassword(string gid, string password)
     {
-        _logger.LogInformation("User {user} attempts to change password for {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupChangePassword, gid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return false;
 
         if (password.Length < 10) return false;
 
-        _logger.LogInformation("User {user} changed password for {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.InvokeGroupChangePassword, gid, "Success");
 
         group.HashedPassword = StringUtils.Sha256String(password);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
@@ -454,14 +478,17 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupChangePinned)]
     public async Task ChangePinned(string gid, string uid, bool isPinned)
     {
+        _logger.LogCallInfo(Api.SendGroupChangePinned, gid, uid, isPinned);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
         var groupPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
         if (groupPair == null) return;
 
-        _logger.LogInformation("{id} changed pin status for {uid} in {gid} to {pin}", AuthenticatedUserId, uid, gid, isPinned);
         groupPair.IsPinned = isPinned;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _logger.LogCallInfo(Api.InvokeGroupChangePassword, gid, uid, isPinned, "Success");
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
 
@@ -477,6 +504,8 @@ public partial class MareHub
     [HubMethodName(Api.SendGroupClear)]
     public async Task ClearGroup(string gid)
     {
+        _logger.LogCallInfo(Api.SendGroupClear, gid);
+
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null || !string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
@@ -488,7 +517,7 @@ public partial class MareHub
             IsDeleted = true,
         }).ConfigureAwait(false);
 
-        _logger.LogInformation("{uid} is clearing group {gid}", AuthenticatedUserId, gid);
+        _logger.LogCallInfo(Api.SendGroupClear, gid, "Success");
 
         var notPinned = groupPairs.Where(g => !g.IsPinned).ToList();
 

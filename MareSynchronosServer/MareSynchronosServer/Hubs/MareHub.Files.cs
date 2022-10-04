@@ -24,7 +24,7 @@ public partial class MareHub
     [HubMethodName(Api.SendFileAbortUpload)]
     public async Task AbortUpload()
     {
-        _logger.LogInformation("User {AuthenticatedUserId} aborted upload", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.SendFileAbortUpload);
         var userId = AuthenticatedUserId;
         var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == userId).ToList();
         _dbContext.RemoveRange(notUploadedFiles);
@@ -35,7 +35,7 @@ public partial class MareHub
     [HubMethodName(Api.SendFileDeleteAllFiles)]
     public async Task DeleteAllFiles()
     {
-        _logger.LogInformation("User {AuthenticatedUserId} deleted all their files", AuthenticatedUserId);
+        _logger.LogCallInfo(Api.SendFileDeleteAllFiles);
 
         var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
         var request = new DeleteFilesRequest();
@@ -51,6 +51,8 @@ public partial class MareHub
     [HubMethodName(Api.InvokeGetFilesSizes)]
     public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
     {
+        _logger.LogCallInfo(Api.InvokeGetFilesSizes, hashes.Count.ToString());
+
         var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
@@ -87,6 +89,7 @@ public partial class MareHub
     [HubMethodName(Api.InvokeFileIsUploadFinished)]
     public async Task<bool> IsUploadFinished()
     {
+        _logger.LogCallInfo(Api.InvokeFileIsUploadFinished);
         var userUid = AuthenticatedUserId;
         return await _dbContext.Files.AsNoTracking()
             .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded).ConfigureAwait(false);
@@ -97,7 +100,7 @@ public partial class MareHub
     public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
     {
         var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal), StringComparer.Ordinal);
-        _logger.LogInformation("User {AuthenticatedUserId} sending files: {count}", AuthenticatedUserId, userSentHashes.Count);
+        _logger.LogCallInfo(Api.InvokeFileSendFiles, userSentHashes.Count.ToString());
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
@@ -122,7 +125,8 @@ public partial class MareHub
             }
             if (existingFiles.ContainsKey(file)) { continue; }
 
-            _logger.LogInformation("User {AuthenticatedUserId}  needs upload: {file}", AuthenticatedUserId, file);
+            _logger.LogCallInfo(Api.InvokeFileSendFiles, file, "Missing");
+
             var userId = AuthenticatedUserId;
             fileCachesToUpload.Add(new FileCache()
             {
@@ -146,7 +150,7 @@ public partial class MareHub
     [HubMethodName(Api.SendFileUploadFileStreamAsync)]
     public async Task UploadFileStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
     {
-        _logger.LogInformation("User {AuthenticatedUserId} uploading file: {hash}", AuthenticatedUserId, hash);
+        _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash);
 
         var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && !f.Uploaded);
         if (relatedFile == null) return;
@@ -188,7 +192,7 @@ public partial class MareHub
             return;
         }
 
-        _logger.LogInformation("User {AuthenticatedUserId} upload finished: {hash}, size: {length}", AuthenticatedUserId, hash, length);
+        _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash, "Uploaded");
 
         try
         {
@@ -199,7 +203,7 @@ public partial class MareHub
             var computedHashString = BitConverter.ToString(computedHash).Replace("-", "", StringComparison.Ordinal);
             if (!string.Equals(hash, computedHashString, StringComparison.Ordinal))
             {
-                _logger.LogWarning("Computed file hash was not expected file hash. Computed: {computedHashString}, Expected {hash}", computedHashString, hash);
+                _logger.LogCallWarning(Api.SendFileUploadFileStreamAsync, hash, "Invalid", computedHashString);
                 _dbContext.Remove(relatedFile);
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -227,10 +231,12 @@ public partial class MareHub
             await streamingCall.RequestStream.CompleteAsync().ConfigureAwait(false);
             tempFileStream.Close();
             await tempFileStream.DisposeAsync().ConfigureAwait(false);
+
+            _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash, "Pushed");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Upload failed");
+            _logger.LogCallWarning(Api.SendFileUploadFileStreamAsync, "Failed", hash, ex.Message);
             _dbContext.Remove(relatedFile);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
