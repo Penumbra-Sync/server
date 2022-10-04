@@ -25,6 +25,7 @@ public class SecretKeyAuthenticationHandler
     private readonly object failedAuthLock = new();
     private readonly int _failedAttemptsForTempBan;
     private readonly int _tempBanMinutes;
+    private List<string> _whitelistedIps = new();
 
     public void ClearUnauthorizedUsers()
     {
@@ -136,14 +137,18 @@ public class SecretKeyAuthenticationHandler
                 logger.LogWarning("Failed authorization from {ip}", ip);
                 lock (failedAuthLock)
                 {
-                    if (failedAuthorizations.TryGetValue(ip, out var auth))
+                    if (!_whitelistedIps.Any(w => ip.Contains(w)))
                     {
-                        auth.IncreaseFailedAttempts();
+                        if (failedAuthorizations.TryGetValue(ip, out var auth))
+                        {
+                            auth.IncreaseFailedAttempts();
+                        }
+                        else
+                        {
+                            failedAuthorizations[ip] = new FailedAuthorization();
+                        }
                     }
-                    else
-                    {
-                        failedAuthorizations[ip] = new FailedAuthorization();
-                    }
+
                 }
 
                 metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
@@ -168,5 +173,6 @@ public class SecretKeyAuthenticationHandler
         var config = configuration.GetRequiredSection("MareSynchronos");
         _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
         _tempBanMinutes = config.GetValue<int>("TempBanDurationInMinutes", 30);
+        _whitelistedIps = config.GetValue<List<string>>("WhitelistedIps", new List<string>());
     }
 }
