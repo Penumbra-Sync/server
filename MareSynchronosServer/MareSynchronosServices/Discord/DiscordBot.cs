@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Discord;
+using Discord.Rest;
 using Discord.WebSocket;
 using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Data;
@@ -41,7 +42,9 @@ public class DiscordBot : IHostedService
     private readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
     private readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
     private ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
+    private ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     private ulong vanityCommandId;
+    private ulong vanityGidCommandId;
     private Task cleanUpUserTask = null;
 
     private SemaphoreSlim semaphore;
@@ -130,6 +133,18 @@ public class DiscordBot : IHostedService
                         await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
                         break;
                     }
+                case "setsyncshellvanityid":
+                    {
+                        EmbedBuilder eb = new();
+                        var oldGid = (string)arg.Data.Options.First(f => f.Name == "syncshell_id").Value;
+                        var newGid = (string)arg.Data.Options.First(f => f.Name == "vanity_syncshell_id").Value;
+
+                        eb = await HandleVanityGid(eb, arg.User.Id, oldGid, newGid);
+
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+
+                        break;
+                    }
                 default:
                     await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
                     break;
@@ -141,11 +156,75 @@ public class DiscordBot : IHostedService
         }
     }
 
-    private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid)
+    private async Task<EmbedBuilder> HandleVanityGid(EmbedBuilder eb, ulong id, string oldGid, string newGid)
     {
+        if (LastVanityGidChange.TryGetValue(oldGid, out var lastChange))
+        {
+            var dateTimeDiff = DateTime.UtcNow.Subtract(lastChange);
+            if (dateTimeDiff.TotalHours < 24)
+            {
+                eb.WithTitle(("Failed to set Vanity Syncshell Id"));
+                eb.WithDescription(
+                    $"You can only change the Vanity Syncshell Id once every 24h. Your last change is {dateTimeDiff} ago.");
+            }
+        }
+
+        Regex rgx = new(@"[_\-a-zA-Z0-9]{5,20}", RegexOptions.ECMAScript);
+        if (!rgx.Match(newGid).Success || newGid.Length < 5 || newGid.Length > 20)
+        {
+            eb.WithTitle("Failed to set Vanity Syncshell Id");
+            eb.WithDescription("The Vanity Syncshell Id must be between 5 and 20 characters and only contain letters A-Z, numbers 0-9 as well as - and _.");
+            return eb;
+        }
+
         using var scope = services.CreateScope();
         await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
 
+        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
+        if (lodestoneUser == null)
+        {
+            eb.WithTitle("Failed to set Vanity Syncshell Id");
+            eb.WithDescription("You do not have a registered account on this server.");
+            return eb;
+        }
+
+        var group = await db.Groups.FirstOrDefaultAsync(g => g.GID == oldGid || g.Alias == oldGid).ConfigureAwait(false);
+        if (group == null)
+        {
+            eb.WithTitle("Failed to set Vanity Syncshell Id");
+            eb.WithDescription("The provided Syncshell Id does not exist.");
+            return eb;
+        }
+
+        if (lodestoneUser.User.UID != group.OwnerUID)
+        {
+            eb.WithTitle("Failed to set Vanity Syncshell Id");
+            eb.WithDescription("You are not the owner of this Syncshell");
+            return eb;
+        }
+
+        var uidExists = await db.Groups.AnyAsync(u => u.GID == newGid || u.Alias == newGid).ConfigureAwait(false);
+        if (uidExists)
+        {
+            eb.WithTitle("Failed to set Vanity Syncshell Id");
+            eb.WithDescription("This Syncshell Id is already taken.");
+            return eb;
+        }
+
+        group.Alias = newGid;
+        db.Update(group);
+        await db.SaveChangesAsync();
+
+        LastVanityGidChange[newGid] = DateTime.UtcNow;
+        LastVanityGidChange[oldGid] = DateTime.UtcNow;
+
+        eb.WithTitle("Vanity Syncshell Id set");
+        eb.WithDescription("The Vanity Syncshell Id was set to **" + newGid + "**." + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
+        return eb;
+    }
+
+    private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid)
+    {
         if (LastVanityChange.TryGetValue(id, out var lastChange))
         {
             var timeRemaining = DateTime.UtcNow.Subtract(lastChange);
@@ -157,13 +236,16 @@ public class DiscordBot : IHostedService
             }
         }
 
-        Regex rgx = new("[A-Z0-9]{10}", RegexOptions.ECMAScript);
-        if (!rgx.Match(newUid).Success || newUid.Length != 10)
+        Regex rgx = new(@"[_\-a-zA-Z0-9]{5,15}", RegexOptions.ECMAScript);
+        if (!rgx.Match(newUid).Success || newUid.Length < 5 || newUid.Length > 15)
         {
             eb.WithTitle("Failed to set Vanity UID");
             eb.WithDescription("The Vanity UID must be between 5 and 15 characters and only contain letters A-Z, numbers 0-9, as well as - and _.");
             return eb;
         }
+
+        using var scope = services.CreateScope();
+        await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
 
         var lodestoneUser = await db.LodeStoneAuth.Include("User").SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
         if (lodestoneUser == null)
@@ -202,7 +284,7 @@ public class DiscordBot : IHostedService
         {
             if (discordAuthedUser.User != null)
             {
-                cleanupService.PurgeUser(discordAuthedUser.User, db);
+                await cleanupService.PurgeUser(discordAuthedUser.User, db);
             }
             else
             {
@@ -508,6 +590,12 @@ public class DiscordBot : IHostedService
         vanityuid.WithDescription("Sets your Vanity UID.");
         vanityuid.AddOption("vanity_uid", ApplicationCommandOptionType.String, "Desired Vanity UID", isRequired: true);
 
+        var vanitygid = new SlashCommandBuilder();
+        vanitygid.WithName("setsyncshellvanityid");
+        vanitygid.WithDescription("Sets a Vanity GID for a Syncshell");
+        vanitygid.AddOption("syncshell_id", ApplicationCommandOptionType.String, "Syncshell ID", isRequired: true);
+        vanitygid.AddOption("vanity_syncshell_id", ApplicationCommandOptionType.String, "Desired Vanity Syncshell ID", isRequired: true);
+
         var recover = new SlashCommandBuilder();
         recover.WithName("recover");
         recover.WithDescription("Allows you to recover your account by generating a new secret key");
@@ -528,13 +616,16 @@ public class DiscordBot : IHostedService
             }
             if (!commands.Any(c => c.Name.Contains("setvanityuid")))
             {
-                await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
                 var vanityCommand = await guild.CreateApplicationCommandAsync(vanityuid.Build()).ConfigureAwait(false);
                 vanityCommandId = vanityCommand.Id;
             }
             else
             {
                 vanityCommandId = commands.First(c => c.Name.Contains("setvanityuid")).Id;
+            }
+            if (!commands.Any(c => c.Name.Contains("setsyncshellvanityid")))
+            {
+                await guild.CreateApplicationCommandAsync(vanitygid.Build()).ConfigureAwait(false);
             }
             if (!commands.Any(c => c.Name.Contains("recover")))
             {
@@ -651,6 +742,8 @@ public class DiscordBot : IHostedService
                     {
                         var aliasedUsers = db.LodeStoneAuth.Include("User")
                             .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias));
+                        var aliasedGroups = db.Groups.Include(u => u.Owner)
+                            .Where(c => !string.IsNullOrEmpty(c.Alias));
 
                         foreach (var lodestoneAuth in aliasedUsers)
                         {
@@ -665,9 +758,30 @@ public class DiscordBot : IHostedService
                             }
 
                             await Task.Delay(100);
+                            await db.SaveChangesAsync().ConfigureAwait(false);
                         }
 
-                        await db.SaveChangesAsync().ConfigureAwait(false);
+                        foreach (var group in aliasedGroups)
+                        {
+                            var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID);
+                            RestGuildUser discordUser = null;
+                            if (lodestoneUser != null)
+                            {
+                                discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
+                            }
+
+                            logger.LogInformation($"Checking Group: {group.GID}, owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+
+                            if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
+                            {
+                                logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
+                                group.Alias = null;
+                                db.Update(group);
+                            }
+
+                            await Task.Delay(100);
+                            await db.SaveChangesAsync().ConfigureAwait(false);
+                        }
                     }
                 }
                 else
@@ -690,7 +804,7 @@ public class DiscordBot : IHostedService
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
-            var onlineUsers = clientService.GetOnlineUsers();
+            var onlineUsers = await clientService.GetOnlineUsers();
             logger.LogInformation("Users online: " + onlineUsers);
             await discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);

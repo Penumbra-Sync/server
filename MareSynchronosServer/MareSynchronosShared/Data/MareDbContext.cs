@@ -39,13 +39,14 @@ public class MareDbContext : DbContext
     public DbSet<Auth> Auth { get; set; }
     public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
     public DbSet<BannedRegistrations> BannedRegistrations { get; set; }
+    public DbSet<Group> Groups { get; set; }
+    public DbSet<GroupPair> GroupPairs { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Auth>().ToTable("auth");
         modelBuilder.Entity<User>().ToTable("users");
-        //modelBuilder.Entity<User>().HasIndex(c => c.CharacterIdentification);
         modelBuilder.Entity<FileCache>().ToTable("file_caches");
         modelBuilder.Entity<FileCache>().HasIndex(c => c.UploaderUID);
         modelBuilder.Entity<ClientPair>().ToTable("client_pairs");
@@ -56,5 +57,11 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<Banned>().ToTable("banned_users");
         modelBuilder.Entity<LodeStoneAuth>().ToTable("lodestone_auth");
         modelBuilder.Entity<BannedRegistrations>().ToTable("banned_registrations");
+        modelBuilder.Entity<Group>().ToTable("groups");
+        modelBuilder.Entity<Group>().HasIndex(c => c.OwnerUID);
+        modelBuilder.Entity<GroupPair>().ToTable("group_pairs");
+        modelBuilder.Entity<GroupPair>().HasKey(u => new { u.GroupGID, u.GroupUserUID });
+        modelBuilder.Entity<GroupPair>().HasIndex(c => c.GroupUserUID);
+        modelBuilder.Entity<GroupPair>().HasIndex(c => c.GroupGID);
     }
 }

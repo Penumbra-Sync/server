@@ -3,6 +3,7 @@ using System;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20220917115233_Groups")]
+    partial class Groups
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -174,8 +176,8 @@ namespace MareSynchronosServer.Migrations
             modelBuilder.Entity("MareSynchronosShared.Models.Group", b =>
                 {
                     b.Property<string>("GID")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)")
                         .HasColumnName("gid");
 
                     b.Property<string>("Alias")
@@ -207,7 +209,7 @@ namespace MareSynchronosServer.Migrations
             modelBuilder.Entity("MareSynchronosShared.Models.GroupPair", b =>
                 {
                     b.Property<string>("GroupGID")
-                        .HasColumnType("character varying(20)")
+                        .HasColumnType("character varying(14)")
                         .HasColumnName("group_gid");
 
                     b.Property<string>("GroupUserUID")
@@ -217,10 +219,6 @@ namespace MareSynchronosServer.Migrations
                     b.Property<bool>("IsPaused")
                         .HasColumnType("boolean")
                         .HasColumnName("is_paused");
-
-                    b.Property<bool>("IsPinned")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_pinned");
 
                     b.HasKey("GroupGID", "GroupUserUID")
                         .HasName("pk_group_pairs");

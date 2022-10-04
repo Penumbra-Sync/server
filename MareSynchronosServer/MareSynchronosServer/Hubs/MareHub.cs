@@ -4,6 +4,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
+using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
@@ -27,9 +28,14 @@ public partial class MareHub : Hub
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
     private readonly IClientIdentificationService _clientIdentService;
-    private readonly ILogger<MareHub> _logger;
+    private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _cdnFullUri;
+    private readonly string _shardName;
+    private readonly int _maxExistingGroupsByUser;
+    private readonly int _maxJoinedGroupsByUser;
+    private readonly int _maxGroupUserCount;
+
     public MareHub(MareMetrics mareMetrics, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor,
         IClientIdentificationService clientIdentService)
@@ -38,10 +44,15 @@ public partial class MareHub : Hub
         _authServiceClient = authServiceClient;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        _cdnFullUri = new Uri(configuration.GetRequiredSection("MareSynchronos").GetValue<string>("CdnFullUrl"));
+        var config = configuration.GetRequiredSection("MareSynchronos");
+        _cdnFullUri = new Uri(config.GetValue<string>("CdnFullUrl"));
+        _shardName = config.GetValue("ShardName", "Main");
+        _maxExistingGroupsByUser = config.GetValue<int>("MaxExistingGroupsByUser", 3);
+        _maxJoinedGroupsByUser = config.GetValue<int>("MaxJoinedGroupsByUser", 6);
+        _maxGroupUserCount = config.GetValue<int>("MaxGroupUserCount", 100);
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
-        _logger = logger;
+        _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
 
@@ -51,9 +62,9 @@ public partial class MareHub : Hub
     {
         _mareMetrics.IncCounter(MetricsAPI.CounterInitializedConnections);
 
-        var userId = Context.User!.Claims.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+        var userId = Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value;
 
-        _logger.LogInformation("Connection from {userId}, CI: {characterIdentification}", userId, characterIdentification);
+        _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification);
 
         await Clients.Caller.SendAsync(Api.OnUpdateSystemInfo, _systemInfoService.SystemInfoDto).ConfigureAwait(false);
 
@@ -62,9 +73,11 @@ public partial class MareHub : Hub
         if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
         {
             var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId).ConfigureAwait(false));
-            var existingIdent = _clientIdentService.GetCharacterIdentForUid(userId);
-            if (!string.IsNullOrEmpty(existingIdent) && characterIdentification != existingIdent)
+            var existingIdent = await _clientIdentService.GetCharacterIdentForUid(userId).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(existingIdent) && !string.Equals(characterIdentification, existingIdent, StringComparison.Ordinal))
             {
+                _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Failure", "LoggedIn");
+
                 return new ConnectionDto()
                 {
                     ServerVersion = Api.Version
@@ -72,17 +85,28 @@ public partial class MareHub : Hub
             }
 
             user.LastLoggedIn = DateTime.UtcNow;
-            _clientIdentService.MarkUserOnline(user.UID, characterIdentification);
+            await _clientIdentService.MarkUserOnline(user.UID, characterIdentification).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+            _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Success");
 
             return new ConnectionDto
             {
                 ServerVersion = Api.Version,
                 UID = string.IsNullOrEmpty(user.Alias) ? user.UID : user.Alias,
                 IsModerator = user.IsModerator,
-                IsAdmin = user.IsAdmin
+                IsAdmin = user.IsAdmin,
+                ServerInfo = new ServerInfoDto()
+                {
+                    MaxGroupsCreatedByUser = _maxExistingGroupsByUser,
+                    ShardName = _shardName,
+                    MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
+                    MaxGroupUserCount = _maxGroupUserCount
+                }
             };
         }
+
+        _logger.LogCallInfo(Api.InvokeHeartbeat, characterIdentification, "Failure");
 
         return new ConnectionDto()
         {
@@ -90,9 +114,21 @@ public partial class MareHub : Hub
         };
     }
 
+    [HubMethodName(Api.InvokeCheckClientHealth)]
+    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    public async Task<bool> CheckClientHealth()
+    {
+        var needsReconnect = string.IsNullOrEmpty(await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false));
+        if (needsReconnect)
+        {
+            _logger.LogCallWarning(Api.InvokeCheckClientHealth, needsReconnect);
+        }
+        return needsReconnect;
+    }
+
     public override async Task OnConnectedAsync()
     {
-        _logger.LogInformation("Connection from {ip}", _contextAccessor.GetIpAddress());
+        _logger.LogCallInfo("Connect", _contextAccessor.GetIpAddress());
         _mareMetrics.IncGauge(MetricsAPI.GaugeConnections);
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
@@ -101,50 +137,22 @@ public partial class MareHub : Hub
     {
         _mareMetrics.DecGauge(MetricsAPI.GaugeConnections);
 
-        var userCharaIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+        var userCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
         if (!string.IsNullOrEmpty(userCharaIdent))
         {
-            var user = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == AuthenticatedUserId)!.ConfigureAwait(false);
             _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
 
-            _logger.LogInformation("Disconnect from {id}", AuthenticatedUserId);
+            _logger.LogCallInfo("Disconnect");
 
-            var query =
-                from userToOther in _dbContext.ClientPairs
-                join otherToUser in _dbContext.ClientPairs
-                    on new
-                    {
-                        user = userToOther.UserUID,
-                        other = userToOther.OtherUserUID
+            await SendDataToAllPairedUsers(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent).ConfigureAwait(false);
 
-                    } equals new
-                    {
-                        user = otherToUser.OtherUserUID,
-                        other = otherToUser.UserUID
-                    }
-                where
-                    userToOther.UserUID == user.UID
-                    && !userToOther.IsPaused
-                    && !otherToUser.IsPaused
-                select otherToUser.UserUID;
-            var otherEntries = await query.ToListAsync().ConfigureAwait(false);
+            _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == AuthenticatedUserId));
 
-            await Clients.Users(otherEntries).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userCharaIdent).ConfigureAwait(false);
-
-            _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == user.UID));
-
-            _clientIdentService.MarkUserOffline(user.UID);
+            await _clientIdentService.MarkUserOffline(AuthenticatedUserId).ConfigureAwait(false);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
-    }
-
-    protected string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
-
-    protected async Task<User> GetAuthenticatedUserUntrackedAsync()
-    {
-        return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
     }
 }

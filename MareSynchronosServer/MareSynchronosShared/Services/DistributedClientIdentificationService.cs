@@ -21,14 +21,14 @@ public class DistributedClientIdentificationService : BaseClientIdentificationSe
         this.configuration = configuration.GetSection("MareSynchronos");
     }
 
-    public override int GetOnlineUsers()
+    public override async Task<int> GetOnlineUsers()
     {
         try
         {
             var redis = configuration.GetValue<string>("RedisConnectionString");
-            var conn = ConnectionMultiplexer.Connect(redis);
+            var conn = await ConnectionMultiplexer.ConnectAsync(redis).ConfigureAwait(false);
             var endpoint = conn.GetEndPoints().First();
-            return conn.GetServer(endpoint).Keys(pattern: "*" + RedisPrefix + "*").Count();
+            return await conn.GetServer(endpoint).KeysAsync(pattern: "*" + RedisPrefix + "*").CountAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -37,27 +37,27 @@ public class DistributedClientIdentificationService : BaseClientIdentificationSe
         }
     }
 
-    public override string? GetCharacterIdentForUid(string uid)
+    public override async Task<string?> GetCharacterIdentForUid(string uid)
     {
-        var localIdent = base.GetCharacterIdentForUid(uid);
+        var localIdent = await base.GetCharacterIdentForUid(uid).ConfigureAwait(false);
         if (localIdent != null) return localIdent;
-        var cachedIdent = distributedCache.Get(RedisPrefix + uid);
-        return cachedIdent == null ? null : Encoding.UTF8.GetString(cachedIdent);
+        var cachedIdent = await distributedCache.GetStringAsync(RedisPrefix + uid).ConfigureAwait(false);
+        return cachedIdent ?? null;
     }
 
-    public override void MarkUserOffline(string uid)
+    public override async Task MarkUserOffline(string uid)
     {
-        base.MarkUserOffline(uid);
-        distributedCache.Remove(RedisPrefix + uid);
+        await base.MarkUserOffline(uid).ConfigureAwait(false);
+        await distributedCache.RemoveAsync(RedisPrefix + uid).ConfigureAwait(false);
     }
 
-    public override void MarkUserOnline(string uid, string charaIdent)
+    public override async Task MarkUserOnline(string uid, string charaIdent)
     {
-        base.MarkUserOnline(uid, charaIdent);
-        distributedCache.Set(RedisPrefix + uid, Encoding.UTF8.GetBytes(charaIdent), new DistributedCacheEntryOptions()
+        await base.MarkUserOnline(uid, charaIdent).ConfigureAwait(false);
+        await distributedCache.SetAsync(RedisPrefix + uid, Encoding.UTF8.GetBytes(charaIdent), new DistributedCacheEntryOptions()
         {
             AbsoluteExpiration = DateTime.Now.AddDays(7)
-        });
+        }).ConfigureAwait(false);
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)

@@ -1,6 +1,4 @@
-﻿using MareSynchronosShared.Data;
-using Microsoft.Extensions.DependencyInjection;
-using Prometheus;
+﻿using Prometheus;
 
 namespace MareSynchronosShared.Metrics;
 
