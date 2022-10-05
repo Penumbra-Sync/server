@@ -63,6 +63,12 @@ public class Startup
             }
         };
 
+        var identMethodConfig = new MethodConfig
+        {
+            Names = { MethodName.Default },
+            RetryPolicy = null
+        };
+
         services.AddSingleton(new MareMetrics(new List<string>
         {
             MetricsAPI.CounterInitializedConnections,
@@ -105,7 +111,7 @@ public class Startup
             c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
         }).ConfigureChannel(c =>
         {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { identMethodConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
                 EnableMultipleHttp2Connections = true
