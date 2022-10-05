@@ -77,8 +77,6 @@ public class Startup
             MetricsAPI.GaugePairsPaused,
             MetricsAPI.GaugeAvailableIOWorkerThreads,
             MetricsAPI.GaugeAvailableWorkerThreads,
-            MetricsAPI.GaugePairs,
-            MetricsAPI.GaugePairsPaused,
             MetricsAPI.GaugeGroups,
             MetricsAPI.GaugeGroupPairs,
             MetricsAPI.GaugeGroupPairsPaused
