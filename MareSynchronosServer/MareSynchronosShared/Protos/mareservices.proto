@@ -16,7 +16,49 @@ service FileService {
 	rpc DeleteFiles (DeleteFilesRequest) returns (Empty);
 }
 
+service IdentificationService {
+	rpc GetOnlineUserCount (ServerMessage) returns (OnlineUserCountResponse);
+	rpc RemoveIdentForUid (RemoveIdentMessage) returns (Empty);
+	rpc SetIdentForUid (SetIdentMessage) returns (Empty);
+	rpc GetUidForCharacterIdent (CharacterIdentMessage) returns (UidMessage);
+	rpc GetIdentForUid (UidMessage) returns (CharacterIdentMessage);
+	rpc ClearIdentsForServer (ServerMessage) returns (Empty);
+	rpc RecreateServerIdents (ServerIdentMessage) returns (Empty);
+}
+
 message Empty { }
+
+message ServerIdentMessage {
+	repeated SetIdentMessage idents = 1;
+}
+
+message ServerMessage {
+	string server_id = 1;
+}
+
+message OnlineUserCountResponse {
+	int64 count = 1;
+}
+
+message RemoveIdentMessage {
+	string uid = 1;
+	string server_id = 2;
+}
+
+message SetIdentMessage {
+	string uid = 1;
+	string server_id = 2;
+	string ident = 3;
+}
+
+message CharacterIdentMessage {
+	string server_id = 1;
+	string ident = 2;
+}
+
+message UidMessage {
+	string uid = 1;
+}
 
 message UploadFileRequest {
 	string hash = 1;

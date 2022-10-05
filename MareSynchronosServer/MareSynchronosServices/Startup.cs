@@ -10,7 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
 using System.Collections.Generic;
-using MareSynchronosShared.Services;
+using MareSynchronosServices.Identity;
 
 namespace MareSynchronosServices;
 
@@ -45,29 +45,12 @@ public class Startup
         }));
 
         services.AddSingleton<SecretKeyAuthenticationHandler>();
+        services.AddSingleton<IdentityHandler>();
         services.AddSingleton<CleanupService>();
         services.AddTransient(_ => Configuration);
         services.AddHostedService(provider => provider.GetService<CleanupService>());
         services.AddHostedService<DiscordBot>();
         services.AddGrpc();
-
-        // add redis related options
-        var redis = Configuration.GetSection("MareSynchronos").GetValue("RedisConnectionString", string.Empty);
-        if (!string.IsNullOrEmpty(redis))
-        {
-            services.AddStackExchangeRedisCache(opt =>
-            {
-                opt.Configuration = redis;
-                opt.InstanceName = "MareSynchronosCache:";
-            });
-            services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
-        }
-        else
-        {
-            services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
-        }
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -80,6 +63,7 @@ public class Startup
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapGrpcService<AuthenticationService>();
+            endpoints.MapGrpcService<IdentityService>();
         });
     }
 }

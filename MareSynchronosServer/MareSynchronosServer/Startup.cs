@@ -20,7 +20,6 @@ using Prometheus;
 using MareSynchronosShared.Metrics;
 using System.Collections.Generic;
 using MareSynchronosServer.Services;
-using MareSynchronosShared.Services;
 using System.Net.Http;
 using MareSynchronosServer.Utils;
 
@@ -77,7 +76,12 @@ public class Startup
             MetricsAPI.GaugePairs,
             MetricsAPI.GaugePairsPaused,
             MetricsAPI.GaugeAvailableIOWorkerThreads,
-            MetricsAPI.GaugeAvailableWorkerThreads
+            MetricsAPI.GaugeAvailableWorkerThreads,
+            MetricsAPI.GaugePairs,
+            MetricsAPI.GaugePairsPaused,
+            MetricsAPI.GaugeGroups,
+            MetricsAPI.GaugeGroupPairs,
+            MetricsAPI.GaugeGroupPairsPaused
         }));
 
         services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
@@ -97,6 +101,17 @@ public class Startup
         }).ConfigureChannel(c =>
         {
             c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+        });
+        services.AddGrpcClient<IdentificationService.IdentificationServiceClient>(c =>
+        {
+            c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+            c.HttpHandler = new SocketsHttpHandler()
+            {
+                EnableMultipleHttp2Connections = true
+            };
         });
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -135,21 +150,10 @@ public class Startup
             {
                 options.Configuration.ChannelPrefix = "MareSynchronos";
             });
-
-            services.AddStackExchangeRedisCache(opt =>
-            {
-                opt.Configuration = redis;
-                opt.InstanceName = "MareSynchronosCache:";
-            });
-            services.AddSingleton<IClientIdentificationService, DistributedClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
-        }
-        else
-        {
-            services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
         }
 
+        services.AddSingleton<GrpcClientIdentificationService>();
+        services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
     }
 
