@@ -24,7 +24,7 @@ public class GrpcClientIdentificationService : IHostedService
     public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient, MareMetrics metrics, IConfiguration configuration)
     {
         var config = configuration.GetSection("MareSynchronos");
-        _shardName = config.GetValue("ServerName", "Main");
+        _shardName = config.GetValue("ShardName", "Main");
         _logger = logger;
         _grpcIdentClient = gprcIdentClient;
         _metrics = metrics;
