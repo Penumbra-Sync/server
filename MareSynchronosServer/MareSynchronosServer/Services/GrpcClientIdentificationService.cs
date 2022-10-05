@@ -17,7 +17,7 @@ public class GrpcClientIdentificationService : IHostedService
     private readonly string _shardName;
     private readonly ILogger<GrpcClientIdentificationService> _logger;
     private readonly IdentificationService.IdentificationServiceClient _grpcIdentClient;
-    private readonly MareMetrics metrics;
+    private readonly MareMetrics _metrics;
     protected ConcurrentDictionary<string, string> OnlineClients = new(StringComparer.Ordinal);
     private bool _grpcIsFaulty = false;
 
@@ -27,6 +27,7 @@ public class GrpcClientIdentificationService : IHostedService
         _shardName = config.GetValue("ServerName", "Main");
         _logger = logger;
         _grpcIdentClient = gprcIdentClient;
+        _metrics = metrics;
     }
 
     public async Task<string?> GetCharacterIdentForUid(string uid)
@@ -76,14 +77,14 @@ public class GrpcClientIdentificationService : IHostedService
     public async Task MarkUserOffline(string uid)
     {
         OnlineClients.TryRemove(uid, out _);
-        metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
+        _metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
         await ExecuteOnGrpc(_grpcIdentClient.RemoveIdentForUidAsync(new RemoveIdentMessage() { ServerId = _shardName, Uid = uid })).ConfigureAwait(false);
     }
 
     public async Task MarkUserOnline(string uid, string charaIdent)
     {
         OnlineClients[uid] = charaIdent;
-        metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
+        _metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
         await ExecuteOnGrpc(_grpcIdentClient.SetIdentForUidAsync(new SetIdentMessage() { Ident = charaIdent, ServerId = _shardName, Uid = uid })).ConfigureAwait(false);
     }
 

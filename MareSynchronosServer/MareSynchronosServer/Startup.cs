@@ -118,6 +118,9 @@ public class Startup
             };
         });
 
+        services.AddSingleton<GrpcClientIdentificationService>();
+        services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
+
         services.AddDbContextPool<MareDbContext>(options =>
         {
             options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
@@ -156,8 +159,6 @@ public class Startup
             });
         }
 
-        services.AddSingleton<GrpcClientIdentificationService>();
-        services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
     }
 
