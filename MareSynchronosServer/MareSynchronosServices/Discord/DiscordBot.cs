@@ -12,10 +12,10 @@ using Discord;
 using Discord.Rest;
 using Discord.WebSocket;
 using MareSynchronosServices.Authentication;
+using MareSynchronosServices.Identity;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
-using MareSynchronosShared.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,11 +24,11 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Discord;
 
-public class DiscordBot : IHostedService
+internal class DiscordBot : IHostedService
 {
     private readonly CleanupService cleanupService;
     private readonly MareMetrics metrics;
-    private readonly IClientIdentificationService clientService;
+    private readonly IdentityHandler identityHandler;
     private readonly IServiceProvider services;
     private readonly IConfiguration _configuration;
     private readonly ILogger<DiscordBot> logger;
@@ -44,16 +44,15 @@ public class DiscordBot : IHostedService
     private ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     private ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     private ulong vanityCommandId;
-    private ulong vanityGidCommandId;
     private Task cleanUpUserTask = null;
 
     private SemaphoreSlim semaphore;
 
-    public DiscordBot(CleanupService cleanupService, MareMetrics metrics, IClientIdentificationService clientService, IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
+    public DiscordBot(CleanupService cleanupService, MareMetrics metrics, IdentityHandler identityHandler, IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
     {
         this.cleanupService = cleanupService;
         this.metrics = metrics;
-        this.clientService = clientService;
+        this.identityHandler = identityHandler;
         this.services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
         this.logger = logger;
@@ -804,7 +803,7 @@ public class DiscordBot : IHostedService
         updateStatusCts = new();
         while (!updateStatusCts.IsCancellationRequested)
         {
-            var onlineUsers = await clientService.GetOnlineUsers();
+            var onlineUsers = identityHandler.GetOnlineUsers(string.Empty);
             logger.LogInformation("Users online: " + onlineUsers);
             await discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);

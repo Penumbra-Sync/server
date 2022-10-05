@@ -8,9 +8,7 @@ using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
-using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
@@ -27,7 +25,7 @@ public partial class MareHub : Hub
     private readonly FileService.FileServiceClient _fileServiceClient;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
-    private readonly IClientIdentificationService _clientIdentService;
+    private readonly GrpcClientIdentificationService _clientIdentService;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _cdnFullUri;
@@ -38,7 +36,7 @@ public partial class MareHub : Hub
 
     public MareHub(MareMetrics mareMetrics, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor,
-        IClientIdentificationService clientIdentService)
+        GrpcClientIdentificationService clientIdentService)
     {
         _mareMetrics = mareMetrics;
         _authServiceClient = authServiceClient;
@@ -118,9 +116,11 @@ public partial class MareHub : Hub
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     public async Task<bool> CheckClientHealth()
     {
-        var needsReconnect = string.IsNullOrEmpty(await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false));
-        if (needsReconnect)
+        var serverId = await _clientIdentService.GetServerForUid(AuthenticatedUserId).ConfigureAwait(false);
+        bool needsReconnect = false;
+        if (string.IsNullOrEmpty(serverId) || !string.Equals(serverId, _shardName, StringComparison.Ordinal))
         {
+            needsReconnect = true;
             _logger.LogCallWarning(Api.InvokeCheckClientHealth, needsReconnect);
         }
         return needsReconnect;

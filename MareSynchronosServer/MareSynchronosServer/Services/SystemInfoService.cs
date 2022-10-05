@@ -6,7 +6,6 @@ using MareSynchronos.API;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,14 +18,14 @@ public class SystemInfoService : IHostedService, IDisposable
 {
     private readonly MareMetrics _mareMetrics;
     private readonly IServiceProvider _services;
-    private readonly IClientIdentificationService _clientIdentService;
+    private readonly GrpcClientIdentificationService _clientIdentService;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub> _hubContext;
     private Timer _timer;
     private string _shardName;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         _services = services;
@@ -56,7 +55,7 @@ public class SystemInfoService : IHostedService, IDisposable
         {
             SystemInfoDto = new SystemInfoDto()
             {
-                OnlineUsers = _clientIdentService.GetOnlineUsers().Result,
+                OnlineUsers = (int)_clientIdentService.GetOnlineUsers().Result,
             };
 
             _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
