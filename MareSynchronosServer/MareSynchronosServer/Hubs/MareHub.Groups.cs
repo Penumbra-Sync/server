@@ -558,6 +558,13 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
 
+        await Clients.Users(uid).SendAsync(Api.OnGroupChange, new GroupDto()
+        {
+            GID = gid,
+            OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
+            IsModerator = false
+        }).ConfigureAwait(false);
+
         await Clients.Users(groupPairs).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = gid,
