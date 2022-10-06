@@ -219,7 +219,8 @@ public partial class MareHub
             IsRemoved = false,
             UserUID = AuthenticatedUserId,
             UserAlias = self.Alias,
-            IsPinned = false
+            IsPinned = false,
+            IsModerator = false,
         }).ConfigureAwait(false);
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
