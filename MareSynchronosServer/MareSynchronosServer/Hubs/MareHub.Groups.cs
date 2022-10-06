@@ -516,7 +516,7 @@ public partial class MareHub
             IsModerator = IsModerator
         }).ConfigureAwait(false);
 
-        await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))
+        await Clients.Users(groupPairs.Where(p => !string.Equals(p.GroupUserUID, uid, StringComparison.Ordinal))
             .Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
             {
                 GroupGID = gid,
