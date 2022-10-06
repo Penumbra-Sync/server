@@ -1,4 +1,5 @@
 ﻿using MareSynchronosShared.Models;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosShared.Data;
@@ -41,6 +42,7 @@ public class MareDbContext : DbContext
     public DbSet<BannedRegistrations> BannedRegistrations { get; set; }
     public DbSet<Group> Groups { get; set; }
     public DbSet<GroupPair> GroupPairs { get; set; }
+    public DbSet<GroupBan> GroupBans { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -63,5 +65,9 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<GroupPair>().HasKey(u => new { u.GroupGID, u.GroupUserUID });
         modelBuilder.Entity<GroupPair>().HasIndex(c => c.GroupUserUID);
         modelBuilder.Entity<GroupPair>().HasIndex(c => c.GroupGID);
+        modelBuilder.Entity<GroupBan>().ToTable("group_bans");
+        modelBuilder.Entity<GroupBan>().HasKey(u => new { u.GroupGID, u.BannedUserUID });
+        modelBuilder.Entity<GroupBan>().HasIndex(c => c.BannedUserUID);
+        modelBuilder.Entity<GroupBan>().HasIndex(c => c.GroupGID);
     }
 }

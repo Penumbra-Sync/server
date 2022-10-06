@@ -22,6 +22,10 @@ public static class SharedDbFunctions
             if (groupHasMigrated)
             {
                 newOwner = potentialNewOwner.GroupUserUID;
+                potentialNewOwner.IsPinned = true;
+                potentialNewOwner.IsModerator = false;
+
+                await context.SaveChangesAsync().ConfigureAwait(false);
                 break;
             }
         }

@@ -107,4 +107,34 @@ public partial class MareHub
         }
     }
 
+    private async Task<(bool IsValid, GroupPair ReferredPair)> TryValidateUserInGroup(string gid, string? uid = null)
+    {
+        uid ??= AuthenticatedUserId;
+
+        var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser).SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
+        if (groupPair == null) return (false, null);
+
+        return (true, groupPair);
+    }
+
+    private async Task<(bool IsValid, Group ReferredGroup)> TryValidateGroupModeratorOrOwner(string gid)
+    {
+        var isOwnerResult = await TryValidateOwner(gid).ConfigureAwait(false);
+        if (isOwnerResult.isValid) return (true, isOwnerResult.ReferredGroup);
+
+        if (isOwnerResult.ReferredGroup == null) return (false, null);
+
+        var groupPairSelf = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
+        if (groupPairSelf == null || !groupPairSelf.IsModerator) return (false, null);
+
+        return (true, isOwnerResult.ReferredGroup);
+    }
+
+    private async Task<(bool isValid, Group ReferredGroup)> TryValidateOwner(string gid)
+    {
+        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
+        if (group == null) return (false, null);
+
+        return (string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal), group);
+    }
 }
