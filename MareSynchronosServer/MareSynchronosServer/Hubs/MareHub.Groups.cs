@@ -510,12 +510,19 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupGID == gid).ToListAsync().ConfigureAwait(false);
 
-        await Clients.Users(groupPairs.Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+        await Clients.User(uid).SendAsync(Api.OnGroupChange, new GroupDto()
         {
-            GroupGID = gid,
-            IsModerator = isModerator,
-            UserUID = uid
+            GID = gid,
+            IsModerator = IsModerator
         }).ConfigureAwait(false);
+
+        await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))
+            .Select(g => g.GroupUserUID)).SendAsync(Api.OnGroupUserChange, new GroupPairDto()
+            {
+                GroupGID = gid,
+                IsModerator = isModerator,
+                UserUID = uid
+            }).ConfigureAwait(false);
 
         _logger.LogCallInfo(Api.SendGroupSetModerator, gid, uid, IsModerator, "Success");
     }
