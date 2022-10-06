@@ -93,7 +93,8 @@ public partial class MareHub
             Alias = g.Group.Alias,
             InvitesEnabled = g.Group.InvitesEnabled,
             OwnedBy = string.IsNullOrEmpty(g.Group.Owner.Alias) ? g.Group.Owner.UID : g.Group.Owner.Alias,
-            IsPaused = g.IsPaused
+            IsPaused = g.IsPaused,
+            IsModerator = g.IsModerator,
         }).ToList();
     }
 
@@ -172,7 +173,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(Api.InvokeGroupJoin, gid);
 
-        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);
+        var group = await _dbContext.Groups.Include(g => g.Owner).SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);
         var existingPair = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         var hashedPw = StringUtils.Sha256String(password);
         var existingUserCount = await _dbContext.GroupPairs.CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
@@ -202,7 +203,7 @@ public partial class MareHub
         await Clients.User(AuthenticatedUserId).SendAsync(Api.OnGroupChange, new GroupDto()
         {
             GID = group.GID,
-            OwnedBy = group.OwnerUID,
+            OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
             IsDeleted = false,
             IsPaused = false,
             Alias = group.Alias,
