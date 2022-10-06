@@ -111,7 +111,8 @@ public partial class MareHub
     {
         uid ??= AuthenticatedUserId;
 
-        var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser).SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == uid).ConfigureAwait(false);
+        var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser)
+            .SingleOrDefaultAsync(g => g.GroupGID == gid && (g.GroupUserUID == uid || g.GroupUser.Alias == uid)).ConfigureAwait(false);
         if (groupPair == null) return (false, null);
 
         return (true, groupPair);
