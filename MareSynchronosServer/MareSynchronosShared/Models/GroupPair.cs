@@ -8,4 +8,5 @@ public class GroupPair
     public User GroupUser { get; set; }
     public bool IsPaused { get; set; }
     public bool IsPinned { get; set; }
+    public bool IsModerator { get; set; }
 }

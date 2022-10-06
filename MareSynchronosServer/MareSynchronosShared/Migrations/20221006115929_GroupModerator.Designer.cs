@@ -3,6 +3,7 @@ using System;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,10 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20221006115929_GroupModerator")]
+    partial class GroupModerator
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -204,43 +206,6 @@ namespace MareSynchronosServer.Migrations
                     b.ToTable("groups", (string)null);
                 });
 
-            modelBuilder.Entity("MareSynchronosShared.Models.GroupBan", b =>
-                {
-                    b.Property<string>("GroupGID")
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("group_gid");
-
-                    b.Property<string>("BannedUserUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("banned_user_uid");
-
-                    b.Property<string>("BannedByUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("banned_by_uid");
-
-                    b.Property<DateTime>("BannedOn")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("banned_on");
-
-                    b.Property<string>("BannedReason")
-                        .HasColumnType("text")
-                        .HasColumnName("banned_reason");
-
-                    b.HasKey("GroupGID", "BannedUserUID")
-                        .HasName("pk_group_bans");
-
-                    b.HasIndex("BannedByUID")
-                        .HasDatabaseName("ix_group_bans_banned_by_uid");
-
-                    b.HasIndex("BannedUserUID")
-                        .HasDatabaseName("ix_group_bans_banned_user_uid");
-
-                    b.HasIndex("GroupGID")
-                        .HasDatabaseName("ix_group_bans_group_gid");
-
-                    b.ToTable("group_bans", (string)null);
-                });
-
             modelBuilder.Entity("MareSynchronosShared.Models.GroupPair", b =>
                 {
                     b.Property<string>("GroupGID")
@@ -391,37 +356,9 @@ namespace MareSynchronosServer.Migrations
                     b.HasOne("MareSynchronosShared.Models.User", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerUID")
-                        .HasConstraintName("fk_groups_users_owner_temp_id7");
+                        .HasConstraintName("fk_groups_users_owner_temp_id5");
 
                     b.Navigation("Owner");
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.GroupBan", b =>
-                {
-                    b.HasOne("MareSynchronosShared.Models.User", "BannedBy")
-                        .WithMany()
-                        .HasForeignKey("BannedByUID")
-                        .HasConstraintName("fk_group_bans_users_banned_by_temp_id4");
-
-                    b.HasOne("MareSynchronosShared.Models.User", "BannedUser")
-                        .WithMany()
-                        .HasForeignKey("BannedUserUID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_group_bans_users_banned_user_temp_id5");
-
-                    b.HasOne("MareSynchronosShared.Models.Group", "Group")
-                        .WithMany()
-                        .HasForeignKey("GroupGID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_group_bans_groups_group_temp_id");
-
-                    b.Navigation("BannedBy");
-
-                    b.Navigation("BannedUser");
-
-                    b.Navigation("Group");
                 });
 
             modelBuilder.Entity("MareSynchronosShared.Models.GroupPair", b =>
@@ -431,14 +368,14 @@ namespace MareSynchronosServer.Migrations
                         .HasForeignKey("GroupGID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_group_pairs_groups_group_temp_id1");
+                        .HasConstraintName("fk_group_pairs_groups_group_temp_id");
 
                     b.HasOne("MareSynchronosShared.Models.User", "GroupUser")
                         .WithMany()
                         .HasForeignKey("GroupUserUID")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_group_pairs_users_group_user_temp_id6");
+                        .HasConstraintName("fk_group_pairs_users_group_user_temp_id4");
 
                     b.Navigation("Group");
 
