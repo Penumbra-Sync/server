@@ -381,6 +381,7 @@ public partial class MareHub
         var (userExists, groupPair) = await TryValidateUserInGroup(gid, uid).ConfigureAwait(false);
         if (!userExists) return;
 
+        if (groupPair.IsModerator || string.Equals(group.OwnerUID, uid, StringComparison.Ordinal)) return;
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, "Success"));
 
         _dbContext.GroupPairs.Remove(groupPair);
@@ -416,11 +417,13 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid));
 
-        var (userHasRights, _) = await TryValidateGroupModeratorOrOwner(gid).ConfigureAwait(false);
+        var (userHasRights, group) = await TryValidateGroupModeratorOrOwner(gid).ConfigureAwait(false);
         if (!userHasRights) return;
 
         var (userExists, groupPair) = await TryValidateUserInGroup(gid, uid).ConfigureAwait(false);
         if (!userExists) return;
+
+        if (groupPair.IsModerator || string.Equals(group.OwnerUID, uid, StringComparison.Ordinal)) return;
 
         var alias = string.IsNullOrEmpty(groupPair.GroupUser.Alias) ? "-" : groupPair.GroupUser.Alias;
         var ban = new GroupBan()
@@ -482,9 +485,9 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    public async Task GroupSetModerator(string gid, string uid, bool isModerator)
+    public async Task SetModerator(string gid, string uid, bool isGroupModerator)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(gid, uid, IsModerator));
+        _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator));
 
         var (userHasRights, _) = await TryValidateOwner(gid).ConfigureAwait(false);
         if (!userHasRights) return;
@@ -492,7 +495,7 @@ public partial class MareHub
         var (userExists, userPair) = await TryValidateUserInGroup(gid, uid).ConfigureAwait(false);
         if (!userExists) return;
 
-        userPair.IsModerator = IsModerator;
+        userPair.IsModerator = isGroupModerator;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupGID == gid).ToListAsync().ConfigureAwait(false);
@@ -500,18 +503,18 @@ public partial class MareHub
         await Clients.User(uid).Client_GroupChange(new GroupDto()
         {
             GID = gid,
-            IsModerator = IsModerator
+            IsModerator = isGroupModerator
         }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs.Where(p => !string.Equals(p.GroupUserUID, uid, StringComparison.Ordinal))
             .Select(g => g.GroupUserUID)).Client_GroupUserChange(new GroupPairDto()
             {
                 GroupGID = gid,
-                IsModerator = isModerator,
+                IsModerator = isGroupModerator,
                 UserUID = uid
             }).ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(gid, uid, IsModerator, "Success"));
+        _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator, "Success"));
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -539,6 +542,13 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, "Success"));
 
         var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).Select(p => p.GroupUserUID).ToListAsync().ConfigureAwait(false);
+
+        await Clients.Users(uid).Client_GroupChange(new GroupDto()
+        {
+            GID = gid,
+            OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
+            IsModerator = false
+        }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs).Client_GroupChange(new GroupDto()
         {

@@ -133,6 +133,8 @@ public class GrpcClientIdentificationService : IHostedService
     {
         if (_grpcIsFaulty)
         {
+            _grpcIsFaulty = false;
+
             _logger.LogInformation("GRPC connection is restored, sending current server idents");
             await _grpcIdentClient.ClearIdentsForServerAsync(new ServerMessage() { ServerId = _shardName }).ConfigureAwait(false);
             var msg = new ServerIdentMessage();
@@ -143,7 +145,6 @@ public class GrpcClientIdentificationService : IHostedService
                 ServerId = _shardName
             }));
             await _grpcIdentClient.RecreateServerIdentsAsync(msg).ConfigureAwait(false);
-            _grpcIsFaulty = false;
         }
     }
 
