@@ -189,7 +189,7 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
-            endpoints.MapHub<MareHub>(Api.Path, options =>
+            endpoints.MapHub<MareHub>(IMareHub.Path, options =>
             {
                 options.ApplicationMaxBufferSize = 5242880;
                 options.TransportMaxBufferSize = 5242880;

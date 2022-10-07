@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Google.Protobuf;
 using Grpc.Core;
 using MareSynchronos.API;
+using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
@@ -21,10 +22,9 @@ namespace MareSynchronosServer.Hubs;
 public partial class MareHub
 {
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendFileAbortUpload)]
-    public async Task AbortUpload()
+    public async Task FilesAbortUpload()
     {
-        _logger.LogCallInfo(Api.SendFileAbortUpload);
+        _logger.LogCallInfo();
         var userId = AuthenticatedUserId;
         var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == userId).ToList();
         _dbContext.RemoveRange(notUploadedFiles);
@@ -32,10 +32,9 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendFileDeleteAllFiles)]
-    public async Task DeleteAllFiles()
+    public async Task FilesDeleteAll()
     {
-        _logger.LogCallInfo(Api.SendFileDeleteAllFiles);
+        _logger.LogCallInfo();
 
         var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
         var request = new DeleteFilesRequest();
@@ -48,10 +47,9 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeGetFilesSizes)]
-    public async Task<List<DownloadFileDto>> GetFilesSizes(List<string> hashes)
+    public async Task<List<DownloadFileDto>> FilesGetSizes(List<string> hashes)
     {
-        _logger.LogCallInfo(Api.InvokeGetFilesSizes, hashes.Count.ToString());
+        _logger.LogCallInfo(MareHubLogger.Args(hashes.Count.ToString()));
 
         var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
@@ -86,21 +84,19 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeFileIsUploadFinished)]
-    public async Task<bool> IsUploadFinished()
+    public async Task<bool> FilesIsUploadFinished()
     {
-        _logger.LogCallInfo(Api.InvokeFileIsUploadFinished);
+        _logger.LogCallInfo();
         var userUid = AuthenticatedUserId;
         return await _dbContext.Files.AsNoTracking()
             .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded).ConfigureAwait(false);
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeFileSendFiles)]
-    public async Task<List<UploadFileDto>> SendFiles(List<string> fileListHashes)
+    public async Task<List<UploadFileDto>> FilesSend(List<string> fileListHashes)
     {
         var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal), StringComparer.Ordinal);
-        _logger.LogCallInfo(Api.InvokeFileSendFiles, userSentHashes.Count.ToString());
+        _logger.LogCallInfo(MareHubLogger.Args(userSentHashes.Count.ToString()));
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
@@ -125,7 +121,7 @@ public partial class MareHub
             }
             if (existingFiles.ContainsKey(file)) { continue; }
 
-            _logger.LogCallInfo(Api.InvokeFileSendFiles, file, "Missing");
+            _logger.LogCallInfo(MareHubLogger.Args(file, "Missing"));
 
             var userId = AuthenticatedUserId;
             fileCachesToUpload.Add(new FileCache()
@@ -147,10 +143,9 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendFileUploadFileStreamAsync)]
-    public async Task UploadFileStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
+    public async Task FilesUploadStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
     {
-        _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash);
+        _logger.LogCallInfo(MareHubLogger.Args(hash));
 
         var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && !f.Uploaded);
         if (relatedFile == null) return;
@@ -192,7 +187,7 @@ public partial class MareHub
             return;
         }
 
-        _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash, "Uploaded");
+        _logger.LogCallInfo(MareHubLogger.Args(hash, "Uploaded"));
 
         try
         {
@@ -203,7 +198,7 @@ public partial class MareHub
             var computedHashString = BitConverter.ToString(computedHash).Replace("-", "", StringComparison.Ordinal);
             if (!string.Equals(hash, computedHashString, StringComparison.Ordinal))
             {
-                _logger.LogCallWarning(Api.SendFileUploadFileStreamAsync, hash, "Invalid", computedHashString);
+                _logger.LogCallWarning(MareHubLogger.Args(hash, "Invalid", computedHashString));
                 _dbContext.Remove(relatedFile);
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -232,11 +227,11 @@ public partial class MareHub
             tempFileStream.Close();
             await tempFileStream.DisposeAsync().ConfigureAwait(false);
 
-            _logger.LogCallInfo(Api.SendFileUploadFileStreamAsync, hash, "Pushed");
+            _logger.LogCallInfo(MareHubLogger.Args(hash, "Pushed"));
         }
         catch (Exception ex)
         {
-            _logger.LogCallWarning(Api.SendFileUploadFileStreamAsync, "Failed", hash, ex.Message);
+            _logger.LogCallWarning(MareHubLogger.Args("Failed", hash, ex.Message));
             _dbContext.Remove(relatedFile);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }

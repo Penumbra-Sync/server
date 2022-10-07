@@ -10,17 +10,15 @@ using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendUserDeleteAccount)]
-    public async Task DeleteAccount()
+    public async Task UserDelete()
     {
-        _logger.LogCallInfo(Api.SendUserDeleteAccount);
+        _logger.LogCallInfo();
 
         string userid = AuthenticatedUserId;
         var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid).ConfigureAwait(false);
@@ -48,12 +46,11 @@ public partial class MareHub
             .Where(u => u.OtherUser.UID == userid).ToListAsync().ConfigureAwait(false);
         foreach (var pair in otherPairData)
         {
-            await Clients.User(pair.User.UID)
-                .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
-                {
-                    OtherUID = userid,
-                    IsRemoved = true
-                }, charaIdent).ConfigureAwait(false);
+            await Clients.User(pair.User.UID).Client_UserUpdateClientPairs(new ClientPairDto()
+            {
+                OtherUID = userid,
+                IsRemoved = true
+            }).ConfigureAwait(false);
         }
 
         foreach (var pair in groupPairs)
@@ -70,22 +67,20 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeUserGetOnlineCharacters)]
-    public async Task<List<string>> GetOnlineCharacters()
+    public async Task<List<string>> UserGetOnlineCharacters()
     {
-        _logger.LogCallInfo(Api.InvokeUserGetOnlineCharacters);
+        _logger.LogCallInfo();
 
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
-        var usersToSendOnlineTo = await SendDataToAllPairedUsers(Api.OnUserAddOnlinePairedPlayer, ownIdent).ConfigureAwait(false);
+        var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(ownIdent).ConfigureAwait(false);
         return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e).ConfigureAwait(false)).Select(t => t.Result).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeUserGetPairedClients)]
-    public async Task<List<ClientPairDto>> GetPairedClients()
+    public async Task<List<ClientPairDto>> UserGetPairedClients()
     {
-        _logger.LogCallInfo(Api.InvokeUserGetPairedClients);
+        _logger.LogCallInfo();
 
         string userid = AuthenticatedUserId;
         var query =
@@ -124,10 +119,9 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.InvokeUserPushCharacterDataToVisibleClients)]
-    public async Task PushCharacterDataToVisibleClients(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
+    public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
-        _logger.LogCallInfo(Api.InvokeUserPushCharacterDataToVisibleClients, visibleCharacterIds.Count);
+        _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
@@ -136,19 +130,18 @@ public partial class MareHub
 
         var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
 
-        _logger.LogCallInfo(Api.InvokeUserPushCharacterDataToVisibleClients, visibleCharacterIds.Count, allPairedUsersDict.Count());
+        _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
 
-        await Clients.Users(allPairedUsersDict.Select(f => f.Key)).SendAsync(Api.OnUserReceiveCharacterData, characterCache, ownIdent).ConfigureAwait(false);
+        await Clients.Users(allPairedUsersDict.Select(f => f.Key)).Client_UserReceiveCharacterData(characterCache, ownIdent).ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, allPairedUsersDict.Count());
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendUserPairedClientAddition)]
-    public async Task SendPairedClientAddition(string uid)
+    public async Task UserAddPair(string uid)
     {
-        _logger.LogCallInfo(Api.SendUserPairedClientAddition, uid);
+        _logger.LogCallInfo(MareHubLogger.Args(uid));
 
         // don't allow adding yourself or nothing
         uid = uid.Trim();
@@ -165,7 +158,7 @@ public partial class MareHub
         // grab self create new client pair and save
         var user = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
 
-        _logger.LogCallInfo(Api.SendUserPairedClientAddition, uid, "Success");
+        _logger.LogCallInfo(MareHubLogger.Args(uid, "Success"));
 
         ClientPair wl = new ClientPair()
         {
@@ -178,8 +171,8 @@ public partial class MareHub
 
         // get the opposite entry of the client pair
         var otherEntry = OppositeEntry(otherUser.UID);
-        await Clients.User(user.UID)
-            .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
+        await Clients.User(user.UID).Client_UserUpdateClientPairs(
+            new ClientPairDto()
             {
                 VanityUID = otherUser.Alias,
                 OtherUID = otherUser.UID,
@@ -196,7 +189,7 @@ public partial class MareHub
         if (otherIdent == null) return;
 
         // send push with update to other user if other user is online
-        await Clients.User(otherUser.UID).SendAsync(Api.OnUserUpdateClientPairs,
+        await Clients.User(otherUser.UID).Client_UserUpdateClientPairs(
             new ClientPairDto()
             {
                 VanityUID = user.Alias,
@@ -213,18 +206,15 @@ public partial class MareHub
         // if the other user has paused the main user and there was no previous group connection don't send anything
         if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, uid, System.StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
         {
-            await Clients.User(user.UID)
-                .SendAsync(Api.OnUserAddOnlinePairedPlayer, otherIdent).ConfigureAwait(false);
-            await Clients.User(otherUser.UID)
-                .SendAsync(Api.OnUserAddOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+            await Clients.User(user.UID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
+            await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
         }
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendUserPairedClientPauseChange)]
-    public async Task SendPairedClientPauseChange(string otherUserUid, bool isPaused)
+    public async Task UserChangePairPauseStatus(string otherUserUid, bool isPaused)
     {
-        _logger.LogCallInfo(Api.SendUserPairedClientPauseChange, otherUserUid, isPaused);
+        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused));
 
         if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
         ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
@@ -234,12 +224,12 @@ public partial class MareHub
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogCallInfo(Api.SendUserPairedClientPauseChange, otherUserUid, isPaused, "Success");
+        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused, "Success"));
 
         var otherEntry = OppositeEntry(otherUserUid);
 
-        await Clients.User(AuthenticatedUserId)
-            .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
+        await Clients.User(AuthenticatedUserId).Client_UserUpdateClientPairs(
+            new ClientPairDto()
             {
                 OtherUID = otherUserUid,
                 IsPaused = isPaused,
@@ -248,7 +238,7 @@ public partial class MareHub
             }).ConfigureAwait(false);
         if (otherEntry != null)
         {
-            await Clients.User(otherUserUid).SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
+            await Clients.User(otherUserUid).Client_UserUpdateClientPairs(new ClientPairDto()
             {
                 OtherUID = AuthenticatedUserId,
                 IsPaused = otherEntry.IsPaused,
@@ -261,24 +251,15 @@ public partial class MareHub
 
             if (selfCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
-            if (isPaused)
-            {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, otherCharaIdent).ConfigureAwait(false);
-                await Clients.User(otherUserUid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, selfCharaIdent).ConfigureAwait(false);
-            }
-            else
-            {
-                await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, otherCharaIdent).ConfigureAwait(false);
-                await Clients.User(otherUserUid).SendAsync(Api.OnUserAddOnlinePairedPlayer, selfCharaIdent).ConfigureAwait(false);
-            }
+            await Clients.User(AuthenticatedUserId).Client_UserChangePairedPlayer(otherCharaIdent, !isPaused).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(selfCharaIdent, !isPaused).ConfigureAwait(false);
         }
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    [HubMethodName(Api.SendUserPairedClientRemoval)]
-    public async Task SendPairedClientRemoval(string otherUserUid)
+    public async Task UserRemovePair(string otherUserUid)
     {
-        _logger.LogCallInfo(Api.SendUserPairedClientRemoval, otherUserUid);
+        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid));
 
         if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
 
@@ -292,10 +273,10 @@ public partial class MareHub
         _dbContext.ClientPairs.Remove(callerPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogCallInfo(Api.SendUserPairedClientRemoval, otherUserUid, "Success");
+        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, "Success"));
 
         await Clients.User(AuthenticatedUserId)
-            .SendAsync(Api.OnUserUpdateClientPairs, new ClientPairDto()
+            .Client_UserUpdateClientPairs(new ClientPairDto()
             {
                 OtherUID = otherUserUid,
                 IsRemoved = true
@@ -310,7 +291,7 @@ public partial class MareHub
         if (otherIdent == null) return;
 
         // get own ident and 
-        await Clients.User(otherUserUid).SendAsync(Api.OnUserUpdateClientPairs,
+        await Clients.User(otherUserUid).Client_UserUpdateClientPairs(
             new ClientPairDto()
             {
                 OtherUID = AuthenticatedUserId,
@@ -333,16 +314,16 @@ public partial class MareHub
         if (!callerHadPaused && !otherHadPaused && isPausedInGroup)
         {
             var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-            await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, otherIdent).ConfigureAwait(false);
-            await Clients.User(otherUserUid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+            await Clients.User(AuthenticatedUserId).Client_UserChangePairedPlayer(otherIdent, false).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(userIdent, false).ConfigureAwait(false);
         }
 
         // if the caller had paused other but not the other has paused the caller and they are in an unpaused group together, change state to online
         if (callerHadPaused && !otherHadPaused && !isPausedInGroup)
         {
             var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-            await Clients.User(AuthenticatedUserId).SendAsync(Api.OnUserAddOnlinePairedPlayer, otherIdent).ConfigureAwait(false);
-            await Clients.User(otherUserUid).SendAsync(Api.OnUserAddOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+            await Clients.User(AuthenticatedUserId).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
         }
     }
 

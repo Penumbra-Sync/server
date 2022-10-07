@@ -1,5 +1,6 @@
 ﻿using MareSynchronosServer.Hubs;
 using Microsoft.Extensions.Logging;
+using System.Runtime.CompilerServices;
 
 namespace MareSynchronosServer.Utils;
 
@@ -13,16 +14,20 @@ public class MareHubLogger
         _hub = hub;
         _logger = logger;
     }
-
-    public void LogCallInfo(string methodName, params object[] args)
+    public static object[] Args(params object[] args)
     {
-        string formattedArgs = args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
+        return args;
+    }
+
+    public void LogCallInfo(object[] args = null, [CallerMemberName] string methodName = "")
+    {
+        string formattedArgs = args != null && args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
         _logger.LogInformation("{uid}:{method}{args}", _hub.AuthenticatedUserId, methodName, formattedArgs);
     }
 
-    public void LogCallWarning(string methodName, params object[] args)
+    public void LogCallWarning(object[] args = null, [CallerMemberName] string methodName = "")
     {
-        string formattedArgs = args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
+        string formattedArgs = args != null && args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
         _logger.LogWarning("{uid}:{method}{args}", _hub.AuthenticatedUserId, methodName, formattedArgs);
     }
 }
