@@ -485,7 +485,7 @@ public partial class MareHub
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
-    public async Task SetModerator(string gid, string uid, bool isGroupModerator)
+    public async Task GroupSetModerator(string gid, string uid, bool isGroupModerator)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator));
 

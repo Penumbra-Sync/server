@@ -20,12 +20,11 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly IServiceProvider _services;
     private readonly GrpcClientIdentificationService _clientIdentService;
     private readonly ILogger<SystemInfoService> _logger;
-    private readonly IHubContext<MareHub> _hubContext;
+    private readonly IHubContext<MareHub, IMareHub> _hubContext;
     private Timer _timer;
-    private string _shardName;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         _services = services;
@@ -58,7 +57,7 @@ public class SystemInfoService : IHostedService, IDisposable
                 OnlineUsers = (int)_clientIdentService.GetOnlineUsers().Result,
             };
 
-            _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
+            _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);
 
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
