@@ -7,6 +7,7 @@ using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,12 +21,11 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly IServiceProvider _services;
     private readonly GrpcClientIdentificationService _clientIdentService;
     private readonly ILogger<SystemInfoService> _logger;
-    private readonly IHubContext<MareHub> _hubContext;
+    private readonly IHubContext<MareHub, IMareHub> _hubContext;
     private Timer _timer;
-    private string _shardName;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         _services = services;
@@ -58,16 +58,16 @@ public class SystemInfoService : IHostedService, IDisposable
                 OnlineUsers = (int)_clientIdentService.GetOnlineUsers().Result,
             };
 
-            _hubContext.Clients.All.SendAsync(Api.OnUpdateSystemInfo, SystemInfoDto);
+            _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);
 
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.Count(p => p.IsPaused));
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairs, db.GroupPairs.Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairsPaused, db.GroupPairs.Count(p => p.IsPaused));
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.AsNoTracking().Count());
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.AsNoTracking().Count());
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairs, db.GroupPairs.AsNoTracking().Count());
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairsPaused, db.GroupPairs.AsNoTracking().Count(p => p.IsPaused));
         }
     }
 

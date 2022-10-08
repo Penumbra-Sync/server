@@ -40,7 +40,7 @@ public partial class MareHub
                                      GID = Convert.ToString(otherGroupPair.GroupGID),
                                      PauseState = (userGroupPair.IsPaused || otherGroupPair.IsPaused)
                                  })
-                            ).ToListAsync().ConfigureAwait(false);
+                            ).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
         return query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
             (key, g) => new PausedEntry
@@ -58,20 +58,23 @@ public partial class MareHub
         return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
     }
 
-    private async Task<List<string>> SendDataToAllPairedUsers(string apiMethod, object arg)
+    private async Task<List<string>> SendOnlineToAllPairedUsers(string arg)
     {
         var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        await Clients.Users(usersToSendDataTo).SendAsync(apiMethod, arg).ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(arg, true).ConfigureAwait(false);
+
+        return usersToSendDataTo;
+    }
+
+    private async Task<List<string>> SendOfflineToAllPairedUsers(string arg)
+    {
+        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(arg, false).ConfigureAwait(false);
 
         return usersToSendDataTo;
     }
 
     public string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
-
-    protected async Task<User> GetAuthenticatedUserUntrackedAsync()
-    {
-        return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
-    }
 
     private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
     {
@@ -86,8 +89,8 @@ public partial class MareHub
         var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(groupUserIdent))
         {
-            await Clients.User(uid).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, groupUserIdent).ConfigureAwait(false);
-            await Clients.User(groupUserPair.GroupUserUID).SendAsync(Api.OnUserRemoveOnlinePairedPlayer, userIdent).ConfigureAwait(false);
+            await Clients.User(uid).Client_UserChangePairedPlayer(groupUserIdent, false).ConfigureAwait(false);
+            await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(userIdent, false).ConfigureAwait(false);
         }
     }
 

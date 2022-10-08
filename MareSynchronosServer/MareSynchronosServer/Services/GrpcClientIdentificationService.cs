@@ -19,7 +19,10 @@ public class GrpcClientIdentificationService : IHostedService
     private readonly IdentificationService.IdentificationServiceClient _grpcIdentClient;
     private readonly MareMetrics _metrics;
     protected ConcurrentDictionary<string, string> OnlineClients = new(StringComparer.Ordinal);
+    private ConcurrentDictionary<string, string> RemoteCachedIdents = new(StringComparer.Ordinal);
+    private readonly TimeSpan InvalidateCachedIdent = TimeSpan.FromSeconds(30);
     private bool _grpcIsFaulty = false;
+    private CancellationTokenSource _cacheVerificationCts = new();
 
     public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient, MareMetrics metrics, IConfiguration configuration)
     {
@@ -30,6 +33,46 @@ public class GrpcClientIdentificationService : IHostedService
         _metrics = metrics;
     }
 
+    private async Task HandleCacheVerification(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (RemoteCachedIdents.Any())
+                {
+                    MultiUidMessage req = new();
+                    req.Uids.AddRange(RemoteCachedIdents.Select(k => new UidMessage() { Uid = k.Key }));
+                    var cacheResponse = await InvokeOnGrpc(_grpcIdentClient.ValidateCachedIdentsAsync(req)).ConfigureAwait(false);
+
+                    foreach (var entry in cacheResponse.UidWithIdent)
+                    {
+                        if (!RemoteCachedIdents.TryGetValue(entry.Uid.Uid, out var ident))
+                        {
+                            continue;
+                        }
+
+                        if (string.IsNullOrEmpty(entry.Ident.Ident))
+                        {
+                            RemoteCachedIdents.TryRemove(entry.Uid.Uid, out var _);
+                            continue;
+                        }
+
+                        RemoteCachedIdents[entry.Uid.Uid] = entry.Ident.Ident;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during cached idents verification");
+            }
+            finally
+            {
+                await Task.Delay(InvalidateCachedIdent, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
     public async Task<string?> GetCharacterIdentForUid(string uid)
     {
         if (OnlineClients.TryGetValue(uid, out string ident))
@@ -37,8 +80,14 @@ public class GrpcClientIdentificationService : IHostedService
             return ident;
         }
 
+        if (RemoteCachedIdents.TryGetValue(uid, out var cachedIdent))
+        {
+            return cachedIdent;
+        }
+
         var result = await InvokeOnGrpc(_grpcIdentClient.GetIdentForUidAsync(new UidMessage { Uid = uid })).ConfigureAwait(false);
         if (result == default(CharacterIdentMessage)) return null;
+        RemoteCachedIdents[uid] = result.Ident;
         return result.Ident;
     }
 
@@ -91,10 +140,13 @@ public class GrpcClientIdentificationService : IHostedService
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await ExecuteOnGrpc(_grpcIdentClient.ClearIdentsForServerAsync(new ServerMessage() { ServerId = _shardName })).ConfigureAwait(false);
+
+        _ = HandleCacheVerification(_cacheVerificationCts.Token);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        _cacheVerificationCts.Cancel();
         await ExecuteOnGrpc(_grpcIdentClient.ClearIdentsForServerAsync(new ServerMessage() { ServerId = _shardName })).ConfigureAwait(false);
     }
 

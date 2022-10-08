@@ -66,4 +66,23 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         }
         return Task.FromResult(new Empty());
     }
+
+    public override async Task<UidWithIdentMessage> ValidateCachedIdents(MultiUidMessage request, ServerCallContext context)
+    {
+        UidWithIdentMessage response = new UidWithIdentMessage();
+        foreach (var msg in request.Uids)
+        {
+            UidWithIdent msgResp = new()
+            {
+                Uid = msg,
+                Ident = new()
+            };
+            var ident = await _handler.GetIdentForuid(msg.Uid);
+            msgResp.Ident.Ident = ident.CharacterIdent;
+            msgResp.Ident.ServerId = ident.ServerId;
+            response.UidWithIdent.Add(msgResp);
+        }
+
+        return response;
+    }
 }
