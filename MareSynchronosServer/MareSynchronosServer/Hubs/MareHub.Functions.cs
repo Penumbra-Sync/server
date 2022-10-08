@@ -40,7 +40,7 @@ public partial class MareHub
                                      GID = Convert.ToString(otherGroupPair.GroupGID),
                                      PauseState = (userGroupPair.IsPaused || otherGroupPair.IsPaused)
                                  })
-                            ).ToListAsync().ConfigureAwait(false);
+                            ).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
         return query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
             (key, g) => new PausedEntry
@@ -75,11 +75,6 @@ public partial class MareHub
     }
 
     public string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
-
-    protected async Task<User> GetAuthenticatedUserUntrackedAsync()
-    {
-        return await _dbContext.Users.AsNoTrackingWithIdentityResolution().SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
-    }
 
     private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
     {

@@ -43,7 +43,7 @@ public partial class MareHub
         _dbContext.RemoveRange(ownPairData);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
-            .Where(u => u.OtherUser.UID == userid).ToListAsync().ConfigureAwait(false);
+            .Where(u => u.OtherUser.UID == userid).AsNoTracking().ToListAsync().ConfigureAwait(false);
         foreach (var pair in otherPairData)
         {
             await Clients.User(pair.User.UID).Client_UserUpdateClientPairs(new ClientPairDto()
@@ -108,7 +108,7 @@ public partial class MareHub
                 IsSynced = otherEntry != null
             };
 
-        return (await query.ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
+        return (await query.AsNoTracking().ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
         {
             VanityUID = f.Alias,
             IsPaused = f.IsPaused,

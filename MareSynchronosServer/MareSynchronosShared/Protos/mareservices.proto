@@ -24,12 +24,30 @@ service IdentificationService {
 	rpc GetIdentForUid (UidMessage) returns (CharacterIdentMessage);
 	rpc ClearIdentsForServer (ServerMessage) returns (Empty);
 	rpc RecreateServerIdents (ServerIdentMessage) returns (Empty);
+	rpc ValidateCachedIdents (MultiUidMessage) returns (UidWithIdentMessage);
 }
 
 message Empty { }
 
+message MultiUidMessage {
+	repeated UidMessage uids = 1;
+}
+
+message UidWithIdentMessage {
+	repeated UidWithIdent uidWithIdent = 1;
+}
+
+message UidWithIdent {
+	UidMessage uid = 1;
+	CharacterIdentMessage ident = 2;
+}
+
 message ServerIdentMessage {
 	repeated SetIdentMessage idents = 1;
+}
+
+message UidMessage {
+	string uid = 1;
 }
 
 message ServerMessage {
@@ -54,10 +72,6 @@ message SetIdentMessage {
 message CharacterIdentMessage {
 	string server_id = 1;
 	string ident = 2;
-}
-
-message UidMessage {
-	string uid = 1;
 }
 
 message UploadFileRequest {
