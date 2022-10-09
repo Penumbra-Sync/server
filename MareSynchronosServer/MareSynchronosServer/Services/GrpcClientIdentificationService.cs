@@ -141,7 +141,11 @@ public class GrpcClientIdentificationService : IHostedService
     {
         while (!ct.IsCancellationRequested)
         {
-            await CheckFaultStateAndResend().ConfigureAwait(false);
+            try
+            {
+                await CheckFaultStateAndResend().ConfigureAwait(false);
+            }
+            catch { SetGrpcFaulty(); }
             await Task.Delay(250).ConfigureAwait(false);
         }
     }
@@ -272,9 +276,6 @@ public class GrpcClientIdentificationService : IHostedService
     {
         if (_grpcIsFaulty)
         {
-            _grpcIsFaulty = false;
-
-            _logger.LogInformation("GRPC connection is restored, sending current server idents");
             await RestartStreams().ConfigureAwait(false);
             var msg = new ServerIdentMessage();
             msg.Idents.AddRange(OnlineClients.Select(c => new SetIdentMessage()
@@ -282,6 +283,8 @@ public class GrpcClientIdentificationService : IHostedService
                 UidWithIdent = c.Value
             }));
             await _grpcIdentClient.RecreateServerIdentsAsync(msg).ConfigureAwait(false);
+            _logger.LogInformation("GRPC connection is restored");
+            _grpcIsFaulty = false;
         }
     }
 

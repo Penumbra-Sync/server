@@ -111,7 +111,6 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
                     await responseStream.WriteAsync(cur).ConfigureAwait(false);
                 }
 
-                _logger.LogInformation("Queue for " + server + " is empty: " + (identChanges.ContainsKey(server) ? identChanges[server].IsEmpty : true));
                 await Task.Delay(10).ConfigureAwait(false);
             }
         }
