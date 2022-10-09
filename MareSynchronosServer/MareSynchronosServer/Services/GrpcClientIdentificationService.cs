@@ -17,6 +17,8 @@ public class GrpcClientIdentificationService : IHostedService
     private readonly string _shardName;
     private readonly ILogger<GrpcClientIdentificationService> _logger;
     private readonly IdentificationService.IdentificationServiceClient _grpcIdentClient;
+    private readonly IdentificationService.IdentificationServiceClient grpcIdentClientStreamOut;
+    private readonly IdentificationService.IdentificationServiceClient grpcIdentClientStreamIn;
     private readonly MareMetrics _metrics;
     protected readonly ConcurrentDictionary<string, UidWithIdent> OnlineClients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, UidWithIdent> RemoteCachedIdents = new(StringComparer.Ordinal);
@@ -25,12 +27,16 @@ public class GrpcClientIdentificationService : IHostedService
     private CancellationTokenSource _streamCts = new();
     private CancellationTokenSource _faultCheckCts = new();
 
-    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient, MareMetrics metrics, IConfiguration configuration)
+    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient, 
+        IdentificationService.IdentificationServiceClient gprcIdentClientStreamOut, 
+        IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, MareMetrics metrics, IConfiguration configuration)
     {
         var config = configuration.GetSection("MareSynchronos");
         _shardName = config.GetValue("ShardName", "Main");
         _logger = logger;
         _grpcIdentClient = gprcIdentClient;
+        this.grpcIdentClientStreamOut = gprcIdentClientStreamOut;
+        this.grpcIdentClientStreamIn = gprcIdentClientStreamIn;
         _metrics = metrics;
     }
 
@@ -184,7 +190,7 @@ public class GrpcClientIdentificationService : IHostedService
     {
         try
         {
-            using var stream = _grpcIdentClient.SendStreamIdentStatusChange(cancellationToken: cts);
+            using var stream = grpcIdentClientStreamOut.SendStreamIdentStatusChange(cancellationToken: cts);
             await stream.RequestStream.WriteAsync(new IdentChangeMessage()
             {
                 Server = new ServerMessage()
@@ -216,7 +222,7 @@ public class GrpcClientIdentificationService : IHostedService
     {
         try
         {
-            using var stream = _grpcIdentClient.ReceiveStreamIdentStatusChange(new ServerMessage()
+            using var stream = grpcIdentClientStreamIn.ReceiveStreamIdentStatusChange(new ServerMessage()
             {
                 ServerId = _shardName,
             });
@@ -233,6 +239,7 @@ public class GrpcClientIdentificationService : IHostedService
                     RemoteCachedIdents.TryRemove(cur.UidWithIdent.Uid.Uid, out _);
                 }
             }
+            _logger.LogCritical("Receive Online Client Data Stream ended");
         }
         catch (OperationCanceledException) { return; }
         catch
