@@ -1,9 +1,6 @@
 ﻿using Grpc.Core;
 using MareSynchronosShared.Protos;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using System.Linq;
-using System.Runtime.ConstrainedExecution;
 using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Identity;
@@ -12,7 +9,6 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 {
     private readonly ILogger<IdentityService> _logger;
     private readonly IdentityHandler _handler;
-    private readonly ConcurrentDictionary<string, ConcurrentQueue<IdentChange>> identChanges = new();
 
     public IdentityService(ILogger<IdentityService> logger, IdentityHandler handler)
     {
@@ -73,13 +69,14 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         await requestStream.MoveNext();
         var server = requestStream.Current.Server;
         if (server == null) throw new System.Exception("First message needs to be server message");
+        _handler.RegisterServerForQueue(server.ServerId);
         _logger.LogInformation("Registered Server " + server.ServerId + " input stream");
-        identChanges[server.ServerId] = new ConcurrentQueue<IdentChange>();
+
         while (await requestStream.MoveNext().ConfigureAwait(false))
         {
             var cur = requestStream.Current.IdentChange;
             if (cur == null) throw new System.Exception("Expected client ident change");
-            EnqueueIdentChange(cur);
+            _handler.EnqueueIdentChange(cur);
 
             if (cur.IsOnline)
             {
@@ -105,17 +102,9 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         {
             while (!context.CancellationToken.IsCancellationRequested)
             {
-                if (identChanges.ContainsKey(server))
+                while (_handler.DequeueIdentChange(server, out var cur))
                 {
-                    if (identChanges[server].TryDequeue(out var cur))
-                    {
-                        _logger.LogInformation("Sending " + cur.UidWithIdent.Uid.Uid + " to " + server);
-                        await responseStream.WriteAsync(cur).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Nothing to send to " + server);
-                    }
+                    await responseStream.WriteAsync(cur).ConfigureAwait(false);
                 }
 
                 await Task.Delay(250).ConfigureAwait(false);
@@ -151,20 +140,9 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         return Task.FromResult(response);
     }
 
-    private void EnqueueIdentChange(IdentChange identchange)
-    {
-        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
-
-        foreach (var k in identChanges.Keys)
-        {
-            if (string.Equals(k, identchange.UidWithIdent.Ident.ServerId, System.StringComparison.Ordinal)) continue;
-            identChanges[k].Enqueue(identchange);
-        }
-    }
-
     private void EnqueueIdentOnline(UidWithIdent ident)
     {
-        EnqueueIdentChange(new IdentChange()
+        _handler.EnqueueIdentChange(new IdentChange()
         {
             IsOnline = true,
             UidWithIdent = ident
@@ -173,7 +151,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
     private void EnqueueIdentOffline(UidWithIdent ident)
     {
-        EnqueueIdentChange(new IdentChange()
+        _handler.EnqueueIdentChange(new IdentChange()
         {
             IsOnline = false,
             UidWithIdent = ident

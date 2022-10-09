@@ -1,4 +1,7 @@
-﻿using System.Collections.Concurrent;
+﻿using MareSynchronosShared.Protos;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +11,13 @@ namespace MareSynchronosServices.Identity;
 internal class IdentityHandler
 {
     private readonly ConcurrentDictionary<string, ServerIdentity> cachedIdentities = new();
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<IdentChange>> identChanges = new();
+    private readonly ILogger<IdentityHandler> _logger;
+
+    public IdentityHandler(ILogger<IdentityHandler> logger)
+    {
+        _logger = logger;
+    }
 
     internal Task<string> GetUidForCharacterIdent(string ident, string serverId)
     {
@@ -63,6 +73,33 @@ internal class IdentityHandler
         {
             cachedIdentities.TryRemove(identity.Key, out _);
         }
+    }
+
+    internal void EnqueueIdentChange(IdentChange identchange)
+    {
+        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
+
+        foreach (var k in identChanges.Keys)
+        {
+            if (string.Equals(k, identchange.UidWithIdent.Ident.ServerId, System.StringComparison.Ordinal)) continue;
+            identChanges[k].Enqueue(identchange);
+        }
+    }
+
+    internal bool DequeueIdentChange(string server, out IdentChange? cur)
+    {
+        if (!(identChanges.ContainsKey(server) && identChanges[server].TryDequeue(out cur)))
+        {
+            cur = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    internal void RegisterServerForQueue(string serverId)
+    {
+        identChanges[serverId] = new ConcurrentQueue<IdentChange>();
     }
 }
 
