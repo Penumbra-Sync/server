@@ -180,7 +180,7 @@ public class GrpcClientIdentificationService : IHostedService
     {
         try
         {
-            var stream = _grpcIdentClient.SendStreamIdentStatusChange(cancellationToken: cts);
+            using var stream = _grpcIdentClient.SendStreamIdentStatusChange(cancellationToken: cts);
             await stream.RequestStream.WriteAsync(new IdentChangeMessage()
             {
                 Server = new ServerMessage()
@@ -212,7 +212,7 @@ public class GrpcClientIdentificationService : IHostedService
     {
         try
         {
-            var stream = _grpcIdentClient.ReceiveStreamIdentStatusChange(new ServerMessage()
+            using var stream = _grpcIdentClient.ReceiveStreamIdentStatusChange(new ServerMessage()
             {
                 ServerId = _shardName,
             });

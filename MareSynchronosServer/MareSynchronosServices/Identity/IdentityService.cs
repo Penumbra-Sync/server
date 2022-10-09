@@ -103,17 +103,16 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
         try
         {
-            while (true)
+            while (!context.CancellationToken.IsCancellationRequested)
             {
-                if (identChanges.ContainsKey(server) && identChanges[server].TryDequeue(out var cur))
+                while (identChanges.ContainsKey(server) && identChanges[server].TryDequeue(out var cur))
                 {
                     _logger.LogInformation("Sending " + cur.UidWithIdent.Uid.Uid + " to " + server);
                     await responseStream.WriteAsync(cur).ConfigureAwait(false);
                 }
-                else
-                {
-                    await Task.Delay(10).ConfigureAwait(false);
-                }
+
+                _logger.LogInformation("Queue for " + server + " is empty: " + identChanges[server].IsEmpty);
+                await Task.Delay(10).ConfigureAwait(false);
             }
         }
         catch
