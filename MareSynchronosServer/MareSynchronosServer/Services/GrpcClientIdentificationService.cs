@@ -27,8 +27,8 @@ public class GrpcClientIdentificationService : IHostedService
     private CancellationTokenSource _streamCts = new();
     private CancellationTokenSource _faultCheckCts = new();
 
-    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient, 
-        IdentificationService.IdentificationServiceClient gprcIdentClientStreamOut, 
+    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient,
+        IdentificationService.IdentificationServiceClient gprcIdentClientStreamOut,
         IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, MareMetrics metrics, IConfiguration configuration)
     {
         var config = configuration.GetSection("MareSynchronos");
@@ -226,9 +226,8 @@ public class GrpcClientIdentificationService : IHostedService
             {
                 ServerId = _shardName,
             });
-            while (await stream.ResponseStream.MoveNext(cts).ConfigureAwait(false))
+            await foreach (var cur in stream.ResponseStream.ReadAllAsync(cts).ConfigureAwait(false))
             {
-                var cur = stream.ResponseStream.Current;
                 if (cur.IsOnline)
                 {
                     RemoteCachedIdents[cur.UidWithIdent.Uid.Uid] = cur.UidWithIdent;

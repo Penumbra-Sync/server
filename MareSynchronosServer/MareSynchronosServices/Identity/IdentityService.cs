@@ -148,9 +148,10 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
     {
         _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
 
-        foreach (var dict in identChanges.Where(k => k.Key != identchange.UidWithIdent.Ident.ServerId))
+        foreach (var k in identChanges.Keys)
         {
-            dict.Value.Enqueue(identchange);
+            if (string.Equals(k, identchange.UidWithIdent.Ident.ServerId, System.StringComparison.Ordinal)) continue;
+            identChanges[k].Enqueue(identchange);
         }
     }
 
