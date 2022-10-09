@@ -116,8 +116,10 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         }
         catch
         {
-            _logger.LogInformation("Server output stream to " + server + " finished or faulty");
+            _logger.LogInformation("Server output stream to " + server + " is faulty");
         }
+
+        _logger.LogInformation("Server output stream to " + server + " is finished");
     }
 
     public override Task<UidWithIdentMessage> GetAllIdents(ServerMessage request, ServerCallContext context)
