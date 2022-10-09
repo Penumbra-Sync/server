@@ -146,7 +146,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
     private void EnqueueIdentChange(IdentChange identchange)
     {
-        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + " from " + identchange.UidWithIdent.Ident.ServerId);
+        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
 
         foreach (var dict in identChanges.Where(k => k.Key != identchange.UidWithIdent.Ident.ServerId))
         {
