@@ -105,13 +105,20 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         {
             while (!context.CancellationToken.IsCancellationRequested)
             {
-                while (identChanges.ContainsKey(server) && identChanges[server].TryDequeue(out var cur))
+                if (identChanges.ContainsKey(server))
                 {
-                    _logger.LogInformation("Sending " + cur.UidWithIdent.Uid.Uid + " to " + server);
-                    await responseStream.WriteAsync(cur).ConfigureAwait(false);
+                    if (identChanges[server].TryDequeue(out var cur))
+                    {
+                        _logger.LogInformation("Sending " + cur.UidWithIdent.Uid.Uid + " to " + server);
+                        await responseStream.WriteAsync(cur).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Nothing to send to " + server);
+                    }
                 }
 
-                await Task.Delay(10).ConfigureAwait(false);
+                await Task.Delay(250).ConfigureAwait(false);
             }
         }
         catch

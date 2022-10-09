@@ -191,6 +191,7 @@ public class GrpcClientIdentificationService : IHostedService
         try
         {
             using var stream = grpcIdentClientStreamOut.SendStreamIdentStatusChange(cancellationToken: cts);
+            _logger.LogInformation("Starting Send Online Client Data stream");
             await stream.RequestStream.WriteAsync(new IdentChangeMessage()
             {
                 Server = new ServerMessage()
@@ -226,6 +227,7 @@ public class GrpcClientIdentificationService : IHostedService
             {
                 ServerId = _shardName,
             });
+            _logger.LogInformation("Starting Receive Online Client Data stream");
             await foreach (var cur in stream.ResponseStream.ReadAllAsync(cts).ConfigureAwait(false))
             {
                 if (cur.IsOnline)
