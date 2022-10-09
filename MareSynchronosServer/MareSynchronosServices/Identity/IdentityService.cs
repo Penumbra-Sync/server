@@ -107,7 +107,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
                     await responseStream.WriteAsync(cur).ConfigureAwait(false);
                 }
 
-                await Task.Delay(250).ConfigureAwait(false);
+                await Task.Delay(10).ConfigureAwait(false);
             }
         }
         catch

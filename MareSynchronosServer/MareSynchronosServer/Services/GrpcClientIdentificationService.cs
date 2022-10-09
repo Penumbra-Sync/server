@@ -208,7 +208,7 @@ public class GrpcClientIdentificationService : IHostedService
                 }
                 else
                 {
-                    await Task.Delay(25, cts).ConfigureAwait(false);
+                    await Task.Delay(10, cts).ConfigureAwait(false);
                 }
             }
         }
