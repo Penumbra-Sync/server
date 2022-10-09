@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -43,6 +44,16 @@ internal class IdentityHandler
         if (string.IsNullOrEmpty(serverId))
             return cachedIdentities.Count;
         return cachedIdentities.Count(c => c.Value.ServerId == serverId);
+    }
+
+    internal Dictionary<string, ServerIdentity> GetIdentsForAllExcept(string serverId)
+    {
+        return cachedIdentities.Where(k => k.Value.ServerId != serverId).ToDictionary(k => k.Key, k => k.Value);
+    }
+
+    internal Dictionary<string, ServerIdentity> GetIdentsForServer(string serverId)
+    {
+        return cachedIdentities.Where(k => k.Value.ServerId == serverId).ToDictionary(k => k.Key, k => k.Value);
     }
 
     internal void ClearIdentsForServer(string serverId)

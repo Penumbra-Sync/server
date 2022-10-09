@@ -86,7 +86,7 @@ public partial class MareHub
             if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) return;
         }
 
-        var groupUserIdent = await _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID).ConfigureAwait(false);
+        var groupUserIdent = _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID);
         if (!string.IsNullOrEmpty(groupUserIdent))
         {
             await Clients.User(uid).Client_UserChangePairedPlayer(groupUserIdent, false).ConfigureAwait(false);
@@ -98,7 +98,7 @@ public partial class MareHub
     {
         foreach (var pair in groupUsers)
         {
-            var pairIdent = await _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID).ConfigureAwait(false);
+            var pairIdent = _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
             var pairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);

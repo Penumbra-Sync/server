@@ -22,7 +22,7 @@ public partial class MareHub
 
         string userid = AuthenticatedUserId;
         var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == userid).ConfigureAwait(false);
-        var charaIdent = await _clientIdentService.GetCharacterIdentForUid(userid).ConfigureAwait(false);
+        var charaIdent = _clientIdentService.GetCharacterIdentForUid(userid);
         var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == userid).ToListAsync().ConfigureAwait(false);
         var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == userid).ConfigureAwait(false);
         var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == userid).ConfigureAwait(false);
@@ -71,10 +71,10 @@ public partial class MareHub
     {
         _logger.LogCallInfo();
 
-        var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+        var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
         var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(ownIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(async e => await _clientIdentService.GetCharacterIdentForUid(e).ConfigureAwait(false)).Select(t => t.Result).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
+        return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -125,10 +125,10 @@ public partial class MareHub
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
-        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, async f => await _clientIdentService.GetCharacterIdentForUid(f).ConfigureAwait(false), System.StringComparer.Ordinal)
-            .Where(f => visibleCharacterIds.Contains(f.Value.Result, System.StringComparer.Ordinal));
+        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => _clientIdentService.GetCharacterIdentForUid(f), System.StringComparer.Ordinal)
+            .Where(f => visibleCharacterIds.Contains(f.Value, System.StringComparer.Ordinal));
 
-        var ownIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+        var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
 
@@ -185,7 +185,7 @@ public partial class MareHub
         if (otherEntry == null) return;
 
         // check if other user is online
-        var otherIdent = await _clientIdentService.GetCharacterIdentForUid(otherUser.UID).ConfigureAwait(false);
+        var otherIdent = _clientIdentService.GetCharacterIdentForUid(otherUser.UID);
         if (otherIdent == null) return;
 
         // send push with update to other user if other user is online
@@ -200,7 +200,7 @@ public partial class MareHub
             }).ConfigureAwait(false);
 
         // get own ident and all pairs
-        var userIdent = await _clientIdentService.GetCharacterIdentForUid(user.UID).ConfigureAwait(false);
+        var userIdent = _clientIdentService.GetCharacterIdentForUid(user.UID);
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
@@ -246,8 +246,8 @@ public partial class MareHub
                 IsSynced = true
             }).ConfigureAwait(false);
 
-            var selfCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
-            var otherCharaIdent = await _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID).ConfigureAwait(false);
+            var selfCharaIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
+            var otherCharaIdent = _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID);
 
             if (selfCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
@@ -287,7 +287,7 @@ public partial class MareHub
         if (oppositeClientPair == null) return;
 
         // check if other user is online, if no then there is no need to do anything further
-        var otherIdent = await _clientIdentService.GetCharacterIdentForUid(otherUserUid).ConfigureAwait(false);
+        var otherIdent = _clientIdentService.GetCharacterIdentForUid(otherUserUid);
         if (otherIdent == null) return;
 
         // get own ident and 
@@ -313,7 +313,7 @@ public partial class MareHub
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
         if (!callerHadPaused && !otherHadPaused && isPausedInGroup)
         {
-            var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+            var userIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
             await Clients.User(AuthenticatedUserId).Client_UserChangePairedPlayer(otherIdent, false).ConfigureAwait(false);
             await Clients.User(otherUserUid).Client_UserChangePairedPlayer(userIdent, false).ConfigureAwait(false);
         }
@@ -321,7 +321,7 @@ public partial class MareHub
         // if the caller had paused other but not the other has paused the caller and they are in an unpaused group together, change state to online
         if (callerHadPaused && !otherHadPaused && !isPausedInGroup)
         {
-            var userIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+            var userIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
             await Clients.User(AuthenticatedUserId).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
             await Clients.User(otherUserUid).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
         }

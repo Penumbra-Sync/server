@@ -18,19 +18,34 @@ service FileService {
 
 service IdentificationService {
 	rpc GetOnlineUserCount (ServerMessage) returns (OnlineUserCountResponse);
-	rpc RemoveIdentForUid (RemoveIdentMessage) returns (Empty);
-	rpc SetIdentForUid (SetIdentMessage) returns (Empty);
-	rpc GetUidForCharacterIdent (CharacterIdentMessage) returns (UidMessage);
 	rpc GetIdentForUid (UidMessage) returns (CharacterIdentMessage);
 	rpc ClearIdentsForServer (ServerMessage) returns (Empty);
 	rpc RecreateServerIdents (ServerIdentMessage) returns (Empty);
-	rpc ValidateCachedIdents (MultiUidMessage) returns (UidWithIdentMessage);
+	rpc GetAllIdents (ServerMessage) returns (UidWithIdentMessage);
+	rpc SendStreamIdentStatusChange (stream IdentChangeMessage) returns (Empty);
+	rpc ReceiveStreamIdentStatusChange (ServerMessage) returns (stream IdentChange);
 }
 
 message Empty { }
 
 message MultiUidMessage {
 	repeated UidMessage uids = 1;
+}
+
+message ServerIdentMessage {
+	repeated SetIdentMessage idents = 1;
+}
+
+message IdentChangeMessage {
+	oneof payload {
+		ServerMessage server = 1;
+		IdentChange identChange = 2;
+	}
+}
+
+message IdentChange {
+	UidWithIdent uidWithIdent = 1;
+	bool isOnline = 2;
 }
 
 message UidWithIdentMessage {
@@ -40,10 +55,6 @@ message UidWithIdentMessage {
 message UidWithIdent {
 	UidMessage uid = 1;
 	CharacterIdentMessage ident = 2;
-}
-
-message ServerIdentMessage {
-	repeated SetIdentMessage idents = 1;
 }
 
 message UidMessage {
@@ -64,9 +75,7 @@ message RemoveIdentMessage {
 }
 
 message SetIdentMessage {
-	string uid = 1;
-	string server_id = 2;
-	string ident = 3;
+	UidWithIdent uidWithIdent = 1;
 }
 
 message CharacterIdentMessage {

@@ -96,13 +96,13 @@ public partial class MareHub
         if (!IsModerator) return null;
 
         var users = await _dbContext.Users.AsNoTracking().ToListAsync().ConfigureAwait(false);
-        return users.Where(c => !string.IsNullOrEmpty(_clientIdentService.GetCharacterIdentForUid(c.UID).Result)).Select(async b => new OnlineUserDto
+        return users.Where(c => !string.IsNullOrEmpty(_clientIdentService.GetCharacterIdentForUid(c.UID))).Select(b => new OnlineUserDto
         {
-            CharacterNameHash = await _clientIdentService.GetCharacterIdentForUid(b.UID).ConfigureAwait(false),
+            CharacterNameHash = _clientIdentService.GetCharacterIdentForUid(b.UID),
             UID = b.UID,
             IsModerator = b.IsModerator,
             IsAdmin = b.IsAdmin
-        }).Select(c => c.Result).ToList();
+        }).ToList();
     }
 
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
@@ -128,7 +128,7 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         await Clients.Users(OnlineAdmins).Client_AdminUpdateOrAddBannedUser(dto).ConfigureAwait(false);
-        var bannedUser = await _clientIdentService.GetUidForCharacterIdent(dto.CharacterHash).ConfigureAwait(false);
+        var bannedUser = _clientIdentService.GetUidForCharacterIdent(dto.CharacterHash);
         if (!string.IsNullOrEmpty(bannedUser))
         {
             await Clients.User(bannedUser).Client_AdminForcedReconnect().ConfigureAwait(false);

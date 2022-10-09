@@ -70,7 +70,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         if (!string.IsNullOrEmpty(userId) && !isBanned && !string.IsNullOrEmpty(characterIdentification))
         {
             var user = (await _dbContext.Users.SingleAsync(u => u.UID == userId).ConfigureAwait(false));
-            var existingIdent = await _clientIdentService.GetCharacterIdentForUid(userId).ConfigureAwait(false);
+            var existingIdent = _clientIdentService.GetCharacterIdentForUid(userId);
             if (!string.IsNullOrEmpty(existingIdent) && !string.Equals(characterIdentification, existingIdent, StringComparison.Ordinal))
             {
                 _logger.LogCallWarning(MareHubLogger.Args(characterIdentification, "Failure", "LoggedIn"));
@@ -82,7 +82,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
             }
 
             user.LastLoggedIn = DateTime.UtcNow;
-            await _clientIdentService.MarkUserOnline(user.UID, characterIdentification).ConfigureAwait(false);
+            _clientIdentService.MarkUserOnline(user.UID, characterIdentification);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             _logger.LogCallInfo(MareHubLogger.Args(characterIdentification, "Success"));
@@ -114,7 +114,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     public async Task<bool> CheckClientHealth()
     {
-        var serverId = await _clientIdentService.GetServerForUid(AuthenticatedUserId).ConfigureAwait(false);
+        var serverId = _clientIdentService.GetServerForUid(AuthenticatedUserId);
         bool needsReconnect = false;
         if (string.IsNullOrEmpty(serverId) || !string.Equals(serverId, _shardName, StringComparison.Ordinal))
         {
@@ -135,7 +135,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     {
         _mareMetrics.DecGauge(MetricsAPI.GaugeConnections);
 
-        var userCharaIdent = await _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId).ConfigureAwait(false);
+        var userCharaIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
         if (!string.IsNullOrEmpty(userCharaIdent))
         {
@@ -147,7 +147,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
             _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == AuthenticatedUserId));
 
-            await _clientIdentService.MarkUserOffline(AuthenticatedUserId).ConfigureAwait(false);
+            _clientIdentService.MarkUserOffline(AuthenticatedUserId);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 

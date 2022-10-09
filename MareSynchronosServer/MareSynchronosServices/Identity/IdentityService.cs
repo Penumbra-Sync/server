@@ -1,6 +1,9 @@
 ﻿using Grpc.Core;
 using MareSynchronosShared.Protos;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Linq;
+using System.Runtime.ConstrainedExecution;
 using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Identity;
@@ -9,23 +12,12 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 {
     private readonly ILogger<IdentityService> _logger;
     private readonly IdentityHandler _handler;
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<IdentChange>> identChanges = new();
 
     public IdentityService(ILogger<IdentityService> logger, IdentityHandler handler)
     {
         _logger = logger;
         _handler = handler;
-    }
-
-    public override Task<Empty> RemoveIdentForUid(RemoveIdentMessage request, ServerCallContext context)
-    {
-        _handler.RemoveIdent(request.Uid, request.ServerId);
-        return Task.FromResult(new Empty());
-    }
-
-    public override Task<Empty> SetIdentForUid(SetIdentMessage request, ServerCallContext context)
-    {
-        _handler.SetIdent(request.Uid, request.ServerId, request.Ident);
-        return Task.FromResult(new Empty());
     }
 
     public override async Task<CharacterIdentMessage> GetIdentForUid(UidMessage request, ServerCallContext context)
@@ -38,15 +30,6 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         };
     }
 
-    public override async Task<UidMessage> GetUidForCharacterIdent(CharacterIdentMessage request, ServerCallContext context)
-    {
-        var result = await _handler.GetUidForCharacterIdent(request.Ident, request.ServerId);
-        return new UidMessage()
-        {
-            Uid = result
-        };
-    }
-
     public override Task<OnlineUserCountResponse> GetOnlineUserCount(ServerMessage request, ServerCallContext context)
     {
         return Task.FromResult(new OnlineUserCountResponse() { Count = _handler.GetOnlineUsers(request.ServerId) });
@@ -54,6 +37,23 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
     public override Task<Empty> ClearIdentsForServer(ServerMessage request, ServerCallContext context)
     {
+        var idents = _handler.GetIdentsForServer(request.ServerId);
+        foreach (var entry in idents)
+        {
+            EnqueueIdentOffline(new UidWithIdent()
+            {
+                Ident = new CharacterIdentMessage()
+                {
+                    Ident = entry.Value.CharacterIdent,
+                    ServerId = entry.Value.ServerId
+                },
+                Uid = new UidMessage()
+                {
+                    Uid = entry.Key
+                }
+            });
+        }
+
         _handler.ClearIdentsForServer(request.ServerId);
         return Task.FromResult(new Empty());
     }
@@ -62,27 +62,113 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
     {
         foreach (var identMsg in request.Idents)
         {
-            _handler.SetIdent(identMsg.Uid, identMsg.ServerId, identMsg.Ident);
+            _handler.SetIdent(identMsg.UidWithIdent.Uid.Uid, identMsg.UidWithIdent.Ident.ServerId, identMsg.UidWithIdent.Ident.Ident);
+            EnqueueIdentOnline(identMsg.UidWithIdent);
         }
         return Task.FromResult(new Empty());
     }
 
-    public override async Task<UidWithIdentMessage> ValidateCachedIdents(MultiUidMessage request, ServerCallContext context)
+    public override async Task<Empty> SendStreamIdentStatusChange(IAsyncStreamReader<IdentChangeMessage> requestStream, ServerCallContext context)
     {
-        UidWithIdentMessage response = new UidWithIdentMessage();
-        foreach (var msg in request.Uids)
+        await requestStream.MoveNext();
+        var server = requestStream.Current.Server;
+        if (server == null) throw new System.Exception("First message needs to be server message");
+        _logger.LogInformation("Registered Server " + server.ServerId + " input stream");
+        identChanges[server.ServerId] = new ConcurrentQueue<IdentChange>();
+        while (await requestStream.MoveNext().ConfigureAwait(false))
         {
-            UidWithIdent msgResp = new()
+            var cur = requestStream.Current.IdentChange;
+            if (cur == null) throw new System.Exception("Expected client ident change");
+            EnqueueIdentChange(cur);
+
+            if (cur.IsOnline)
             {
-                Uid = msg,
-                Ident = new()
-            };
-            var ident = await _handler.GetIdentForuid(msg.Uid);
-            msgResp.Ident.Ident = ident.CharacterIdent;
-            msgResp.Ident.ServerId = ident.ServerId;
-            response.UidWithIdent.Add(msgResp);
+                _handler.SetIdent(cur.UidWithIdent.Uid.Uid, cur.UidWithIdent.Ident.ServerId, cur.UidWithIdent.Ident.Ident);
+            }
+            else
+            {
+                _handler.RemoveIdent(cur.UidWithIdent.Uid.Uid, cur.UidWithIdent.Ident.ServerId);
+            }
         }
 
-        return response;
+        _logger.LogInformation("Server input stream from " + server + " finished");
+
+        return new Empty();
+    }
+
+    public override async Task ReceiveStreamIdentStatusChange(ServerMessage request, IServerStreamWriter<IdentChange> responseStream, ServerCallContext context)
+    {
+        var server = request.ServerId;
+        _logger.LogInformation("Registered Server " + server + " output stream");
+
+        try
+        {
+            while (true)
+            {
+                if (identChanges.ContainsKey(server) && identChanges[server].TryDequeue(out var cur))
+                {
+                    _logger.LogInformation("Sending " + cur.UidWithIdent.Uid.Uid + " to " + server);
+                    await responseStream.WriteAsync(cur).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+            }
+        }
+        catch
+        {
+            _logger.LogInformation("Server output stream to " + server + " finished or faulty");
+        }
+    }
+
+    public override Task<UidWithIdentMessage> GetAllIdents(ServerMessage request, ServerCallContext context)
+    {
+        var response = new UidWithIdentMessage();
+        foreach (var item in _handler.GetIdentsForAllExcept(request.ServerId))
+        {
+            response.UidWithIdent.Add(new UidWithIdent()
+            {
+                Uid = new UidMessage()
+                {
+                    Uid = item.Key
+                },
+                Ident = new CharacterIdentMessage()
+                {
+                    Ident = item.Value.CharacterIdent,
+                    ServerId = item.Value.ServerId
+                }
+            });
+        }
+
+        return Task.FromResult(response);
+    }
+
+    private void EnqueueIdentChange(IdentChange identchange)
+    {
+        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + " from " + identchange.UidWithIdent.Ident.ServerId);
+
+        foreach (var dict in identChanges.Where(k => k.Key != identchange.UidWithIdent.Ident.ServerId))
+        {
+            dict.Value.Enqueue(identchange);
+        }
+    }
+
+    private void EnqueueIdentOnline(UidWithIdent ident)
+    {
+        EnqueueIdentChange(new IdentChange()
+        {
+            IsOnline = true,
+            UidWithIdent = ident
+        });
+    }
+
+    private void EnqueueIdentOffline(UidWithIdent ident)
+    {
+        EnqueueIdentChange(new IdentChange()
+        {
+            IsOnline = false,
+            UidWithIdent = ident
+        });
     }
 }
