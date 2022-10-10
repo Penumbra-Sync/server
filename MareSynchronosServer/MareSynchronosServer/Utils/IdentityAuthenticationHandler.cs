@@ -28,13 +28,13 @@ public class IdentityAuthenticationHandler : AuthenticationHandler<Authenticatio
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var secretKeyAuth = await secretKeyGrpcAuthenticationHandler.AuthenticateAsync().ConfigureAwait(false);
-        if (!secretKeyAuth.Succeeded)
-        {
-            return secretKeyAuth;
-        }
+        var uid = Context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value;
+        var auth = Context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value;
 
-        var uid = secretKeyAuth.Principal.Claims.Single(g => string.Equals(g.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal)).Value;
+        if (uid == null || auth == null)
+        {
+            return AuthenticateResult.Fail("Unauthorized");
+        }
 
         var ident = identClient.GetCharacterIdentForUid(uid);
 
@@ -52,11 +52,11 @@ public class IdentityAuthenticationHandler : AuthenticationHandler<Authenticatio
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, uid),
-            new(ClaimTypes.Authentication, secretKeyAuth.Principal.Claims.Single(g=> string.Equals(g.Type, ClaimTypes.Authentication, StringComparison.Ordinal)).Value),
+            new(ClaimTypes.Authentication, auth),
             new(ClaimTypes.GivenName, ident)
         };
 
-        var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
+        var identity = new ClaimsIdentity(claims, nameof(IdentityAuthenticationHandler));
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
 
