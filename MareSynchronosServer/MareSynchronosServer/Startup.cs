@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using MareSynchronosServer.Services;
 using System.Net.Http;
 using MareSynchronosServer.Utils;
+using MareSynchronosServer.RequirementHandlers;
 
 namespace MareSynchronosServer;
 
@@ -119,6 +120,7 @@ public class Startup
         });
 
         services.AddSingleton<GrpcClientIdentificationService>();
+        services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
         services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -131,11 +133,32 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
-        services.AddAuthentication(options =>
+        services.AddAuthentication(SecretKeyGrpcAuthenticationHandler.AuthScheme)
+            .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { options.Validate(); });
+
+        services.AddAuthorization(options =>
         {
-            options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
-        }).AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, _ => { });
-        services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+            options.DefaultPolicy = new AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme)
+                .RequireAuthenticatedUser().Build();
+            options.AddPolicy("Authenticated", policy =>
+            {
+                policy.AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme);
+                policy.RequireAuthenticatedUser();
+            });
+            options.AddPolicy("Identified", policy =>
+            {
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified));
+            });
+            options.AddPolicy("Admin", policy =>
+            {
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Administrator));
+            });
+            options.AddPolicy("Moderator", policy =>
+            {
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Moderator | UserRequirements.Administrator));
+            });
+        });
 
         services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 

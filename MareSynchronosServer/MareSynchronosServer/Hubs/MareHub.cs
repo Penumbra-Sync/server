@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 
+[Authorize]
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;
@@ -54,7 +55,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _dbContext = mareDbContext;
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Authenticated")]
     public async Task<ConnectionDto> Heartbeat(string characterIdentification)
     {
         _mareMetrics.IncCounter(MetricsAPI.CounterInitializedConnections);
@@ -111,14 +112,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         };
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Authenticated")]
     public async Task<bool> CheckClientHealth()
     {
-        var serverId = _clientIdentService.GetServerForUid(AuthenticatedUserId);
-        bool needsReconnect = false;
-        if (string.IsNullOrEmpty(serverId) || !string.Equals(serverId, _shardName, StringComparison.Ordinal))
+        var needsReconnect = !_clientIdentService.IsOnCurrentServer(AuthenticatedUserId);
+        if (needsReconnect)
         {
-            needsReconnect = true;
             _logger.LogCallWarning(MareHubLogger.Args(needsReconnect));
         }
         return needsReconnect;

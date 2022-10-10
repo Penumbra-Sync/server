@@ -17,7 +17,7 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
     private readonly AuthService.AuthServiceClient _authClient;
     private readonly IHttpContextAccessor _accessor;
 
-    public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient, 
+    public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient,
         IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
     {
         this._authClient = authClient;
@@ -26,20 +26,21 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if(!Request.Headers.TryGetValue("Authorization", out var authHeader))
+        if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
             authHeader = string.Empty;
         }
+
         var ip = _accessor.GetIpAddress();
 
-        var authResult = await _authClient.AuthorizeAsync(new AuthRequest() {Ip = ip, SecretKey = authHeader}).ConfigureAwait(false);
+        var authResult = await _authClient.AuthorizeAsync(new AuthRequest() { Ip = ip, SecretKey = authHeader }).ConfigureAwait(false);
 
         if (!authResult.Success)
         {
             return AuthenticateResult.Fail("Failed Authorization");
         }
 
-        string uid = authResult.Uid;
+        var uid = authResult.Uid;
 
         var claims = new List<Claim>
         {

@@ -40,6 +40,11 @@ public class GrpcClientIdentificationService : IHostedService
         _metrics = metrics;
     }
 
+    public bool IsOnCurrentServer(string uid)
+    {
+        return OnlineClients.ContainsKey(uid);
+    }
+
     public string? GetCharacterIdentForUid(string uid)
     {
         if (OnlineClients.TryGetValue(uid, out var ident))
