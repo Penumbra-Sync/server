@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using MareSynchronosServer.Services;
 using System.Net.Http;
 using MareSynchronosServer.Utils;
+using MareSynchronosServer.RequirementHandlers;
 
 namespace MareSynchronosServer;
 
@@ -119,6 +120,9 @@ public class Startup
         });
 
         services.AddSingleton<GrpcClientIdentificationService>();
+        services.AddSingleton<IAuthorizationHandler, LoggedInRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, AdminRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, ModeratorRequirementHandler>();
         services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -131,14 +135,32 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
-        services.AddAuthentication(options =>
-        {
-            options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
-        })
-        .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, _ => { })
-        .AddScheme<AuthenticationSchemeOptions, IdentityAuthenticationHandler>(IdentityAuthenticationHandler.AuthScheme, _ => { });
+        services.AddAuthentication(SecretKeyGrpcAuthenticationHandler.AuthScheme)
+            .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { options.Validate(); });
 
-        services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        services.AddAuthorization(options =>
+        {
+            options.DefaultPolicy = new AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme)
+                .RequireAuthenticatedUser().Build();
+            options.AddPolicy("Authenticated", policy =>
+            {
+                policy.AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme);
+                policy.RequireAuthenticatedUser();
+            });
+            options.AddPolicy("Identified", policy =>
+            {
+                policy.AddRequirements(new LoggedInRequirement());
+            });
+            options.AddPolicy("Admin", policy =>
+            {
+                policy.AddRequirements(new AdminRequirement());
+            });
+            options.AddPolicy("Moderator", policy =>
+            {
+                policy.AddRequirements(new ModeratorRequirement());
+            });
+        });
 
         services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 

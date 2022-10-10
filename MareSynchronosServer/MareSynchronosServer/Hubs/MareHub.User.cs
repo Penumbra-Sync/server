@@ -15,7 +15,7 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task UserDelete()
     {
         _logger.LogCallInfo();
@@ -66,7 +66,7 @@ public partial class MareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<string>> UserGetOnlineCharacters()
     {
         _logger.LogCallInfo();
@@ -77,7 +77,7 @@ public partial class MareHub
         return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<ClientPairDto>> UserGetPairedClients()
     {
         _logger.LogCallInfo();
@@ -118,7 +118,7 @@ public partial class MareHub
         }).ToList();
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
@@ -138,7 +138,7 @@ public partial class MareHub
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, allPairedUsersDict.Count());
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task UserAddPair(string uid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(uid));
@@ -211,7 +211,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task UserChangePairPauseStatus(string otherUserUid, bool isPaused)
     {
         _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused));
@@ -256,7 +256,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task UserRemovePair(string otherUserUid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(otherUserUid));

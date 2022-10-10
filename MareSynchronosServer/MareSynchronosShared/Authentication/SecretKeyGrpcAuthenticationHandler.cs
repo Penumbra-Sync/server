@@ -34,6 +34,7 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 
         if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
+            Logger.LogInformation("Request Header was empty");
             authHeader = string.Empty;
         }
 
@@ -57,6 +58,8 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
         var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
+
+        Logger.LogInformation("Claim created");
 
         return AuthenticateResult.Success(ticket);
     }

@@ -16,7 +16,7 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<GroupCreatedDto> GroupCreate()
     {
         _logger.LogCallInfo();
@@ -78,7 +78,7 @@ public partial class MareHub
         };
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<GroupDto>> GroupsGetAll()
     {
         _logger.LogCallInfo();
@@ -96,7 +96,7 @@ public partial class MareHub
         }).ToList();
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<GroupPairDto>> GroupsGetUsersInGroup(string gid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -117,7 +117,7 @@ public partial class MareHub
         }).ToList();
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupChangeInviteState(string gid, bool enabled)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, enabled.ToString()));
@@ -138,7 +138,7 @@ public partial class MareHub
         }).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupDelete(string gid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -162,7 +162,7 @@ public partial class MareHub
         await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<bool> GroupJoin(string gid, string password)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -239,7 +239,7 @@ public partial class MareHub
         return true;
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupLeave(string gid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -322,7 +322,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupChangePauseState(string gid, bool isPaused)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, isPaused));
@@ -370,7 +370,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupRemoveUser(string gid, string uid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid));
@@ -412,7 +412,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupBanUser(string gid, string uid, string reason)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid));
@@ -443,7 +443,7 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, "Success"));
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupUnbanUser(string gid, string uid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid));
@@ -484,7 +484,7 @@ public partial class MareHub
         return bannedGroupUsers;
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupSetModerator(string gid, string uid, bool isGroupModerator)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator));
@@ -517,7 +517,7 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator, "Success"));
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupChangeOwnership(string gid, string uid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid));
@@ -567,7 +567,7 @@ public partial class MareHub
         }).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<bool> GroupChangePassword(string gid, string password)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -583,7 +583,7 @@ public partial class MareHub
         return true;
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupChangePinned(string gid, string uid, bool isPinned)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isPinned));
@@ -609,7 +609,7 @@ public partial class MareHub
         }).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task GroupClear(string gid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));

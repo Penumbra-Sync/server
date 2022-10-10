@@ -18,7 +18,7 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task FilesAbortUpload()
     {
         _logger.LogCallInfo();
@@ -28,7 +28,7 @@ public partial class MareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task FilesDeleteAll()
     {
         _logger.LogCallInfo();
@@ -43,7 +43,7 @@ public partial class MareHub
         _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<DownloadFileDto>> FilesGetSizes(List<string> hashes)
     {
         _logger.LogCallInfo(MareHubLogger.Args(hashes.Count.ToString()));
@@ -80,7 +80,7 @@ public partial class MareHub
         return response;
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<bool> FilesIsUploadFinished()
     {
         _logger.LogCallInfo();
@@ -89,7 +89,7 @@ public partial class MareHub
             .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<UploadFileDto>> FilesSend(List<string> fileListHashes)
     {
         var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal), StringComparer.Ordinal);
@@ -139,7 +139,7 @@ public partial class MareHub
         return notCoveredFiles.Values.ToList();
     }
 
-    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task FilesUploadStreamAsync(string hash, IAsyncEnumerable<byte[]> fileContent)
     {
         _logger.LogCallInfo(MareHubLogger.Args(hash));
