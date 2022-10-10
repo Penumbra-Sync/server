@@ -120,9 +120,7 @@ public class Startup
         });
 
         services.AddSingleton<GrpcClientIdentificationService>();
-        services.AddSingleton<IAuthorizationHandler, LoggedInRequirementHandler>();
-        services.AddTransient<IAuthorizationHandler, AdminRequirementHandler>();
-        services.AddTransient<IAuthorizationHandler, ModeratorRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
         services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -150,15 +148,15 @@ public class Startup
             });
             options.AddPolicy("Identified", policy =>
             {
-                policy.AddRequirements(new LoggedInRequirement());
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified));
             });
             options.AddPolicy("Admin", policy =>
             {
-                policy.AddRequirements(new AdminRequirement());
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Administrator));
             });
             options.AddPolicy("Moderator", policy =>
             {
-                policy.AddRequirements(new ModeratorRequirement());
+                policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Moderator | UserRequirements.Administrator));
             });
         });
 
