@@ -15,9 +15,9 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 {
     private readonly GrpcClientIdentificationService identClient;
     private readonly MareDbContext dbContext;
-    private readonly ILogger<ModeratorRequirementHandler> logger;
+    private readonly ILogger<UserRequirementHandler> logger;
 
-    public UserRequirementHandler(GrpcClientIdentificationService identClient, MareDbContext dbContext, ILogger<ModeratorRequirementHandler> logger)
+    public UserRequirementHandler(GrpcClientIdentificationService identClient, MareDbContext dbContext, ILogger<UserRequirementHandler> logger)
     {
         this.identClient = identClient;
         this.dbContext = dbContext;
