@@ -26,15 +26,8 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (Context.User.Claims.Any(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal)))
-        {
-            Logger.LogInformation("Claim already exists");
-            return AuthenticateResult.Success(new AuthenticationTicket(Context.User, Scheme.Name));
-        }
-
         if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
-            Logger.LogInformation("Request Header was empty");
             authHeader = string.Empty;
         }
 
@@ -58,8 +51,6 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
         var identity = new ClaimsIdentity(claims, nameof(SecretKeyGrpcAuthenticationHandler));
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, Scheme.Name);
-
-        Logger.LogInformation("Claim created");
 
         return AuthenticateResult.Success(ticket);
     }
