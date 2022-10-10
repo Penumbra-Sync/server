@@ -134,7 +134,10 @@ public class Startup
         services.AddAuthentication(options =>
         {
             options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
-        }).AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, _ => { });
+        })
+        .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, _ => { })
+        .AddScheme<AuthenticationSchemeOptions, IdentityAuthenticationHandler>(IdentityAuthenticationHandler.AuthScheme, _ => { });
+
         services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
         services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();

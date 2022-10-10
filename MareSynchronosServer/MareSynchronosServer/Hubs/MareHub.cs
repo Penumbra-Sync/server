@@ -114,11 +114,9 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
     public async Task<bool> CheckClientHealth()
     {
-        var serverId = _clientIdentService.GetServerForUid(AuthenticatedUserId);
-        bool needsReconnect = false;
-        if (string.IsNullOrEmpty(serverId) || !string.Equals(serverId, _shardName, StringComparison.Ordinal))
+        var needsReconnect = !_clientIdentService.IsOnCurrentServer(AuthenticatedUserId);
+        if (needsReconnect)
         {
-            needsReconnect = true;
             _logger.LogCallWarning(MareHubLogger.Args(needsReconnect));
         }
         return needsReconnect;

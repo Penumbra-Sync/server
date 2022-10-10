@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
+using MareSynchronosServer.Utils;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +19,7 @@ public partial class MareHub
 
     private List<string> OnlineAdmins => _dbContext.Users.Where(u => (u.IsModerator || u.IsAdmin)).Select(u => u.UID).ToList();
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task AdminChangeModeratorStatus(string uid, bool isModerator)
     {
         if (!IsAdmin) return;
@@ -32,7 +33,7 @@ public partial class MareHub
         await Clients.Users(user.UID).Client_AdminForcedReconnect().ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task AdminDeleteBannedUser(BannedUserDto dto)
     {
         if (!IsModerator || string.IsNullOrEmpty(dto.CharacterHash)) return;
@@ -49,7 +50,7 @@ public partial class MareHub
         await Clients.Users(OnlineAdmins).Client_AdminDeleteBannedUser(dto).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task AdminDeleteForbiddenFile(ForbiddenFileDto dto)
     {
         if (!IsAdmin || string.IsNullOrEmpty(dto.Hash)) return;
@@ -66,7 +67,7 @@ public partial class MareHub
         await Clients.Users(OnlineAdmins).Client_AdminDeleteForbiddenFile(dto).ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task<List<BannedUserDto>> AdminGetBannedUsers()
     {
         if (!IsModerator) return null;
@@ -78,7 +79,7 @@ public partial class MareHub
         }).ToListAsync().ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task<List<ForbiddenFileDto>> AdminGetForbiddenFiles()
     {
         if (!IsModerator) return null;
@@ -90,7 +91,7 @@ public partial class MareHub
         }).ToListAsync().ConfigureAwait(false);
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
     {
         if (!IsModerator) return null;
@@ -105,7 +106,7 @@ public partial class MareHub
         }).ToList();
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task AdminUpdateOrAddBannedUser(BannedUserDto dto)
     {
         if (!IsModerator || string.IsNullOrEmpty(dto.CharacterHash)) return;
@@ -135,7 +136,7 @@ public partial class MareHub
         }
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(AuthenticationSchemes = IdentityAuthenticationHandler.AuthScheme)]
     public async Task AdminUpdateOrAddForbiddenFile(ForbiddenFileDto dto)
     {
         if (!IsAdmin || string.IsNullOrEmpty(dto.Hash)) return;
