@@ -31,7 +31,7 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 
         if (uid == null || auth == null) context.Fail();
 
-        if ((requirement.Requirements & UserRequirements.Identified) == UserRequirements.Identified)
+        if ((requirement.Requirements & UserRequirements.Identified) is UserRequirements.Identified)
         {
             var ident = identClient.GetCharacterIdentForUid(uid);
             if (ident == null) context.Fail();
@@ -40,15 +40,16 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
             if (!isOnCurrent) identClient.MarkUserOnline(uid, ident);
         }
 
-        if ((requirement.Requirements & UserRequirements.Administrator) == UserRequirements.Administrator)
+        if ((requirement.Requirements & UserRequirements.Administrator) is UserRequirements.Administrator)
         {
-            var user = await dbContext.Users.SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
-            if (user == null || !user.IsAdmin && !user.IsModerator) context.Fail();
+            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            if (user == null || !user.IsAdmin) context.Fail();
             logger.LogInformation("Admin {uid} authenticated", uid);
         }
-        else if ((requirement.Requirements & UserRequirements.Moderator) == UserRequirements.Moderator)
+
+        if ((requirement.Requirements & UserRequirements.Moderator) is UserRequirements.Moderator)
         {
-            var user = await dbContext.Users.SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
             if (user == null || !user.IsAdmin && !user.IsModerator) context.Fail();
             logger.LogInformation("Admin/Moderator {uid} authenticated", uid);
         }
