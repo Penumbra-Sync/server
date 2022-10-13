@@ -18,7 +18,6 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 
-[Authorize]
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;
