@@ -53,17 +53,24 @@ public class GrpcAuthenticationService : GrpcBaseService
 
     public async Task GrpcAuthStream(CancellationToken token)
     {
-        using var stream = _authClient.Authorize(cancellationToken: token);
-        while (!token.IsCancellationRequested)
+        try
         {
-            while (_requestQueue.TryDequeue(out var request))
+            using var stream = _authClient.Authorize(cancellationToken: token);
+            while (!token.IsCancellationRequested)
             {
-                await stream.RequestStream.WriteAsync(request.Request, token).ConfigureAwait(false);
-                await stream.ResponseStream.MoveNext(token).ConfigureAwait(false);
-                _authReplies[request.Id] = stream.ResponseStream.Current;
-            }
+                while (_requestQueue.TryDequeue(out var request))
+                {
+                    await stream.RequestStream.WriteAsync(request.Request, token).ConfigureAwait(false);
+                    await stream.ResponseStream.MoveNext(token).ConfigureAwait(false);
+                    _authReplies[request.Id] = stream.ResponseStream.Current;
+                }
 
-            await Task.Delay(10, token).ConfigureAwait(false);
+                await Task.Delay(10, token).ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            SetGrpcFaulty();
         }
     }
 
