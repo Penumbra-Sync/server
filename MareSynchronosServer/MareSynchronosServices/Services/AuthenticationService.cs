@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Services;
 
-public class AuthenticationService : AuthService.AuthServiceBase
+internal class AuthenticationService : AuthService.AuthServiceBase
 {
     private readonly ILogger<AuthenticationService> _logger;
     private readonly MareDbContext _dbContext;
@@ -20,12 +20,16 @@ public class AuthenticationService : AuthService.AuthServiceBase
         _authHandler = authHandler;
     }
 
-    public override async Task<AuthReply> Authorize(AuthRequest request, ServerCallContext context)
+    public override async Task Authorize(IAsyncStreamReader<AuthRequest> requestStream, IServerStreamWriter<AuthReply> responseStream, ServerCallContext context)
     {
-        return await _authHandler.AuthenticateAsync(_dbContext, request.Ip, request.SecretKey);
+        await foreach (var input in requestStream.ReadAllAsync(context.CancellationToken).ConfigureAwait(false))
+        {
+            var response = await _authHandler.AuthenticateAsync(_dbContext, input.Ip, input.SecretKey).ConfigureAwait(false);
+            await responseStream.WriteAsync(response, context.CancellationToken).ConfigureAwait(false);
+        }
     }
 
-    public override Task<Empty> RemoveAuth(RemoveAuthRequest request, ServerCallContext context)
+    public override Task<Empty> RemoveAuth(UidMessage request, ServerCallContext context)
     {
         _logger.LogInformation("Removing Authentication for {uid}", request.Uid);
         _authHandler.RemoveAuthentication(request.Uid);

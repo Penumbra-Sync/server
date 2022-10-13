@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Text.Encodings.Web;
 using MareSynchronosServer;
-using MareSynchronosShared.Protos;
+using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -14,13 +14,13 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 {
     public const string AuthScheme = "SecretKeyGrpcAuth";
 
-    private readonly AuthService.AuthServiceClient _authClient;
+    private readonly GrpcAuthenticationService _grpcAuthService;
     private readonly IHttpContextAccessor _accessor;
 
-    public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, AuthService.AuthServiceClient authClient,
+    public SecretKeyGrpcAuthenticationHandler(IHttpContextAccessor accessor, GrpcAuthenticationService authClient,
         IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
     {
-        this._authClient = authClient;
+        this._grpcAuthService = authClient;
         _accessor = accessor;
     }
 
@@ -33,7 +33,7 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 
         var ip = _accessor.GetIpAddress();
 
-        var authResult = await _authClient.AuthorizeAsync(new AuthRequest() { Ip = ip, SecretKey = authHeader }).ConfigureAwait(false);
+        var authResult = await _grpcAuthService.AuthorizeAsync(ip, authHeader).ConfigureAwait(false);
 
         if (!authResult.Success)
         {
@@ -44,7 +44,7 @@ public class SecretKeyGrpcAuthenticationHandler : AuthenticationHandler<Authenti
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, uid),
+            new(ClaimTypes.NameIdentifier, uid.Uid),
             new(ClaimTypes.Authentication, authHeader)
         };
 

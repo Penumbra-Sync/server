@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Authentication;
 
-public class SecretKeyAuthenticationHandler
+internal class SecretKeyAuthenticationHandler
 {
     private readonly ILogger<SecretKeyAuthenticationHandler> logger;
     private readonly MareMetrics metrics;
@@ -60,7 +60,7 @@ public class SecretKeyAuthenticationHandler
         if (string.IsNullOrEmpty(secretKey))
         {
             metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
-            return new AuthReply() { Success = false, Uid = string.Empty };
+            return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
         }
 
         lock (failedAuthLock)
@@ -86,7 +86,7 @@ public class SecretKeyAuthenticationHandler
                 }, token);
 
                 logger.LogWarning("TempBan {ip} for authorization spam", ip);
-                return new AuthReply() { Success = false, Uid = string.Empty };
+                return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
             }
         }
 
@@ -115,7 +115,7 @@ public class SecretKeyAuthenticationHandler
                         }
                     }
 
-                    return new AuthReply() { Success = false, Uid = string.Empty };
+                    return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
                 }
 
                 metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
@@ -152,7 +152,7 @@ public class SecretKeyAuthenticationHandler
                 }
 
                 metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
-                return new AuthReply() { Success = false, Uid = string.Empty };
+                return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
             }
 
             lock (authDictLock)
@@ -163,7 +163,7 @@ public class SecretKeyAuthenticationHandler
 
         metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
 
-        return new AuthReply() { Success = true, Uid = uid };
+        return new AuthReply() { Success = true, Uid = new UidMessage() { Uid = uid } };
     }
 
     public SecretKeyAuthenticationHandler(IConfiguration configuration, ILogger<SecretKeyAuthenticationHandler> logger, MareMetrics metrics)

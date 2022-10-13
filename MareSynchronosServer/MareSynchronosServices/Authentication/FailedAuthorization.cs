@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Authentication;
 
-public class FailedAuthorization : IDisposable
+internal class FailedAuthorization : IDisposable
 {
     private int failedAttempts = 1;
     public int FailedAttempts => failedAttempts;
