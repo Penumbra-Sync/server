@@ -4,12 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
-using Microsoft.AspNetCore.SignalR;
-using System.Globalization;
-using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using System.Security.Claims;
-using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 

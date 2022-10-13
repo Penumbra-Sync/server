@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
