@@ -1,6 +1,5 @@
 ﻿using MareSynchronosShared.Protos;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -101,10 +100,10 @@ internal class IdentityHandler
     {
         identChanges[serverId] = new ConcurrentQueue<IdentChange>();
     }
-}
 
-internal record ServerIdentity
-{
-    public string ServerId { get; set; } = string.Empty;
-    public string CharacterIdent { get; set; } = string.Empty;
+    internal record ServerIdentity
+    {
+        public string ServerId { get; set; } = string.Empty;
+        public string CharacterIdent { get; set; } = string.Empty;
+    }
 }

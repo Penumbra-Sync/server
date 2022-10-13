@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
@@ -18,7 +17,6 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Hubs;
 
-[Authorize]
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;

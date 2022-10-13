@@ -5,8 +5,8 @@ option csharp_namespace = "MareSynchronosShared.Protos";
 package mareservices;
 
 service AuthService {
-  rpc Authorize (AuthRequest) returns (AuthReply);
-  rpc RemoveAuth (RemoveAuthRequest) returns (Empty);
+  rpc Authorize (stream AuthRequest) returns (stream AuthReply);
+  rpc RemoveAuth (UidMessage) returns (Empty);
   rpc ClearUnauthorized (Empty) returns (Empty);
 }
 
@@ -101,10 +101,6 @@ message FileSizeResponse {
 	map<string, int64> hashToFileSize = 1;
 }
 
-message RemoveAuthRequest {
-	string uid = 1;
-}
-
 message AuthRequest {
 	string ip = 1;
 	string secretKey = 2;
@@ -112,5 +108,5 @@ message AuthRequest {
 
 message AuthReply {
   bool success = 1;
-  string uid = 2;
+  UidMessage uid = 2;
 }

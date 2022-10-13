@@ -3,6 +3,7 @@ using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
+using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -47,6 +48,7 @@ public class Startup
             }
         };
 
+        services.AddSingleton<GrpcAuthenticationService>();
         services.AddSingleton(new MareMetrics(new List<string> {
         }, new List<string>
         {
@@ -72,6 +74,7 @@ public class Startup
         }, mareSettings.GetValue("DbContextPoolSize", 1024));
 
         services.AddHostedService<CleanupService>();
+        services.AddHostedService(p => p.GetService<GrpcAuthenticationService>());
 
         services.AddAuthentication(options =>
             {

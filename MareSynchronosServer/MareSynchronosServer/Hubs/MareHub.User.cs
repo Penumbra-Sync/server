@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Utils;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
@@ -38,7 +37,7 @@ public partial class MareHub
             await Task.Delay(1000).ConfigureAwait(false);
         }
 
-        await _authServiceClient.RemoveAuthAsync(new RemoveAuthRequest() { Uid = userid }).ConfigureAwait(false);
+        await _authServiceClient.RemoveAuthAsync(new UidMessage() { Uid = userid }).ConfigureAwait(false);
 
         _dbContext.RemoveRange(ownPairData);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);

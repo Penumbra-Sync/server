@@ -23,6 +23,7 @@ using MareSynchronosServer.Services;
 using System.Net.Http;
 using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
+using MareSynchronosShared.Services;
 
 namespace MareSynchronosServer;
 
@@ -119,8 +120,10 @@ public class Startup
             };
         });
 
+        services.AddSingleton<GrpcAuthenticationService>();
         services.AddSingleton<GrpcClientIdentificationService>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
+        services.AddHostedService(p => p.GetService<GrpcAuthenticationService>());
         services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
 
         services.AddDbContextPool<MareDbContext>(options =>
