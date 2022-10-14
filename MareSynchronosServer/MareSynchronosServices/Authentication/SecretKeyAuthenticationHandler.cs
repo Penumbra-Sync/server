@@ -102,16 +102,20 @@ internal class SecretKeyAuthenticationHandler
                 {
                     metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
 
+                    logger.LogWarning("Failed authorization from {ip}", ip);
+
                     lock (failedAuthLock)
                     {
-                        logger.LogWarning("Failed authorization from {ip}", ip);
-                        if (failedAuthorizations.TryGetValue(ip, out var auth))
+                        if (!_whitelistedIps.Any(w => ip.Contains(w)))
                         {
-                            auth.IncreaseFailedAttempts();
-                        }
-                        else
-                        {
-                            failedAuthorizations[ip] = new FailedAuthorization();
+                            if (failedAuthorizations.TryGetValue(ip, out var auth))
+                            {
+                                auth.IncreaseFailedAttempts();
+                            }
+                            else
+                            {
+                                failedAuthorizations[ip] = new FailedAuthorization();
+                            }
                         }
                     }
 
