@@ -129,7 +129,7 @@ public class MareModule : InteractionModuleBase
         await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
     }
 
-    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, ulong? optionalUser, string? uid)
+    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, ulong? optionalUser = null, string? uid = null)
     {
         using var scope = _services.CreateScope();
         await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
@@ -151,7 +151,7 @@ public class MareModule : InteractionModuleBase
             eb.WithDescription("You are not authorized to view another users' information");
             return eb;
         }
-        else
+        else if ((optionalUser != null || uid != null) && isAdminCall)
         {
             LodeStoneAuth userInDb = null;
             if (optionalUser != null)
@@ -184,7 +184,10 @@ public class MareModule : InteractionModuleBase
         eb.WithDescription("This is the user information for Discord User Id " + userToCheckForDiscordId + Environment.NewLine
             + "If you want to verify your secret key is valid, go to https://emn178.github.io/online-tools/sha256.html and copy your secret key into there and compare it to the Hashed Secret Key.");
         eb.AddField("UID", dbUser.UID);
-        eb.AddField("Vanity UID", dbUser.Alias);
+        if (!string.IsNullOrEmpty(dbUser.Alias))
+        {
+            eb.AddField("Vanity UID", dbUser.Alias);
+        }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
         eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.CharacterIdent));
         eb.AddField("Hashed Secret Key", auth.HashedKey);
@@ -193,11 +196,14 @@ public class MareModule : InteractionModuleBase
         foreach (var group in groups)
         {
             var syncShellUserCount = await db.GroupPairs.CountAsync(g => g.GroupGID == group.GID).ConfigureAwait(false);
-            eb.AddField("Owned Syncshell " + group.GID + " Vanity ID", group.Alias);
+            if (!string.IsNullOrEmpty(group.Alias))
+            {
+                eb.AddField("Owned Syncshell " + group.GID + " Vanity ID", group.Alias);
+            }
             eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
         }
 
-        if (isAdminCall)
+        if (isAdminCall && !string.IsNullOrEmpty(identity.CharacterIdent))
         {
             eb.AddField("Character Ident", identity.CharacterIdent);
         }
