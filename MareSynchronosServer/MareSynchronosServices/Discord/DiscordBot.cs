@@ -144,7 +144,7 @@ internal class DiscordBot : IHostedService
 
                         break;
                     }
-                case "userinfo":
+                case "mareinfo":
                     {
                         EmbedBuilder eb = new();
 
@@ -688,10 +688,10 @@ internal class DiscordBot : IHostedService
         recover.WithDescription("Allows you to recover your account by generating a new secret key");
 
         var userInfo = new SlashCommandBuilder();
-        userInfo.WithName("userinfo");
+        userInfo.WithName("mareinfo");
         userInfo.WithDescription("Checks and returns your user information about your Mare account. The parameters are solely for admins, do not use them.");
-        userInfo.AddOption("discord_user", ApplicationCommandOptionType.String, "Discord User", isRequired: false);
-        userInfo.AddOption("uid", ApplicationCommandOptionType.String, "UID", isRequired: false);
+        userInfo.AddOption("discord_user", ApplicationCommandOptionType.String, "Discord User", false);
+        userInfo.AddOption("uid", ApplicationCommandOptionType.String, "UID", false);
 
         try
         {
@@ -724,7 +724,7 @@ internal class DiscordBot : IHostedService
             {
                 await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
             }
-            if (!commands.Any(c => c.Name.Contains("userinfo")))
+            if (!commands.Any(c => c.Name.Contains("mareinfo")))
             {
                 await guild.CreateApplicationCommandAsync(userInfo.Build()).ConfigureAwait(false);
             }
