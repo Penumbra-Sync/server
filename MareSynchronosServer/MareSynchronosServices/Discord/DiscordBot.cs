@@ -144,6 +144,18 @@ internal class DiscordBot : IHostedService
 
                         break;
                     }
+                case "userinfo":
+                    {
+                        EmbedBuilder eb = new();
+
+                        IUser optionalUser = (IUser?)arg.Data.Options.FirstOrDefault(f => f.Name == "discord_user")?.Value ?? null;
+                        string uid = (string?)arg.Data.Options.FirstOrDefault(f => f.Name == "uid")?.Value ?? null;
+
+                        eb = await HandleUserInfo(eb, arg.User.Id, optionalUser, uid);
+
+                        await arg.RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+                        break;
+                    }
                 default:
                     await arg.RespondAsync("idk what you did to get here to start, just follow the instructions as provided.", ephemeral: true).ConfigureAwait(false);
                     break;
@@ -153,6 +165,82 @@ internal class DiscordBot : IHostedService
         {
             semaphore.Release();
         }
+    }
+
+    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, IUser? optionalUser, string? uid)
+    {
+        using var scope = services.CreateScope();
+        await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
+
+        var self = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
+        ulong userToCheckForDiscordId = id;
+        bool isAdminCall = self.User.IsModerator || self.User.IsAdmin;
+
+        if (self == null)
+        {
+            eb.WithTitle("No account");
+            eb.WithDescription("No Mare account was found associated to your Discord user");
+            return eb;
+        }
+
+        if ((optionalUser != null || uid != null) && !isAdminCall)
+        {
+            eb.WithTitle("Unauthorized");
+            eb.WithDescription("You are not authorized to view another users' information");
+            return eb;
+        }
+        else
+        {
+            LodeStoneAuth userInDb = null;
+            if (optionalUser != null)
+            {
+                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == optionalUser.Id).ConfigureAwait(false);
+            }
+            else if (uid != null)
+            {
+                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.User.UID == uid).ConfigureAwait(false);
+            }
+
+            if (userInDb == null)
+            {
+                eb.WithTitle("No account");
+                eb.WithDescription("The Discord user has no valid Mare account");
+                return eb;
+            }
+
+            userToCheckForDiscordId = userInDb.DiscordId;
+        }
+
+        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userToCheckForDiscordId).ConfigureAwait(false);
+        var dbUser = lodestoneUser.User;
+        var auth = await db.Auth.SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
+        var identity = await identityHandler.GetIdentForuid(dbUser.UID).ConfigureAwait(false);
+        var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
+        var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
+
+        eb.WithTitle("User Information");
+        eb.WithDescription("This is the user information for Discord User Id " + userToCheckForDiscordId + Environment.NewLine
+            + "If you want to verify your secret key is valid, go to https://emn178.github.io/online-tools/sha256.html and copy your secret key into there and compare it to the Hashed Secret Key.");
+        eb.AddField("UID", dbUser.UID);
+        eb.AddField("Vanity UID", dbUser.Alias);
+        eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
+        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.CharacterIdent));
+        eb.AddField("Hashed Secret Key", auth.HashedKey);
+        eb.AddField("Joined Syncshells", groupsJoined.Count);
+        eb.AddField("Owned Syncshells", groups.Count);
+        foreach (var group in groups)
+        {
+            var syncShellUserCount = await db.GroupPairs.CountAsync(g => g.GroupGID == group.GID).ConfigureAwait(false);
+            eb.AddField("Owned Syncshell " + group.GID + " Vanity ID", group.Alias);
+            eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
+        }
+
+        if (isAdminCall)
+        {
+            eb.AddField("Character Ident", identity.CharacterIdent);
+        }
+
+        return eb;
     }
 
     private async Task<EmbedBuilder> HandleVanityGid(EmbedBuilder eb, ulong id, string oldGid, string newGid)
@@ -599,6 +687,12 @@ internal class DiscordBot : IHostedService
         recover.WithName("recover");
         recover.WithDescription("Allows you to recover your account by generating a new secret key");
 
+        var userInfo = new SlashCommandBuilder();
+        userInfo.WithName("userinfo");
+        userInfo.WithDescription("Checks and returns your user information about your Mare account. The parameters are solely for admins, do not use them.");
+        userInfo.AddOption("discord_user", ApplicationCommandOptionType.User, "Discord User", isRequired: false);
+        userInfo.AddOption("uid", ApplicationCommandOptionType.String, "UID", isRequired: false);
+
         try
         {
             await discordClient.Rest.DeleteAllGlobalCommandsAsync().ConfigureAwait(false);
@@ -629,6 +723,10 @@ internal class DiscordBot : IHostedService
             if (!commands.Any(c => c.Name.Contains("recover")))
             {
                 await guild.CreateApplicationCommandAsync(recover.Build()).ConfigureAwait(false);
+            }
+            if (!commands.Any(c => c.Name.Contains("userinfo")))
+            {
+                await guild.CreateApplicationCommandAsync(userInfo.Build()).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
