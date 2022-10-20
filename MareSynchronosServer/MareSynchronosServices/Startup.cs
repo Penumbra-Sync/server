@@ -45,6 +45,7 @@ public class Startup
         }));
 
         services.AddSingleton<SecretKeyAuthenticationHandler>();
+        services.AddSingleton<DiscordBotServices>();
         services.AddSingleton<IdentityHandler>();
         services.AddSingleton<CleanupService>();
         services.AddTransient(_ => Configuration);

@@ -144,7 +144,7 @@ public class GrpcClientIdentificationService : GrpcBaseService
                 {
                     ServerId = _shardName
                 }
-            }).ConfigureAwait(false);
+            }, cts).ConfigureAwait(false);
 
             while (!cts.IsCancellationRequested)
             {
