@@ -76,13 +76,6 @@ internal class DiscordBot : IHostedService
             try
             {
                 _logger.LogInformation($"Cleaning up Vanity UIDs");
-                var guild = _discordClient.Guilds.FirstOrDefault();
-                if (guild == null)
-                {
-                    _logger.LogInformation($"Guild was null");
-                    throw new Exception("Guild is null");
-                }
-
                 _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
                 var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id);
                 var vanityCommand = await restGuild.GetSlashCommandAsync(vanityCommandId).ConfigureAwait(false);
