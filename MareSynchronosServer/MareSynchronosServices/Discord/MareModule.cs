@@ -160,7 +160,7 @@ public class MareModule : InteractionModuleBase
             }
             else if (uid != null)
             {
-                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.User.UID == uid).ConfigureAwait(false);
+                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.User.UID == uid || u.User.Alias == uid).ConfigureAwait(false);
             }
 
             if (userInDb == null)
