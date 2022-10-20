@@ -148,8 +148,8 @@ internal class DiscordBot : IHostedService
                     {
                         EmbedBuilder eb = new();
 
-                        IUser optionalUser = (IUser?)arg.Data.Options.FirstOrDefault(f => f.Name == "discord_user")?.Value ?? null;
-                        string uid = (string?)arg.Data.Options.FirstOrDefault(f => f.Name == "uid")?.Value ?? null;
+                        string? optionalUser = (string?)arg.Data.Options.FirstOrDefault(f => f.Name == "discord_user")?.Value ?? null;
+                        string? uid = (string?)arg.Data.Options.FirstOrDefault(f => f.Name == "uid")?.Value ?? null;
 
                         eb = await HandleUserInfo(eb, arg.User.Id, optionalUser, uid);
 
@@ -167,7 +167,7 @@ internal class DiscordBot : IHostedService
         }
     }
 
-    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, IUser? optionalUser, string? uid)
+    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, string? optionalUser, string? uid)
     {
         using var scope = services.CreateScope();
         await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
@@ -192,9 +192,9 @@ internal class DiscordBot : IHostedService
         else
         {
             LodeStoneAuth userInDb = null;
-            if (optionalUser != null)
+            if (optionalUser != null && ulong.TryParse(optionalUser, out ulong optionalUserId))
             {
-                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == optionalUser.Id).ConfigureAwait(false);
+                userInDb = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == optionalUserId).ConfigureAwait(false);
             }
             else if (uid != null)
             {
@@ -690,7 +690,7 @@ internal class DiscordBot : IHostedService
         var userInfo = new SlashCommandBuilder();
         userInfo.WithName("userinfo");
         userInfo.WithDescription("Checks and returns your user information about your Mare account. The parameters are solely for admins, do not use them.");
-        userInfo.AddOption("discord_user", ApplicationCommandOptionType.User, "Discord User", isRequired: false);
+        userInfo.AddOption("discord_user", ApplicationCommandOptionType.String, "Discord User", isRequired: false);
         userInfo.AddOption("uid", ApplicationCommandOptionType.String, "UID", isRequired: false);
 
         try

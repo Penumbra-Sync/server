@@ -57,18 +57,12 @@ public class Startup
             Names = { MethodName.Default },
             RetryPolicy = new RetryPolicy
             {
-                MaxAttempts = 100,
+                MaxAttempts = 1000,
                 InitialBackoff = TimeSpan.FromSeconds(1),
                 MaxBackoff = TimeSpan.FromSeconds(5),
                 BackoffMultiplier = 1.5,
                 RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable }
             }
-        };
-
-        var identMethodConfig = new MethodConfig
-        {
-            Names = { MethodName.Default },
-            RetryPolicy = null
         };
 
         services.AddSingleton(new MareMetrics(new List<string>
@@ -113,7 +107,7 @@ public class Startup
             c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
         }).ConfigureChannel(c =>
         {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { identMethodConfig } };
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
                 EnableMultipleHttp2Connections = true

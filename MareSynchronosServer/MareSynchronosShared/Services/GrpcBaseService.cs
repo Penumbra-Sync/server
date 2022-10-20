@@ -72,14 +72,14 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
         {
             try
             {
-                await CheckFaultStateAndResend().ConfigureAwait(false);
+                await CheckFaultStateAndRestore().ConfigureAwait(false);
             }
             catch { SetGrpcFaulty(); }
             await Task.Delay(250).ConfigureAwait(false);
         }
     }
 
-    private async Task CheckFaultStateAndResend()
+    private async Task CheckFaultStateAndRestore()
     {
         if (GrpcIsFaulty)
         {
@@ -96,8 +96,6 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
         {
             var result = await toExecute.ConfigureAwait(false);
 
-            await CheckFaultStateAndResend().ConfigureAwait(false);
-
             return result;
         }
         catch
@@ -113,7 +111,7 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
         try
         {
             await toExecute.ConfigureAwait(false);
-            await CheckFaultStateAndResend().ConfigureAwait(false);
+            await CheckFaultStateAndRestore().ConfigureAwait(false);
         }
         catch
         {
