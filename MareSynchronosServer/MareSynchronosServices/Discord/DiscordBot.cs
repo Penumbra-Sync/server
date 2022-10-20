@@ -115,10 +115,10 @@ internal class DiscordBot : IHostedService
                     await using var scope = _services.CreateAsyncScope();
                     await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
                     {
-                        var aliasedUsers = db.LodeStoneAuth.Include("User")
-                            .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias));
-                        var aliasedGroups = db.Groups.Include(u => u.Owner)
-                            .Where(c => !string.IsNullOrEmpty(c.Alias));
+                        var aliasedUsers = await db.LodeStoneAuth.Include("User")
+                            .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias)).ToListAsync().ConfigureAwait(false);
+                        var aliasedGroups = await db.Groups.Include(u => u.Owner)
+                            .Where(c => !string.IsNullOrEmpty(c.Alias)).ToListAsync().ConfigureAwait(false);
 
                         foreach (var lodestoneAuth in aliasedUsers)
                         {
@@ -138,7 +138,7 @@ internal class DiscordBot : IHostedService
 
                         foreach (var group in aliasedGroups)
                         {
-                            var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID);
+                            var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
                             RestGuildUser discordUser = null;
                             if (lodestoneUser != null)
                             {
