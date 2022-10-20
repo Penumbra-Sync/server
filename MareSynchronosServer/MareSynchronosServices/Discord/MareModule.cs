@@ -136,7 +136,6 @@ public class MareModule : InteractionModuleBase
 
         var self = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
         ulong userToCheckForDiscordId = id;
-        bool isAdminCall = self.User.IsModerator || self.User.IsAdmin;
 
         if (self == null)
         {
@@ -144,6 +143,8 @@ public class MareModule : InteractionModuleBase
             eb.WithDescription("No Mare account was found associated to your Discord user");
             return eb;
         }
+
+        bool isAdminCall = self.User.IsModerator || self.User.IsAdmin;
 
         if ((optionalUser != null || uid != null) && !isAdminCall)
         {
