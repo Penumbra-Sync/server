@@ -44,11 +44,11 @@ public class Startup
             MetricsAPI.GaugeUsersRegistered
         }));
 
+        services.AddTransient(_ => Configuration);
         services.AddSingleton<SecretKeyAuthenticationHandler>();
         services.AddSingleton<DiscordBotServices>();
         services.AddSingleton<IdentityHandler>();
         services.AddSingleton<CleanupService>();
-        services.AddTransient(_ => Configuration);
         services.AddHostedService(provider => provider.GetService<CleanupService>());
         services.AddHostedService<DiscordBot>();
         services.AddGrpc();

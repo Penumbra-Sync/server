@@ -72,7 +72,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         _handler.RegisterServerForQueue(server.ServerId);
         _logger.LogInformation("Registered Server " + server.ServerId + " input stream");
 
-        while (await requestStream.MoveNext().ConfigureAwait(false))
+        while (await requestStream.MoveNext(context.CancellationToken).ConfigureAwait(false))
         {
             var cur = requestStream.Current.IdentChange;
             if (cur == null) throw new System.Exception("Expected client ident change");

@@ -39,15 +39,16 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
 
     private async Task RestartStreams()
     {
-        _streamCts?.Cancel();
-        _streamCts?.Dispose();
-        _streamCts = new();
         if (!GrpcIsFaulty)
         {
+            _streamCts?.Cancel();
+            _streamCts?.Dispose();
+            _streamCts = new();
+            var token = _streamCts.Token;
             try
             {
                 await PreStartStream().ConfigureAwait(false);
-                await StartStream(_streamCts.Token).ConfigureAwait(false);
+                await StartStream(token).ConfigureAwait(false);
                 await PostStartStream().ConfigureAwait(false);
             }
             catch
@@ -74,7 +75,11 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
             {
                 await CheckFaultStateAndRestore().ConfigureAwait(false);
             }
-            catch { SetGrpcFaulty(); }
+            catch
+            {
+                SetGrpcFaulty();
+                await Task.Delay(5000, ct).ConfigureAwait(false);
+            }
             await Task.Delay(250).ConfigureAwait(false);
         }
     }
@@ -83,10 +88,10 @@ public abstract class GrpcBaseService : IHostedService, IDisposable
     {
         if (GrpcIsFaulty)
         {
+            GrpcIsFaulty = false;
             await RestartStreams().ConfigureAwait(false);
             await OnGrpcRestore().ConfigureAwait(false);
             _logger.LogInformation("GRPC connection is restored");
-            GrpcIsFaulty = false;
         }
     }
 

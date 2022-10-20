@@ -42,13 +42,13 @@ public class Startup
 
         services.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"));
         services.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"));
+        services.AddTransient(_ => Configuration);
 
         services.AddMemoryCache();
         services.AddInMemoryRateLimiting();
 
         services.AddSingleton<SystemInfoService, SystemInfoService>();
         services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
-        services.AddTransient(_ => Configuration);
 
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
 
@@ -63,6 +63,12 @@ public class Startup
                 BackoffMultiplier = 1.5,
                 RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable }
             }
+        };
+
+        var noRetryConfig = new MethodConfig
+        {
+            Names = { MethodName.Default },
+            RetryPolicy = null
         };
 
         services.AddSingleton(new MareMetrics(new List<string>
@@ -89,7 +95,7 @@ public class Startup
             c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
         }).ConfigureChannel(c =>
         {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
                 EnableMultipleHttp2Connections = true
@@ -107,7 +113,7 @@ public class Startup
             c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
         }).ConfigureChannel(c =>
         {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
                 EnableMultipleHttp2Connections = true

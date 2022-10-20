@@ -176,7 +176,13 @@ public class SecretKeyAuthenticationHandler
         this.metrics = metrics;
         var config = configuration.GetRequiredSection("MareSynchronos");
         _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
+        logger.LogInformation("FailedAuthForTempBan: {num}", _failedAttemptsForTempBan);
         _tempBanMinutes = config.GetValue<int>("TempBanDurationInMinutes", 30);
-        _whitelistedIps = config.GetValue<List<string>>("WhitelistedIps", new List<string>());
+        logger.LogInformation("TempBanMinutes: {num}", _tempBanMinutes);
+        _whitelistedIps = config.GetSection("WhitelistedIps").Get<List<string>>();
+        foreach (var ip in _whitelistedIps)
+        {
+            logger.LogInformation("Whitelisted IP: " + ip);
+        }
     }
 }
