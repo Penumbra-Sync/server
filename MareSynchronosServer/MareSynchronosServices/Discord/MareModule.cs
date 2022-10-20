@@ -17,6 +17,15 @@ using MareSynchronosServices.Identity;
 
 namespace MareSynchronosServices.Discord;
 
+internal class LodestoneModal : IModal
+{
+    public string Title => "Verify with Lodestone";
+
+    [InputLabel("Enter the Lodestone URL of your Character")]
+    [ModalTextInput("lodestone_url", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/")]
+    public string LodestoneUrl { get; set; }
+}
+
 internal class MareModule : InteractionModuleBase
 {
     private readonly IServiceProvider _services;
@@ -40,11 +49,7 @@ internal class MareModule : InteractionModuleBase
             await DeletePreviousUserAccount(Context.User.Id).ConfigureAwait(false);
         }
 
-        var modal = new ModalBuilder();
-        modal.WithTitle("Verify with Lodestone");
-        modal.WithCustomId("register_modal");
-        modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-        await RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+        await RespondWithModalAsync<LodestoneModal>("register_modal").ConfigureAwait(false);
     }
 
     [SlashCommand("setvanityuid", "Sets your Vanity UID.")]
@@ -95,11 +100,7 @@ internal class MareModule : InteractionModuleBase
     [SlashCommand("recover", "Allows you to recover your account by generating a new secret key")]
     public async Task Recover()
     {
-        var modal = new ModalBuilder();
-        modal.WithTitle("Verify with Lodestone");
-        modal.WithCustomId("recover_modal");
-        modal.AddTextInput("Enter the Lodestone URL of your Character", "lodestoneurl", TextInputStyle.Short, "https://*.finalfantasyxiv.com/lodestone/character/<CHARACTERID>/", required: true);
-        await RespondWithModalAsync(modal.Build()).ConfigureAwait(false);
+        await RespondWithModalAsync<LodestoneModal>("recover_modal").ConfigureAwait(false);
     }
 
     [SlashCommand("userinfo", "Shows you your user information")]
@@ -115,16 +116,16 @@ internal class MareModule : InteractionModuleBase
     }
 
     [ModalInteraction("recover_modal")]
-    public async Task RecoverModal()
+    public async Task RecoverModal(LodestoneModal modal)
     {
-        var embed = await HandleRecoverModalAsync((SocketModal)Context.Interaction).ConfigureAwait(false);
+        var embed = await HandleRecoverModalAsync(modal, Context.User.Id).ConfigureAwait(false);
         await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
     }
 
     [ModalInteraction("register_modal")]
-    public async Task RegisterModal()
+    public async Task RegisterModal(LodestoneModal modal)
     {
-        var embed = await HandleRegisterModalAsync((SocketModal)Context.Interaction).ConfigureAwait(false);
+        var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
         await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
     }
 
@@ -204,11 +205,11 @@ internal class MareModule : InteractionModuleBase
         return eb;
     }
 
-    private async Task<Embed> HandleRecoverModalAsync(SocketModal arg)
+    private async Task<Embed> HandleRecoverModalAsync(LodestoneModal arg, ulong userid)
     {
         var embed = new EmbedBuilder();
 
-        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.Data.Components.Single(c => c.CustomId == "lodestoneurl").Value);
+        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.LodestoneUrl);
         if (lodestoneId == null)
         {
             embed.WithTitle("Invalid Lodestone URL");
@@ -224,7 +225,7 @@ internal class MareModule : InteractionModuleBase
 
             await using var db = scope.ServiceProvider.GetService<MareDbContext>();
             var existingLodestoneAuth = await db.LodeStoneAuth.Include("User")
-                .FirstOrDefaultAsync(a => a.DiscordId == arg.User.Id && a.HashedLodestoneId == hashedLodestoneId)
+                .FirstOrDefaultAsync(a => a.DiscordId == userid && a.HashedLodestoneId == hashedLodestoneId)
                 .ConfigureAwait(false);
 
             // check if discord id or lodestone id is banned
@@ -267,11 +268,11 @@ internal class MareModule : InteractionModuleBase
         return embed.Build();
     }
 
-    private async Task<Embed> HandleRegisterModalAsync(SocketModal arg)
+    private async Task<Embed> HandleRegisterModalAsync(LodestoneModal arg, ulong userid)
     {
         var embed = new EmbedBuilder();
 
-        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.Data.Components.Single(c => c.CustomId == "lodestoneurl").Value);
+        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.LodestoneUrl);
         if (lodestoneId == null)
         {
             embed.WithTitle("Invalid Lodestone URL");
@@ -289,12 +290,12 @@ internal class MareModule : InteractionModuleBase
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
             // check if discord id or lodestone id is banned
-            if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == arg.User.Id.ToString() || a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
+            if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == userid.ToString() || a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
             {
                 embed.WithTitle("no");
                 embed.WithDescription("your account is banned");
             }
-            else if (db.LodeStoneAuth.Any(a => a.DiscordId == arg.User.Id))
+            else if (db.LodeStoneAuth.Any(a => a.DiscordId == userid))
             {
                 // user already in db
                 embed.WithTitle("Registration failed");
@@ -308,7 +309,7 @@ internal class MareModule : InteractionModuleBase
             }
             else
             {
-                string lodestoneAuth = await GenerateLodestoneAuth(arg.User.Id, hashedLodestoneId, db).ConfigureAwait(false);
+                string lodestoneAuth = await GenerateLodestoneAuth(userid, hashedLodestoneId, db).ConfigureAwait(false);
                 // check if lodestone id is already in db
                 embed.WithTitle("Authorize your character");
                 embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
@@ -322,7 +323,7 @@ internal class MareModule : InteractionModuleBase
                                       + "You can delete the entry from your profile after verification."
                                       + Environment.NewLine + Environment.NewLine
                                       + "The verification will expire in approximately 15 minutes. If you fail to **/verify** the registration will be invalidated and you have to **/register** again.");
-                _botServices.DiscordLodestoneMapping[arg.User.Id] = lodestoneId.ToString();
+                _botServices.DiscordLodestoneMapping[userid] = lodestoneId.ToString();
             }
         }
 
