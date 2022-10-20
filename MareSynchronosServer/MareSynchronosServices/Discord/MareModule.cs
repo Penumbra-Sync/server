@@ -17,7 +17,7 @@ using MareSynchronosServices.Identity;
 
 namespace MareSynchronosServices.Discord;
 
-internal class LodestoneModal : IModal
+public class LodestoneModal : IModal
 {
     public string Title => "Verify with Lodestone";
 
@@ -26,7 +26,7 @@ internal class LodestoneModal : IModal
     public string LodestoneUrl { get; set; }
 }
 
-internal class MareModule : InteractionModuleBase
+public class MareModule : InteractionModuleBase
 {
     private readonly IServiceProvider _services;
     private readonly DiscordBotServices _botServices;

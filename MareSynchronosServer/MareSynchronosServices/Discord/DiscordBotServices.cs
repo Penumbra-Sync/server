@@ -18,7 +18,7 @@ using System.Threading;
 
 namespace MareSynchronosServices.Discord;
 
-internal class DiscordBotServices
+public class DiscordBotServices
 {
     public readonly ConcurrentQueue<SocketSlashCommand> verificationQueue = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();

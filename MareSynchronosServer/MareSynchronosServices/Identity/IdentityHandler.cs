@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MareSynchronosServices.Identity;
 
-internal class IdentityHandler
+public class IdentityHandler
 {
     private readonly ConcurrentDictionary<string, ServerIdentity> cachedIdentities = new();
     private readonly ConcurrentDictionary<string, ConcurrentQueue<IdentChange>> identChanges = new();

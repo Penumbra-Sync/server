@@ -54,6 +54,12 @@ internal class DiscordBot : IHostedService
         await interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
         await interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
 
+        _discordClient.InteractionCreated += async (x) =>
+        {
+            var ctx = new SocketInteractionContext(_discordClient, x);
+            await interactionModule.ExecuteCommandAsync(ctx, _services);
+        };
+
         _ = RemoveUsersNotInVanityRole();
     }
 
