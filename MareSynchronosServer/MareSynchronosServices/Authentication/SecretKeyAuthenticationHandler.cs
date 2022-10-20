@@ -14,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Authentication;
 
-internal class SecretKeyAuthenticationHandler
+public class SecretKeyAuthenticationHandler
 {
     private readonly ILogger<SecretKeyAuthenticationHandler> logger;
     private readonly MareMetrics metrics;

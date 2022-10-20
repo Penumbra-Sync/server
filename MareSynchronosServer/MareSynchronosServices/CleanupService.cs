@@ -16,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace MareSynchronosServices;
 
-internal class CleanupService : IHostedService, IDisposable
+public class CleanupService : IHostedService, IDisposable
 {
     private readonly MareMetrics metrics;
     private readonly SecretKeyAuthenticationHandler _authService;
