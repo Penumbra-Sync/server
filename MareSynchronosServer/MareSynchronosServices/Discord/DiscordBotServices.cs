@@ -35,7 +35,7 @@ public class DiscordBotServices
     public DiscordBotServices(IServiceProvider services, IConfiguration configuration, ILogger<DiscordBotServices> logger, MareMetrics metrics)
     {
         _services = services;
-        _configuration = configuration;
+        _configuration = configuration.GetRequiredSection("MareSynchronos");
         _logger = logger;
         _metrics = metrics;
         random = new();
