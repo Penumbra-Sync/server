@@ -109,6 +109,16 @@ public class CleanupService : IHostedService, IDisposable
             _logger.LogWarning(ex, "Error during user purge");
         }
 
+        try
+        {
+            var tempInvites = await dbContext.GroupTempInvites.ToListAsync();
+            dbContext.RemoveRange(tempInvites.Where(i => i.ExpirationDate < DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during Temp Invite purge");
+        }
+
         _authService.ClearUnauthorizedUsers();
 
         _logger.LogInformation($"Cleanup complete");

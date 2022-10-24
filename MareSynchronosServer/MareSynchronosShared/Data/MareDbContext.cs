@@ -42,6 +42,7 @@ public class MareDbContext : DbContext
     public DbSet<Group> Groups { get; set; }
     public DbSet<GroupPair> GroupPairs { get; set; }
     public DbSet<GroupBan> GroupBans { get; set; }
+    public DbSet<GroupTempInvite> GroupTempInvites { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -68,5 +69,9 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<GroupBan>().HasKey(u => new { u.GroupGID, u.BannedUserUID });
         modelBuilder.Entity<GroupBan>().HasIndex(c => c.BannedUserUID);
         modelBuilder.Entity<GroupBan>().HasIndex(c => c.GroupGID);
+        modelBuilder.Entity<GroupTempInvite>().ToTable("group_temp_invites");
+        modelBuilder.Entity<GroupTempInvite>().HasKey(u => new { u.GroupGID, u.Invite });
+        modelBuilder.Entity<GroupTempInvite>().HasIndex(c => c.GroupGID);
+        modelBuilder.Entity<GroupTempInvite>().HasIndex(c => c.Invite);
     }
 }
