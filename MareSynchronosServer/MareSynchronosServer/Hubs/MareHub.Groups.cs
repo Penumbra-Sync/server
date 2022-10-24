@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
@@ -173,15 +174,23 @@ public partial class MareHub
         var existingUserCount = await _dbContext.GroupPairs.AsNoTracking().CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
         var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
         var isBanned = await _dbContext.GroupBans.AnyAsync(g => g.GroupGID == gid && g.BannedUserUID == AuthenticatedUserId).ConfigureAwait(false);
+        var groupGid = group?.GID ?? string.Empty;
+        var oneTimeInvite = await _dbContext.GroupTempInvites.SingleOrDefaultAsync(g => g.GroupGID == groupGid && g.Invite == hashedPw).ConfigureAwait(false);
 
         if (group == null
-            || !string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal)
+            || (!string.Equals(group.HashedPassword, hashedPw, StringComparison.Ordinal) && oneTimeInvite == null)
             || existingPair != null
             || existingUserCount >= _maxGroupUserCount
             || !group.InvitesEnabled
             || joinedGroups >= _maxJoinedGroupsByUser
             || isBanned)
             return false;
+
+        if (oneTimeInvite != null)
+        {
+            _logger.LogCallInfo(MareHubLogger.Args(gid, "TempInvite", oneTimeInvite.Invite));
+            _dbContext.Remove(oneTimeInvite);
+        }
 
         GroupPair newPair = new()
         {
@@ -237,6 +246,45 @@ public partial class MareHub
         }
 
         return true;
+    }
+
+    [Authorize(Policy = "Identified")]
+    public async Task<List<string>> GroupCreateTempInvite(string gid, int amount)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(gid, amount));
+        List<string> inviteCodes = new();
+        List<GroupTempInvite> tempInvites = new();
+        var (hasRights, group) = await TryValidateGroupModeratorOrOwner(gid).ConfigureAwait(false);
+        if (!hasRights) return new();
+
+        var existingInvites = await _dbContext.GroupTempInvites.Where(g => g.GroupGID == group.GID).ToListAsync().ConfigureAwait(false);
+
+        for (int i = 0; i < amount; i++)
+        {
+            bool hasValidInvite = false;
+            string invite = string.Empty;
+            string hashedInvite = string.Empty;
+            while (!hasValidInvite)
+            {
+                invite = StringUtils.GenerateRandomString(10, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
+                hashedInvite = StringUtils.Sha256String(invite);
+                if (existingInvites.Any(i => string.Equals(i.Invite, hashedInvite, StringComparison.Ordinal))) continue;
+                hasValidInvite = true;
+                inviteCodes.Add(invite);
+            }
+
+            tempInvites.Add(new GroupTempInvite()
+            {
+                ExpirationDate = DateTime.UtcNow.AddDays(1),
+                GroupGID = group.GID,
+                Invite = hashedInvite
+            });
+        }
+
+        _dbContext.GroupTempInvites.AddRange(tempInvites);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        return inviteCodes;
     }
 
     [Authorize(Policy = "Identified")]
