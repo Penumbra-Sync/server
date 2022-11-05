@@ -1,9 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
@@ -16,164 +16,124 @@ namespace MareSynchronosServices.Authentication;
 
 public class SecretKeyAuthenticationHandler
 {
-    private readonly ILogger<SecretKeyAuthenticationHandler> logger;
-    private readonly MareMetrics metrics;
+    private readonly ILogger<SecretKeyAuthenticationHandler> _logger;
+    private readonly MareMetrics _metrics;
     private const string Unauthorized = "Unauthorized";
-    private readonly Dictionary<string, string> authorizations = new();
-    private readonly Dictionary<string, FailedAuthorization?> failedAuthorizations = new();
-    private readonly object authDictLock = new();
-    private readonly object failedAuthLock = new();
+    private readonly ConcurrentDictionary<string, string> _cachedAuthorizations = new();
+    private readonly ConcurrentDictionary<string, FailedAuthorization?> _failedAuthorizations = new();
     private readonly int _failedAttemptsForTempBan;
     private readonly int _tempBanMinutes;
-    private List<string> _whitelistedIps = new();
+    private readonly List<string> _whitelistedIps = new();
 
     public void ClearUnauthorizedUsers()
     {
-        lock (authDictLock)
+        foreach (var item in _cachedAuthorizations.ToArray())
         {
-            foreach (var item in authorizations.ToArray())
+            if (item.Value == Unauthorized)
             {
-                if (item.Value == Unauthorized)
-                {
-                    authorizations[item.Key] = string.Empty;
-                }
+                _cachedAuthorizations[item.Key] = string.Empty;
             }
         }
     }
 
     public void RemoveAuthentication(string uid)
     {
-        lock (authDictLock)
+        var authorization = _cachedAuthorizations.Where(u => u.Value == uid);
+        if (authorization.Any())
         {
-            var authorization = authorizations.Where(u => u.Value == uid);
-            if (authorization.Any())
-            {
-                authorizations.Remove(authorization.First().Key);
-            }
+            _cachedAuthorizations.Remove(authorization.First().Key, out _);
         }
     }
 
     public async Task<AuthReply> AuthenticateAsync(MareDbContext mareDbContext, string ip, string secretKey)
     {
-        metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
+        _metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
 
         if (string.IsNullOrEmpty(secretKey))
         {
-            metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
             return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
         }
 
-        lock (failedAuthLock)
+        if (_failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization) && existingFailedAuthorization.FailedAttempts > _failedAttemptsForTempBan)
         {
-            if (failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization) && existingFailedAuthorization.FailedAttempts > _failedAttemptsForTempBan)
-            {
-                metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
 
-                existingFailedAuthorization.ResetCts?.Cancel();
-                existingFailedAuthorization.ResetCts?.Dispose();
-                existingFailedAuthorization.ResetCts = new CancellationTokenSource();
-                var token = existingFailedAuthorization.ResetCts.Token;
+            if (existingFailedAuthorization.ResetTask == null)
+            {
+                _logger.LogWarning("TempBan {ip} for authorization spam", ip);
+
                 existingFailedAuthorization.ResetTask = Task.Run(async () =>
                 {
-                    await Task.Delay(TimeSpan.FromMinutes(_tempBanMinutes), token).ConfigureAwait(false);
-                    if (token.IsCancellationRequested) return;
-                    FailedAuthorization? failedAuthorization;
-                    lock (failedAuthLock)
-                    {
-                        failedAuthorizations.Remove(ip, out failedAuthorization);
-                    }
-                    failedAuthorization?.Dispose();
-                }, token);
+                    await Task.Delay(TimeSpan.FromMinutes(_tempBanMinutes)).ConfigureAwait(false);
 
-                logger.LogWarning("TempBan {ip} for authorization spam", ip);
-                return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
+                }).ContinueWith((t) =>
+                {
+                    _failedAuthorizations.Remove(ip, out _);
+                });
             }
+            return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
         }
 
         using var sha256 = SHA256.Create();
         var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(secretKey))).Replace("-", "");
 
-        string uid;
-        lock (authDictLock)
+        bool fromCache = _cachedAuthorizations.TryGetValue(hashedHeader, out string uid);
+
+        if (fromCache)
         {
-            if (authorizations.TryGetValue(hashedHeader, out uid))
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
+
+            if (uid == Unauthorized)
             {
-                if (uid == Unauthorized)
-                {
-                    metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
-
-                    logger.LogWarning("Failed authorization from {ip}", ip);
-
-                    lock (failedAuthLock)
-                    {
-                        if (!_whitelistedIps.Any(w => ip.Contains(w)))
-                        {
-                            if (failedAuthorizations.TryGetValue(ip, out var auth))
-                            {
-                                auth.IncreaseFailedAttempts();
-                            }
-                            else
-                            {
-                                failedAuthorizations[ip] = new FailedAuthorization();
-                            }
-                        }
-                    }
-
-                    return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
-                }
-
-                metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
+                return AuthenticationFailure(ip);
             }
         }
-
-        if (string.IsNullOrEmpty(uid))
+        else
         {
             uid = (await mareDbContext.Auth.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader).ConfigureAwait(false))?.UserUID;
 
             if (uid == null)
             {
-                lock (authDictLock)
-                {
-                    authorizations[hashedHeader] = Unauthorized;
-                }
+                _cachedAuthorizations[hashedHeader] = Unauthorized;
 
-                logger.LogWarning("Failed authorization from {ip}", ip);
-                lock (failedAuthLock)
-                {
-                    if (!_whitelistedIps.Any(w => ip.Contains(w)))
-                    {
-                        if (failedAuthorizations.TryGetValue(ip, out var auth))
-                        {
-                            auth.IncreaseFailedAttempts();
-                        }
-                        else
-                        {
-                            failedAuthorizations[ip] = new FailedAuthorization();
-                        }
-                    }
-
-                }
-
-                metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
-                return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
+                return AuthenticationFailure(ip);
             }
 
-            lock (authDictLock)
-            {
-                authorizations[hashedHeader] = uid;
-            }
+            _cachedAuthorizations[hashedHeader] = uid;
         }
 
-        metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
+        _metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
 
         return new AuthReply() { Success = true, Uid = new UidMessage() { Uid = uid } };
     }
 
+    private AuthReply AuthenticationFailure(string ip)
+    {
+        _metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
+
+        _logger.LogWarning("Failed authorization from {ip}", ip);
+        if (!_whitelistedIps.Any(w => ip.Contains(w)))
+        {
+            if (_failedAuthorizations.TryGetValue(ip, out var auth))
+            {
+                auth.IncreaseFailedAttempts();
+            }
+            else
+            {
+                _failedAuthorizations[ip] = new FailedAuthorization();
+            }
+        }
+
+        return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
+    }
+
     public SecretKeyAuthenticationHandler(IConfiguration configuration, ILogger<SecretKeyAuthenticationHandler> logger, MareMetrics metrics)
     {
-        this.logger = logger;
-        this.metrics = metrics;
+        this._logger = logger;
+        this._metrics = metrics;
         var config = configuration.GetRequiredSection("MareSynchronos");
         _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
         logger.LogInformation("FailedAuthForTempBan: {num}", _failedAttemptsForTempBan);
