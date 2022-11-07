@@ -2,12 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
+using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -31,7 +30,7 @@ public class SecretKeyAuthenticationHandler
         {
             if (item.Value == Unauthorized)
             {
-                _cachedAuthorizations[item.Key] = string.Empty;
+                _cachedAuthorizations.TryRemove(item.Key, out _);
             }
         }
     }
@@ -76,12 +75,11 @@ public class SecretKeyAuthenticationHandler
             return new AuthReply() { Success = false, Uid = new UidMessage() { Uid = string.Empty } };
         }
 
-        using var sha256 = SHA256.Create();
-        var hashedHeader = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(secretKey))).Replace("-", "");
+        var hashedHeader = StringUtils.Sha256String(secretKey);
 
         bool fromCache = _cachedAuthorizations.TryGetValue(hashedHeader, out string uid);
 
-        if (fromCache)
+        if (fromCache && !string.IsNullOrEmpty(uid))
         {
             _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
 
@@ -95,7 +93,7 @@ public class SecretKeyAuthenticationHandler
             uid = (await mareDbContext.Auth.AsNoTracking()
                 .FirstOrDefaultAsync(m => m.HashedKey == hashedHeader).ConfigureAwait(false))?.UserUID;
 
-            if (uid == null)
+            if (string.IsNullOrEmpty(uid))
             {
                 _cachedAuthorizations[hashedHeader] = Unauthorized;
 
@@ -132,8 +130,8 @@ public class SecretKeyAuthenticationHandler
 
     public SecretKeyAuthenticationHandler(IConfiguration configuration, ILogger<SecretKeyAuthenticationHandler> logger, MareMetrics metrics)
     {
-        this._logger = logger;
-        this._metrics = metrics;
+        _logger = logger;
+        _metrics = metrics;
         var config = configuration.GetRequiredSection("MareSynchronos");
         _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
         logger.LogInformation("FailedAuthForTempBan: {num}", _failedAttemptsForTempBan);
