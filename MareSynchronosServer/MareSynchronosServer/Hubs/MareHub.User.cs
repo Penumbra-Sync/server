@@ -125,11 +125,12 @@ public partial class MareHub
 
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
-            if (replacement.GamePaths.Any(p => !GamePathRegex().IsMatch(p))
-                || (!string.IsNullOrEmpty(replacement.Hash) && !HashRegex().IsMatch(replacement.Hash))
-                || (!string.IsNullOrEmpty(replacement.FileSwapPath) && !GamePathRegex().IsMatch(replacement.FileSwapPath)))
+            bool validGamePaths = replacement.GamePaths.All(p => GamePathRegex().IsMatch(p));
+            bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
+            bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
+            if (!validGamePaths || !validHash || !validFileSwapPath)
             {
-                _logger.LogCallWarning(MareHubLogger.Args("Invalid Data"));
+                _logger.LogCallWarning(MareHubLogger.Args("Invalid Data", "GamePaths", validGamePaths, "Hash", validHash, "FileSwap", validFileSwapPath));
                 throw new HubException("Invalid data provided");
             }
         }
