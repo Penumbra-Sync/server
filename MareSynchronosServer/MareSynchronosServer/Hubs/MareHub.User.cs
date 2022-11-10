@@ -118,6 +118,12 @@ public partial class MareHub
         }).ToList();
     }
 
+    [GeneratedRegex(@"^[A-Z0-9]{40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
+    private static partial Regex HashRegex();
+
+    [GeneratedRegex(@"^([a-z0-9_]+\/)+(([a-z0-9_])+(\.[a-z]{3,4}))$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
+    private static partial Regex GamePathRegex();
+
     [Authorize(Policy = "Identified")]
     public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
@@ -125,9 +131,11 @@ public partial class MareHub
 
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
-            bool validGamePaths = replacement.GamePaths.All(p => GamePathRegex().IsMatch(p));
+            //bool validGamePaths = replacement.GamePaths.All(p => GamePathRegex().IsMatch(p));
+            bool validGamePaths = true;
             bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
-            bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
+            //bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
+            bool validFileSwapPath = true;
             if (!validGamePaths || !validHash || !validFileSwapPath)
             {
                 _logger.LogCallWarning(MareHubLogger.Args("Invalid Data", "GamePaths", validGamePaths, "Hash", validHash, "FileSwap", validFileSwapPath));
@@ -341,10 +349,4 @@ public partial class MareHub
 
     private ClientPair OppositeEntry(string otherUID) =>
                                 _dbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
-
-    [GeneratedRegex(@"^[A-Z0-9]{40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
-    private static partial Regex HashRegex();
-
-    [GeneratedRegex(@"^([a-z0-9_]+\\)+(([a-z0-9_])+(\.[a-z]{3,4}))$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
-    private static partial Regex GamePathRegex();
 }
