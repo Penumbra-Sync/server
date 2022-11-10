@@ -133,7 +133,7 @@ public partial class MareHub
         {
             var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToArray();
             replacement.GamePaths = replacement.GamePaths.Where(p => GamePathRegex().IsMatch(p)).ToArray();
-            validGamePaths = replacement.GamePaths.Any();
+            bool validGamePaths = replacement.GamePaths.Any();
             bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
             bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
             if (!validGamePaths || !validHash || !validFileSwapPath)
