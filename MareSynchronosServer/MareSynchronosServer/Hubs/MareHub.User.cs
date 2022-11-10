@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using MareSynchronos.API;
 using MareSynchronosServer.Utils;
@@ -121,6 +122,17 @@ public partial class MareHub
     public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
+
+        foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
+        {
+            if (replacement.GamePaths.Any(p => !GamePathRegex().IsMatch(p))
+                || (!string.IsNullOrEmpty(replacement.Hash) && !HashRegex().IsMatch(replacement.Hash))
+                || (!string.IsNullOrEmpty(replacement.FileSwapPath) && !GamePathRegex().IsMatch(replacement.FileSwapPath)))
+            {
+                _logger.LogCallWarning(MareHubLogger.Args("Invalid Data"));
+                throw new HubException("Invalid data provided");
+            }
+        }
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
@@ -328,4 +340,10 @@ public partial class MareHub
 
     private ClientPair OppositeEntry(string otherUID) =>
                                 _dbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == AuthenticatedUserId);
+
+    [GeneratedRegex(@"^[A-Z0-9]{40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
+    private static partial Regex HashRegex();
+
+    [GeneratedRegex(@"^([a-z0-9_]+\/)+(([a-z0-9_])+(\.[a-z]{3,4}))$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
+    private static partial Regex GamePathRegex();
 }
