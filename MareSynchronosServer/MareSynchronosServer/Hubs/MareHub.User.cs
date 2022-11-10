@@ -121,7 +121,7 @@ public partial class MareHub
     [GeneratedRegex(@"^[A-Z0-9]{40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
     private static partial Regex HashRegex();
 
-    [GeneratedRegex(@"^([a-z0-9_]{3,}\/)+([a-z0-9_-]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
+    [GeneratedRegex(@"^([a-z0-9_ '+&,\.-]{3,}\/)+([a-z0-9_ '+&,\.-]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
     private static partial Regex GamePathRegex();
 
     [Authorize(Policy = "Identified")]
@@ -132,7 +132,7 @@ public partial class MareHub
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
             replacement.GamePaths = replacement.GamePaths.Where(p => GamePathRegex().IsMatch(p)).ToArray();
-            bool validGamePaths = replacement.GamePaths.Any();
+            validGamePaths = replacement.GamePaths.Any();
             bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
             bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
             if (!validGamePaths || !validHash || !validFileSwapPath)
