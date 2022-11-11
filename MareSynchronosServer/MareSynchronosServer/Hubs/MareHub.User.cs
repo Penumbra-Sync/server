@@ -129,6 +129,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
 
+        bool hadInvalidData = false;
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
             var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToArray();
@@ -139,9 +140,11 @@ public partial class MareHub
             if (!validGamePaths || !validHash || !validFileSwapPath)
             {
                 _logger.LogCallWarning(MareHubLogger.Args("Invalid Data", "GamePaths", validGamePaths, string.Join(",", invalidPaths), "Hash", validHash, replacement.Hash, "FileSwap", validFileSwapPath, replacement.FileSwapPath));
-                throw new HubException("Invalid data provided");
+                hadInvalidData = true;
             }
         }
+
+        if (hadInvalidData) throw new HubException("Invalid data provided");
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
