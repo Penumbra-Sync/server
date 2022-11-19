@@ -97,7 +97,7 @@ public class MareModule : InteractionModuleBase
         else
         {
             await DeferAsync(ephemeral: true).ConfigureAwait(false);
-            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action>(Context.User.Id, async () => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction)));
+            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
         }
     }
 
@@ -120,7 +120,7 @@ public class MareModule : InteractionModuleBase
         else
         {
             await DeferAsync(ephemeral: true).ConfigureAwait(false);
-            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action>(Context.User.Id, async () => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction)));
+            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
         }
     }
 
@@ -608,11 +608,11 @@ public class MareModule : InteractionModuleBase
         }
     }
 
-    private async Task HandleVerifyRelinkAsync(SocketSlashCommand cmd)
+    private async Task HandleVerifyRelinkAsync(SocketSlashCommand cmd, IServiceProvider serviceProvider)
     {
         var embedBuilder = new EmbedBuilder();
 
-        using var scope = _services.CreateScope();
+        using var scope = serviceProvider.CreateScope();
         var req = new HttpClient();
         using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
@@ -674,7 +674,7 @@ public class MareModule : InteractionModuleBase
         {
             embedBuilder.WithTitle("Your auth has expired or something else went wrong");
             embedBuilder.WithDescription("Start again with **/relink**");
-            _botServices.DiscordLodestoneMapping.TryRemove(cmd.User.Id, out _);
+            _botServices.DiscordRelinkLodestoneMapping.TryRemove(cmd.User.Id, out _);
         }
 
         var dataEmbed = embedBuilder.Build();
@@ -682,11 +682,11 @@ public class MareModule : InteractionModuleBase
         await cmd.FollowupAsync(embed: dataEmbed, ephemeral: true).ConfigureAwait(false);
     }
 
-    private async Task HandleVerifyAsync(SocketSlashCommand cmd)
+    private async Task HandleVerifyAsync(SocketSlashCommand cmd, IServiceProvider serviceProvider)
     {
         var embedBuilder = new EmbedBuilder();
 
-        using var scope = _services.CreateScope();
+        using var scope = serviceProvider.CreateScope();
         var req = new HttpClient();
         using var db = scope.ServiceProvider.GetService<MareDbContext>();
 

@@ -11,21 +11,24 @@ namespace MareSynchronosServices.Discord;
 
 public class DiscordBotServices
 {
-    public readonly ConcurrentQueue<KeyValuePair<ulong, Action>> verificationQueue = new();
+    public readonly ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> verificationQueue = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     public ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
     public ConcurrentDictionary<ulong, string> DiscordRelinkLodestoneMapping = new();
     public readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
+    private readonly IServiceProvider _serviceProvider;
+
     public IConfiguration Configuration { get; init; }
     public ILogger<DiscordBotServices> Logger { get; init; }
     public MareMetrics Metrics { get; init; }
     public Random Random { get; init; }
     private CancellationTokenSource? verificationTaskCts;
 
-    public DiscordBotServices(IConfiguration configuration, ILogger<DiscordBotServices> logger, MareMetrics metrics)
+    public DiscordBotServices(IConfiguration configuration, IServiceProvider serviceProvider, ILogger<DiscordBotServices> logger, MareMetrics metrics)
     {
         Configuration = configuration.GetRequiredSection("MareSynchronos");
+        _serviceProvider = serviceProvider;
         Logger = logger;
         Metrics = metrics;
         Random = new();
@@ -50,7 +53,7 @@ public class DiscordBotServices
             {
                 try
                 {
-                    queueitem.Value.Invoke();
+                    queueitem.Value.Invoke(_serviceProvider);
 
                     Logger.LogInformation("Sent login information to user");
                 }
