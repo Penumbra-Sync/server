@@ -111,7 +111,7 @@ public class MareModule : InteractionModuleBase
             eb.WithDescription("You are already queued for verification. Please wait.");
             await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
         }
-        else if (!_botServices.DiscordLodestoneMapping.ContainsKey(Context.User.Id))
+        else if (!_botServices.DiscordRelinkLodestoneMapping.ContainsKey(Context.User.Id))
         {
             eb.WithTitle("Cannot verify relink");
             eb.WithDescription("You need to **/relink** first before you can **/verify_relink**");
