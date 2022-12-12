@@ -35,6 +35,8 @@ public class Startup
 
         var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
 
+        bool isSecondary = mareSettings.GetValue<bool>("IsSecondaryInstance", false);
+
         var defaultMethodConfig = new MethodConfig
         {
             Names = { MethodName.Default },
@@ -48,14 +50,20 @@ public class Startup
             }
         };
 
-        services.AddSingleton<GrpcAuthenticationService>();
-        services.AddSingleton(new MareMetrics(new List<string> {
-        }, new List<string>
-        {
-            MetricsAPI.GaugeFilesTotalSize,
-            MetricsAPI.GaugeFilesTotal
-        }));
 
+        if (!isSecondary)
+        {
+            services.AddSingleton(new MareMetrics(new List<string>
+            {
+            }, new List<string>
+            {
+                MetricsAPI.GaugeFilesTotalSize,
+                MetricsAPI.GaugeFilesTotal
+            }));
+            services.AddHostedService<CleanupService>();
+        }
+
+        services.AddSingleton<GrpcAuthenticationService>();
         services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
         {
             c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
@@ -73,7 +81,6 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareSettings.GetValue("DbContextPoolSize", 1024));
 
-        services.AddHostedService<CleanupService>();
         services.AddHostedService(p => p.GetService<GrpcAuthenticationService>());
 
         services.AddAuthentication(options =>
@@ -91,12 +98,17 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
+        bool isSecondary = Configuration.GetSection("MareSynchronos").GetValue<bool>("IsSecondaryInstance", false);
+
         app.UseHttpLogging();
 
         app.UseRouting();
 
-        var metricServer = new KestrelMetricServer(4981);
-        metricServer.Start();
+        if (!isSecondary)
+        {
+            var metricServer = new KestrelMetricServer(4981);
+            metricServer.Start();
+        }
 
         app.UseAuthentication();
         app.UseAuthorization();
@@ -108,9 +120,12 @@ public class Startup
             ServeUnknownFileTypes = true
         });
 
-        app.UseEndpoints(e =>
+        if (!isSecondary)
         {
-            e.MapGrpcService<FileService>();
-        });
+            app.UseEndpoints(e =>
+            {
+                e.MapGrpcService<FileService>();
+            });
+        }
     }
 }
