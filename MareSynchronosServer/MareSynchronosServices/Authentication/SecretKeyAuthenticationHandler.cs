@@ -137,14 +137,10 @@ public class SecretKeyAuthenticationHandler
         logger.LogInformation("FailedAuthForTempBan: {num}", _failedAttemptsForTempBan);
         _tempBanMinutes = config.GetValue<int>("TempBanDurationInMinutes", 30);
         logger.LogInformation("TempBanMinutes: {num}", _tempBanMinutes);
-        var whitelisted = config.GetSection("WhitelistedIps");
-        if (!string.IsNullOrEmpty(whitelisted.Value))
+        _whitelistedIps = config.GetSection("WhitelistedIps").Get<List<string>>();
+        foreach (var ip in _whitelistedIps)
         {
-            _whitelistedIps = whitelisted.Get<List<string>>();
-            foreach (var ip in _whitelistedIps)
-            {
-                logger.LogInformation("Whitelisted IP: " + ip);
-            }
+            logger.LogInformation("Whitelisted IP: " + ip);
         }
     }
 }
