@@ -407,6 +407,7 @@ public partial class MareHub
             {
                 if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
                 if (userPair.IsPausedExcludingGroup(gid) is PauseInfo.Unpaused) continue;
+                if (userPair.IsOtherPausedForSpecificGroup(gid) is PauseInfo.Paused) continue;
             }
 
             var groupUserIdent = _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID);

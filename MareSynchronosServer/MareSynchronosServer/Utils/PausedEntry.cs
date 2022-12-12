@@ -37,6 +37,13 @@ public record PausedEntry
         }
     }
 
+    public PauseInfo IsOtherPausedForSpecificGroup(string gid)
+    {
+        var state = PauseStatesWithoutDirect.SingleOrDefault(g => string.Equals(g.GID, gid, StringComparison.Ordinal));
+        if (state == null) return PauseInfo.NoConnection;
+        return state.IsOtherPaused ? PauseInfo.Paused : PauseInfo.Unpaused;
+    }
+
     public PauseInfo IsPausedForSpecificGroup(string gid)
     {
         var state = PauseStatesWithoutDirect.SingleOrDefault(g => string.Equals(g.GID, gid, StringComparison.Ordinal));

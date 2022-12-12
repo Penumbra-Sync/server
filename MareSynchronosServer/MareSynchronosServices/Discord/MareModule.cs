@@ -11,9 +11,13 @@ using System.Linq;
 using Prometheus;
 using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Models;
-using System.Text;
-using System.Security.Cryptography;
 using MareSynchronosServices.Identity;
+using MareSynchronosShared.Metrics;
+using Microsoft.Extensions.Configuration;
+using System.Net.Http;
+using MareSynchronosShared.Utils;
+using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices.Discord;
 
@@ -78,7 +82,7 @@ public class MareModule : InteractionModuleBase
     public async Task Verify()
     {
         EmbedBuilder eb = new();
-        if (_botServices.verificationQueue.Any(u => u.User.Id == Context.User.Id))
+        if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
         {
             eb.WithTitle("Already queued for verfication");
             eb.WithDescription("You are already queued for verification. Please wait.");
@@ -93,7 +97,30 @@ public class MareModule : InteractionModuleBase
         else
         {
             await DeferAsync(ephemeral: true).ConfigureAwait(false);
-            _botServices.verificationQueue.Enqueue((SocketSlashCommand)Context.Interaction);
+            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
+        }
+    }
+
+    [SlashCommand("verify_relink", "Finishes the relink process for your user on the Mare Synchronos server of this Discord")]
+    public async Task VerifyRelink()
+    {
+        EmbedBuilder eb = new();
+        if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+        {
+            eb.WithTitle("Already queued for verfication");
+            eb.WithDescription("You are already queued for verification. Please wait.");
+            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
+        else if (!_botServices.DiscordRelinkLodestoneMapping.ContainsKey(Context.User.Id))
+        {
+            eb.WithTitle("Cannot verify relink");
+            eb.WithDescription("You need to **/relink** first before you can **/verify_relink**");
+            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
+        else
+        {
+            await DeferAsync(ephemeral: true).ConfigureAwait(false);
+            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
         }
     }
 
@@ -115,6 +142,12 @@ public class MareModule : InteractionModuleBase
         await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
     }
 
+    [SlashCommand("relink", "Allows you to link a new Discord account to an existing Mare account")]
+    public async Task Relink()
+    {
+        await RespondWithModalAsync<LodestoneModal>("relink_modal").ConfigureAwait(false);
+    }
+
     [ModalInteraction("recover_modal")]
     public async Task RecoverModal(LodestoneModal modal)
     {
@@ -126,6 +159,13 @@ public class MareModule : InteractionModuleBase
     public async Task RegisterModal(LodestoneModal modal)
     {
         var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
+        await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+    }
+
+    [ModalInteraction("relink_modal")]
+    public async Task RelinkModal(LodestoneModal modal)
+    {
+        var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
         await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
     }
 
@@ -226,9 +266,8 @@ public class MareModule : InteractionModuleBase
         else
         {
             using var scope = _services.CreateScope();
-            using var sha256 = SHA256.Create();
 
-            var hashedLodestoneId = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(lodestoneId.ToString()))).Replace("-", "");
+            var hashedLodestoneId = StringUtils.Sha256String(lodestoneId.ToString());
 
             await using var db = scope.ServiceProvider.GetService<MareDbContext>();
             var existingLodestoneAuth = await db.LodeStoneAuth.Include("User")
@@ -249,11 +288,10 @@ public class MareModule : InteractionModuleBase
                     db.Auth.Remove(previousAuth);
                 }
 
-                var computedHash = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(DiscordBotServices.GenerateRandomString(64) + DateTime.UtcNow.ToString()))).Replace("-", "");
+                var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
                 var auth = new Auth()
                 {
-                    HashedKey = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(computedHash)))
-                        .Replace("-", ""),
+                    HashedKey = StringUtils.Sha256String(computedHash),
                     User = existingLodestoneAuth.User,
                 };
 
@@ -290,9 +328,8 @@ public class MareModule : InteractionModuleBase
         {
             // check if userid is already in db
             using var scope = _services.CreateScope();
-            using var sha256 = SHA256.Create();
 
-            var hashedLodestoneId = BitConverter.ToString(sha256.ComputeHash(Encoding.UTF8.GetBytes(lodestoneId.ToString()))).Replace("-", "");
+            var hashedLodestoneId = StringUtils.Sha256String(lodestoneId.ToString());
 
             using var db = scope.ServiceProvider.GetService<MareDbContext>();
 
@@ -312,7 +349,7 @@ public class MareModule : InteractionModuleBase
             {
                 // character already in db
                 embed.WithTitle("Registration failed");
-                embed.WithDescription("This lodestone character already exists in the Database. If you are the rightful owner for this character and lost your secret key generated with it, contact the developer.");
+                embed.WithDescription("This lodestone character already exists in the Database. If you want to attach this character to your current Discord account use **/relink**.");
             }
             else
             {
@@ -327,7 +364,7 @@ public class MareModule : InteractionModuleBase
                                       + Environment.NewLine + Environment.NewLine
                                       + "Once added and saved, use command **/verify** to finish registration and receive a secret key to use for Mare Synchronos."
                                       + Environment.NewLine
-                                      + "You can delete the entry from your profile after verification."
+                                      + "__You can delete the entry from your profile after verification.__"
                                       + Environment.NewLine + Environment.NewLine
                                       + "The verification will expire in approximately 15 minutes. If you fail to **/verify** the registration will be invalidated and you have to **/register** again.");
                 _botServices.DiscordLodestoneMapping[userid] = lodestoneId.ToString();
@@ -337,9 +374,70 @@ public class MareModule : InteractionModuleBase
         return embed.Build();
     }
 
+    private async Task<Embed> HandleRelinkModalAsync(LodestoneModal arg, ulong userid)
+    {
+        var embed = new EmbedBuilder();
+
+        var lodestoneId = ParseCharacterIdFromLodestoneUrl(arg.LodestoneUrl);
+        if (lodestoneId == null)
+        {
+            embed.WithTitle("Invalid Lodestone URL");
+            embed.WithDescription("The lodestone URL was not valid. It should have following format:" + Environment.NewLine
+                + "https://eu.finalfantasyxiv.com/lodestone/character/YOUR_LODESTONE_ID/");
+        }
+        else
+        {
+            // check if userid is already in db
+            using var scope = _services.CreateScope();
+
+            var hashedLodestoneId = StringUtils.Sha256String(lodestoneId.ToString());
+
+            using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+            // check if discord id or lodestone id is banned
+            if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == userid.ToString() || a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
+            {
+                embed.WithTitle("no");
+                embed.WithDescription("your account is banned");
+            }
+            else if (db.LodeStoneAuth.Any(a => a.DiscordId == userid))
+            {
+                // user already in db
+                embed.WithTitle("Relink failed");
+                embed.WithDescription("You cannot register more than one lodestone character to your discord account.");
+            }
+            else if (!db.LodeStoneAuth.Any(a => a.HashedLodestoneId == hashedLodestoneId))
+            {
+                // character already in db
+                embed.WithTitle("Relink failed");
+                embed.WithDescription("This lodestone character does not exist in the database.");
+            }
+            else
+            {
+                string lodestoneAuth = await GenerateLodestoneAuth(userid, hashedLodestoneId, db).ConfigureAwait(false);
+                // check if lodestone id is already in db
+                embed.WithTitle("Authorize your character for relinking");
+                embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + $"**{lodestoneAuth}**"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + "Once added and saved, use command **/verify_relink** to finish relink and receive a new secret key to use for Mare Synchronos."
+                                      + Environment.NewLine
+                                      + "__You can delete the entry from your profile after verification.__"
+                                      + Environment.NewLine + Environment.NewLine
+                                      + "The verification will expire in approximately 15 minutes. If you fail to **/verify_relink** the relink will be invalidated and you have to **/relink** again.");
+                _botServices.DiscordRelinkLodestoneMapping[userid] = lodestoneId.ToString();
+            }
+        }
+
+        return embed.Build();
+    }
+
     private async Task<string> GenerateLodestoneAuth(ulong discordid, string hashedLodestoneId, MareDbContext dbContext)
     {
-        var auth = DiscordBotServices.GenerateRandomString(32);
+        var auth = StringUtils.GenerateRandomString(32);
         LodeStoneAuth lsAuth = new LodeStoneAuth()
         {
             DiscordId = discordid,
@@ -508,5 +606,173 @@ public class MareModule : InteractionModuleBase
 
             await db.SaveChangesAsync().ConfigureAwait(false);
         }
+    }
+
+    private async Task HandleVerifyRelinkAsync(SocketSlashCommand cmd, IServiceProvider serviceProvider)
+    {
+        var embedBuilder = new EmbedBuilder();
+
+        using var scope = serviceProvider.CreateScope();
+        var req = new HttpClient();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+        var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
+        if (lodestoneAuth != null && _botServices.DiscordRelinkLodestoneMapping.ContainsKey(cmd.User.Id))
+        {
+            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordRelinkLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (content.Contains(lodestoneAuth.LodestoneAuthString))
+                {
+                    _botServices.DiscordRelinkLodestoneMapping.TryRemove(cmd.User.Id, out _);
+
+                    var existingLodestoneAuth = db.LodeStoneAuth.Include(u => u.User).SingleOrDefault(u => u.DiscordId != cmd.User.Id && u.HashedLodestoneId == lodestoneAuth.HashedLodestoneId);
+
+                    var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID);
+                    if (previousAuth != null)
+                    {
+                        db.Auth.Remove(previousAuth);
+                    }
+
+                    var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+                    var auth = new Auth()
+                    {
+                        HashedKey = StringUtils.Sha256String(computedHash),
+                        User = existingLodestoneAuth.User,
+                    };
+
+                    lodestoneAuth.StartedAt = null;
+                    lodestoneAuth.LodestoneAuthString = null;
+                    lodestoneAuth.User = existingLodestoneAuth.User;
+
+                    db.LodeStoneAuth.Remove(existingLodestoneAuth);
+
+                    await db.Auth.AddAsync(auth).ConfigureAwait(false);
+
+                    _botServices.Logger.LogInformation("User relinked: {userUID}", lodestoneAuth.User.UID);
+
+                    embedBuilder.WithTitle("Relink successful");
+                    embedBuilder.WithDescription("This is your **new** private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
+                                                 + Environment.NewLine + Environment.NewLine
+                                                 + $"**{computedHash}**"
+                                                 + Environment.NewLine + Environment.NewLine
+                                                 + "Enter this key in Mare Synchronos and hit save to connect to the service.");
+                }
+                else
+                {
+                    embedBuilder.WithTitle("Failed to verify your character");
+                    embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/relink_verify** again.");
+                    lodestoneAuth.StartedAt = DateTime.UtcNow;
+                }
+            }
+
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            embedBuilder.WithTitle("Your auth has expired or something else went wrong");
+            embedBuilder.WithDescription("Start again with **/relink**");
+            _botServices.DiscordRelinkLodestoneMapping.TryRemove(cmd.User.Id, out _);
+        }
+
+        var dataEmbed = embedBuilder.Build();
+
+        await cmd.FollowupAsync(embed: dataEmbed, ephemeral: true).ConfigureAwait(false);
+    }
+
+    private async Task HandleVerifyAsync(SocketSlashCommand cmd, IServiceProvider serviceProvider)
+    {
+        var embedBuilder = new EmbedBuilder();
+
+        using var scope = serviceProvider.CreateScope();
+        var req = new HttpClient();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+        var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
+        if (lodestoneAuth != null && _botServices.DiscordLodestoneMapping.ContainsKey(cmd.User.Id))
+        {
+            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (content.Contains(lodestoneAuth.LodestoneAuthString))
+                {
+                    _botServices.DiscordLodestoneMapping.TryRemove(cmd.User.Id, out _);
+
+                    var user = new User();
+
+                    var hasValidUid = false;
+                    while (!hasValidUid)
+                    {
+                        var uid = StringUtils.GenerateRandomString(10);
+                        if (db.Users.Any(u => u.UID == uid || u.Alias == uid)) continue;
+                        user.UID = uid;
+                        hasValidUid = true;
+                    }
+
+                    // make the first registered user on the service to admin
+                    if (!await db.Users.AnyAsync().ConfigureAwait(false))
+                    {
+                        user.IsAdmin = true;
+                    }
+
+                    if (_botServices.Configuration.GetValue<bool>("PurgeUnusedAccounts"))
+                    {
+                        var purgedDays = _botServices.Configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
+                        user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
+                    }
+
+                    var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+                    var auth = new Auth()
+                    {
+                        HashedKey = StringUtils.Sha256String(computedHash),
+                        User = user,
+                    };
+
+                    await db.Users.AddAsync(user).ConfigureAwait(false);
+                    await db.Auth.AddAsync(auth).ConfigureAwait(false);
+
+                    _botServices.Logger.LogInformation("User registered: {userUID}", user.UID);
+
+                    _botServices.Metrics.IncGauge(MetricsAPI.GaugeUsersRegistered, 1);
+
+                    lodestoneAuth.StartedAt = null;
+                    lodestoneAuth.User = user;
+                    lodestoneAuth.LodestoneAuthString = null;
+
+                    embedBuilder.WithTitle("Registration successful");
+                    embedBuilder.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
+                                                 + Environment.NewLine + Environment.NewLine
+                                                 + $"**{computedHash}**"
+                                                 + Environment.NewLine + Environment.NewLine
+                                                 + "Enter this key in Mare Synchronos and hit save to connect to the service."
+                                                 + Environment.NewLine
+                                                 + "You should connect as soon as possible to not get caught by the automatic cleanup process."
+                                                 + Environment.NewLine
+                                                 + "Have fun.");
+                }
+                else
+                {
+                    embedBuilder.WithTitle("Failed to verify your character");
+                    embedBuilder.WithDescription("Did not find requested authentication key on your profile. Make sure you have saved *twice*, then do **/verify** again.");
+                    lodestoneAuth.StartedAt = DateTime.UtcNow;
+                }
+            }
+
+            await db.SaveChangesAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            embedBuilder.WithTitle("Your auth has expired or something else went wrong");
+            embedBuilder.WithDescription("Start again with **/register**");
+            _botServices.DiscordLodestoneMapping.TryRemove(cmd.User.Id, out _);
+        }
+
+        var dataEmbed = embedBuilder.Build();
+
+        await cmd.FollowupAsync(embed: dataEmbed, ephemeral: true).ConfigureAwait(false);
     }
 }

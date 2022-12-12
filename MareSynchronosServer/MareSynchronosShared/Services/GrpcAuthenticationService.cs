@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Security.Cryptography;
 using MareSynchronosShared.Protos;
 using Microsoft.Extensions.Logging;
 
@@ -13,9 +12,16 @@ public class GrpcAuthenticationService : GrpcBaseService
         public long Id { get; set; }
     }
 
+    private record AuthResponseCache
+    {
+        public AuthReply Response { get; set; }
+        public DateTime WrittenTo { get; set; }
+    }
+
     private readonly AuthService.AuthServiceClient _authClient;
     private readonly ConcurrentQueue<AuthRequestInternal> _requestQueue = new();
     private readonly ConcurrentDictionary<long, AuthReply> _authReplies = new();
+    private readonly ConcurrentDictionary<string, AuthResponseCache> _cachedPositiveResponses = new(StringComparer.Ordinal);
     private long _requestId = 0;
 
     public GrpcAuthenticationService(ILogger<GrpcAuthenticationService> logger, AuthService.AuthServiceClient authClient) : base(logger)
@@ -25,7 +31,12 @@ public class GrpcAuthenticationService : GrpcBaseService
 
     public async Task<AuthReply> AuthorizeAsync(string ip, string secretKey)
     {
-        using var sha1 = SHA1.Create();
+        if (_cachedPositiveResponses.TryGetValue(secretKey, out var cachedPositiveResponse))
+        {
+            if (cachedPositiveResponse.WrittenTo.AddMinutes(5) < DateTime.UtcNow) return cachedPositiveResponse.Response;
+            _cachedPositiveResponses.Remove(secretKey, out _);
+        }
+
         var id = Interlocked.Increment(ref _requestId);
         _requestQueue.Enqueue(new AuthRequestInternal()
         {
@@ -43,6 +54,15 @@ public class GrpcAuthenticationService : GrpcBaseService
         while (!GrpcIsFaulty && !cts.IsCancellationRequested && !_authReplies.TryRemove(id, out response))
         {
             await Task.Delay(10, cts.Token).ConfigureAwait(false);
+        }
+
+        if (response?.Success ?? false)
+        {
+            _cachedPositiveResponses[secretKey] = new AuthResponseCache
+            {
+                Response = response,
+                WrittenTo = DateTime.UtcNow
+            };
         }
 
         return response ?? new AuthReply

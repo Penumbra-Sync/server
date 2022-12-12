@@ -22,7 +22,8 @@ public partial class MareHub
                            {
                                UID = Convert.ToString(userPair.OtherUserUID),
                                GID = "DIRECT",
-                               PauseState = (userPair.IsPaused || otherUserPair.IsPaused)
+                               PauseStateSelf = userPair.IsPaused,
+                               PauseStateOther = otherUserPair.IsPaused
                            })
                             .Union(
                                 (from userGroupPair in _dbContext.GroupPairs
@@ -34,15 +35,16 @@ public partial class MareHub
                                  {
                                      UID = Convert.ToString(otherGroupPair.GroupUserUID),
                                      GID = Convert.ToString(otherGroupPair.GroupGID),
-                                     PauseState = (userGroupPair.IsPaused || otherGroupPair.IsPaused)
+                                     PauseStateSelf = userGroupPair.IsPaused,
+                                     PauseStateOther = otherGroupPair.IsPaused,
                                  })
                             ).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
-        return query.GroupBy(g => g.UID, g => (g.GID, g.PauseState),
+        return query.GroupBy(g => g.UID, g => (g.GID, g.PauseStateSelf, g.PauseStateOther),
             (key, g) => new PausedEntry
             {
                 UID = key,
-                PauseStates = g.Select(p => new PauseState() { GID = string.Equals(p.GID, "DIRECT", StringComparison.Ordinal) ? null : p.GID, IsPaused = p.PauseState })
+                PauseStates = g.Select(p => new PauseState() { GID = string.Equals(p.GID, "DIRECT", StringComparison.Ordinal) ? null : p.GID, IsSelfPaused = p.PauseStateSelf, IsOtherPaused = p.PauseStateOther })
                 .ToList()
             }, StringComparer.Ordinal).ToList();
     }
