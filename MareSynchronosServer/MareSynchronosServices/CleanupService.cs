@@ -167,13 +167,11 @@ public class CleanupService : IHostedService, IDisposable
                 }
                 else
                 {
-                    var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.GetValue<int>("MaxExistingGroupsByUser", 3)).ConfigureAwait(false);
+                    _ = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.GetValue<int>("MaxExistingGroupsByUser", 3)).ConfigureAwait(false);
                 }
             }
-            else
-            {
-                dbContext.GroupPairs.Remove(userGroupPair);
-            }
+
+            dbContext.GroupPairs.Remove(userGroupPair);
 
             await dbContext.SaveChangesAsync();
         }
