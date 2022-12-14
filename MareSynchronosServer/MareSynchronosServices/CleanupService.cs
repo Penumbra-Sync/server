@@ -158,7 +158,7 @@ public class CleanupService : IHostedService, IDisposable
 
             if (ownerHasLeft)
             {
-                var groupPairs = await dbContext.GroupPairs.Where(g => g.GroupGID == userGroupPair.GroupGID).ToListAsync().ConfigureAwait(false);
+                var groupPairs = await dbContext.GroupPairs.Where(g => g.GroupGID == userGroupPair.GroupGID && g.GroupUserUID != user.UID).ToListAsync().ConfigureAwait(false);
 
                 if (!groupPairs.Any())
                 {
