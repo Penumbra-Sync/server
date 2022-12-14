@@ -148,7 +148,7 @@ public class CleanupService : IHostedService, IDisposable
         var otherPairData = dbContext.ClientPairs.Include(u => u.User)
             .Where(u => u.OtherUser.UID == user.UID).ToList();
 
-        var userGroupPairs = dbContext.GroupPairs.Include(g => g.Group).Where(u => u.GroupUserUID == user.UID);
+        var userGroupPairs = await dbContext.GroupPairs.Include(g => g.Group).Where(u => u.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
 
         foreach (var groupPair in userGroupPairs)
         {
