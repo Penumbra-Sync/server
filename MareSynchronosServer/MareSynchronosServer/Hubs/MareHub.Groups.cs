@@ -316,7 +316,7 @@ public partial class MareHub
             {
                 _logger.LogCallInfo(MareHubLogger.Args(gid, "Deleted"));
 
-                _dbContext.Remove(group);
+                _dbContext.Groups.Remove(group);
             }
             else
             {

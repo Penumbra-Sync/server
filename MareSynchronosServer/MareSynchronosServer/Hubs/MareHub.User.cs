@@ -40,7 +40,7 @@ public partial class MareHub
 
         await _authServiceClient.RemoveAuthAsync(new UidMessage() { Uid = userid }).ConfigureAwait(false);
 
-        _dbContext.RemoveRange(ownPairData);
+        _dbContext.ClientPairs.RemoveRange(ownPairData);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
             .Where(u => u.OtherUser.UID == userid).AsNoTracking().ToListAsync().ConfigureAwait(false);
@@ -60,9 +60,9 @@ public partial class MareHub
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
 
-        _dbContext.RemoveRange(otherPairData);
-        _dbContext.Remove(userEntry);
-        _dbContext.Remove(auth);
+        _dbContext.ClientPairs.RemoveRange(otherPairData);
+        _dbContext.Users.Remove(userEntry);
+        _dbContext.Auth.Remove(auth);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 

@@ -128,6 +128,8 @@ public class CleanupService : IHostedService, IDisposable
 
     public async Task PurgeUser(User user, MareDbContext dbContext)
     {
+        _logger.LogInformation("Purging user: {uid}", user.UID);
+
         var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
 
         if (lodestone != null)
@@ -143,46 +145,47 @@ public class CleanupService : IHostedService, IDisposable
         dbContext.Files.RemoveRange(userFiles);
 
         var ownPairData = dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToList();
-
-        dbContext.RemoveRange(ownPairData);
+        dbContext.ClientPairs.RemoveRange(ownPairData);
         var otherPairData = dbContext.ClientPairs.Include(u => u.User)
             .Where(u => u.OtherUser.UID == user.UID).ToList();
+        dbContext.ClientPairs.RemoveRange(otherPairData);
 
-        var userGroupPairs = await dbContext.GroupPairs.Include(g => g.Group).Where(u => u.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+        var userJoinedGroups = await dbContext.GroupPairs.Include(g => g.Group).Where(u => u.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
 
-        foreach (var groupPair in userGroupPairs)
+        foreach (var userGroupPair in userJoinedGroups)
         {
-            bool ownerHasLeft = string.Equals(groupPair.Group.OwnerUID, user.UID, StringComparison.Ordinal);
+            bool ownerHasLeft = string.Equals(userGroupPair.Group.OwnerUID, user.UID, StringComparison.Ordinal);
+
             if (ownerHasLeft)
             {
-                var groupPairs = await dbContext.GroupPairs.Where(g => g.GroupGID == groupPair.GroupGID).ToListAsync().ConfigureAwait(false);
+                var groupPairs = await dbContext.GroupPairs.Where(g => g.GroupGID == userGroupPair.GroupGID).ToListAsync().ConfigureAwait(false);
 
                 if (!groupPairs.Any())
                 {
-                    _logger.LogInformation("Group {gid} has no new owner, deleting", groupPair.GroupGID);
-                    dbContext.Remove(groupPair.Group);
+                    _logger.LogInformation("Group {gid} has no new owner, deleting", userGroupPair.GroupGID);
+                    dbContext.Groups.Remove(userGroupPair.Group);
                 }
                 else
                 {
-                    var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, groupPair.Group, groupPairs, _configuration.GetValue<int>("MaxExistingGroupsByUser", 3)).ConfigureAwait(false);
-                    continue;
+                    var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.GetValue<int>("MaxExistingGroupsByUser", 3)).ConfigureAwait(false);
                 }
             }
             else
             {
-                dbContext.Remove(groupPair);
+                dbContext.GroupPairs.Remove(userGroupPair);
             }
 
-            dbContext.SaveChanges();
+            await dbContext.SaveChangesAsync();
         }
 
         _logger.LogInformation("User purged: {uid}", user.UID);
 
-        metrics.DecGauge(MetricsAPI.GaugeUsersRegistered, 1);
+        dbContext.Auth.Remove(auth);
+        dbContext.Users.Remove(user);
 
-        dbContext.RemoveRange(otherPairData);
-        dbContext.Remove(auth);
-        dbContext.Remove(user);
+        await dbContext.SaveChangesAsync();
+
+        metrics.DecGauge(MetricsAPI.GaugeUsersRegistered, 1);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
