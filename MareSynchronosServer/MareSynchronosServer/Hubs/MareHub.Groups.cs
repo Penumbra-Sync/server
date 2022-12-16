@@ -123,7 +123,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, enabled.ToString()));
 
-        var (hasRights, group) = await TryValidateOwner(gid).ConfigureAwait(false);
+        var (hasRights, group) = await TryValidateGroupModeratorOrOwner(gid).ConfigureAwait(false);
         if (!hasRights) return;
 
         group.InvitesEnabled = enabled;
@@ -676,7 +676,7 @@ public partial class MareHub
 
         _logger.LogCallInfo(MareHubLogger.Args(gid, "Success"));
 
-        var notPinned = groupPairs.Where(g => !g.IsPinned).ToList();
+        var notPinned = groupPairs.Where(g => !g.IsPinned && !g.IsModerator).ToList();
 
         _dbContext.GroupPairs.RemoveRange(notPinned);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
