@@ -132,8 +132,8 @@ internal class DiscordBot : IHostedService
                                 db.Update(lodestoneAuth.User);
                             }
 
-                            await Task.Delay(100);
                             await db.SaveChangesAsync().ConfigureAwait(false);
+                            await Task.Delay(1000);
                         }
 
                         foreach (var group in aliasedGroups)
@@ -154,8 +154,8 @@ internal class DiscordBot : IHostedService
                                 db.Update(group);
                             }
 
-                            await Task.Delay(100);
                             await db.SaveChangesAsync().ConfigureAwait(false);
+                            await Task.Delay(1000);
                         }
                     }
                 }
