@@ -139,12 +139,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
             _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
 
             _logger.LogCallInfo();
+            _clientIdentService.MarkUserOffline(AuthenticatedUserId);
 
             await SendOfflineToAllPairedUsers(userCharaIdent).ConfigureAwait(false);
 
             _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == AuthenticatedUserId));
 
-            _clientIdentService.MarkUserOffline(AuthenticatedUserId);
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
