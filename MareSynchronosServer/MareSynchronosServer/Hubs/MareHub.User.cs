@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -128,6 +129,8 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
 
         bool hadInvalidData = false;
+        List<string> invalidGamePaths = new();
+        List<string> invalidFileSwapPaths = new();
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
             var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToArray();
@@ -142,7 +145,11 @@ public partial class MareHub
             }
         }
 
-        if (hadInvalidData) throw new HubException("Invalid data provided");
+        if (hadInvalidData) throw new HubException("Invalid data provided, contact the appropriate mod creator to resolve those issues" 
+            + Environment.NewLine 
+            + string.Join(Environment.NewLine, invalidGamePaths.Select(p => "Invalid Game Path: " + p))
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, invalidGamePaths.Select(p => "Invalid FileSwap Path: " + p)));
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
