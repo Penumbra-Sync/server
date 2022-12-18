@@ -1,6 +1,4 @@
-using MareSynchronosServices.Authentication;
 using MareSynchronosServices.Discord;
-using MareSynchronosServices.Services;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.Builder;
@@ -45,7 +43,6 @@ public class Startup
         }));
 
         services.AddTransient(_ => Configuration);
-        services.AddSingleton<SecretKeyAuthenticationHandler>();
         services.AddSingleton<DiscordBotServices>();
         services.AddSingleton<IdentityHandler>();
         services.AddSingleton<CleanupService>();
@@ -63,7 +60,6 @@ public class Startup
 
         app.UseEndpoints(endpoints =>
         {
-            endpoints.MapGrpcService<AuthenticationService>();
             endpoints.MapGrpcService<IdentityService>();
         });
     }

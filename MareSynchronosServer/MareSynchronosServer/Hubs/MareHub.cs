@@ -20,7 +20,6 @@ namespace MareSynchronosServer.Hubs;
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;
-    private readonly AuthService.AuthServiceClient _authServiceClient;
     private readonly FileService.FileServiceClient _fileServiceClient;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
@@ -33,12 +32,11 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
 
-    public MareHub(MareMetrics mareMetrics, AuthService.AuthServiceClient authServiceClient, FileService.FileServiceClient fileServiceClient,
+    public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor,
         GrpcClientIdentificationService clientIdentService)
     {
         _mareMetrics = mareMetrics;
-        _authServiceClient = authServiceClient;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
         var config = configuration.GetRequiredSection("MareSynchronos");

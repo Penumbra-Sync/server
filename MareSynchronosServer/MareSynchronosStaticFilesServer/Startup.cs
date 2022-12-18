@@ -2,8 +2,6 @@ using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Protos;
-using MareSynchronosShared.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -50,7 +48,6 @@ public class Startup
             }
         };
 
-
         if (!isSecondary)
         {
             services.AddSingleton(new MareMetrics(new List<string>
@@ -63,15 +60,7 @@ public class Startup
             services.AddHostedService<CleanupService>();
         }
 
-        services.AddSingleton<GrpcAuthenticationService>();
-        services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
-        {
-            c.Address = new Uri(mareSettings.GetValue<string>("ServiceAddress"));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
-        });
-
+        services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddDbContextPool<MareDbContext>(options =>
         {
             options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
@@ -81,13 +70,11 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareSettings.GetValue("DbContextPoolSize", 1024));
 
-        services.AddHostedService(p => p.GetService<GrpcAuthenticationService>());
-
         services.AddAuthentication(options =>
             {
-                options.DefaultScheme = SecretKeyGrpcAuthenticationHandler.AuthScheme;
+                options.DefaultScheme = SecretKeyAuthenticationHandler.AuthScheme;
             })
-            .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { });
+            .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
         services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
         services.AddGrpc(o =>
@@ -117,7 +104,8 @@ public class Startup
         {
             FileProvider = new PhysicalFileProvider(Configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"]),
             RequestPath = "/cache",
-            ServeUnknownFileTypes = true
+            ServeUnknownFileTypes = true,
+            
         });
 
         if (!isSecondary)

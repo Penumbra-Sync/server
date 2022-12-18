@@ -90,17 +90,6 @@ public class Startup
             MetricsAPI.GaugeGroupPairsPaused
         }));
 
-        services.AddGrpcClient<AuthService.AuthServiceClient>(c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true
-            };
-        });
         services.AddGrpcClient<FileService.FileServiceClient>(c =>
         {
             c.Address = new Uri(mareConfig.GetValue<string>("StaticFileServiceAddress"));
@@ -120,10 +109,9 @@ public class Startup
             };
         });
 
-        services.AddSingleton<GrpcAuthenticationService>();
+        services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddSingleton<GrpcClientIdentificationService>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
-        services.AddHostedService(p => p.GetService<GrpcAuthenticationService>());
         services.AddHostedService(p => p.GetService<GrpcClientIdentificationService>());
 
         services.AddDbContextPool<MareDbContext>(options =>
@@ -136,17 +124,17 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue("DbContextPoolSize", 1024));
 
-        services.AddAuthentication(SecretKeyGrpcAuthenticationHandler.AuthScheme)
-            .AddScheme<AuthenticationSchemeOptions, SecretKeyGrpcAuthenticationHandler>(SecretKeyGrpcAuthenticationHandler.AuthScheme, options => { options.Validate(); });
+        services.AddAuthentication(SecretKeyAuthenticationHandler.AuthScheme)
+            .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { options.Validate(); });
 
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = new AuthorizationPolicyBuilder()
-                .AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme)
+                .AddAuthenticationSchemes(SecretKeyAuthenticationHandler.AuthScheme)
                 .RequireAuthenticatedUser().Build();
             options.AddPolicy("Authenticated", policy =>
             {
-                policy.AddAuthenticationSchemes(SecretKeyGrpcAuthenticationHandler.AuthScheme);
+                policy.AddAuthenticationSchemes(SecretKeyAuthenticationHandler.AuthScheme);
                 policy.RequireAuthenticatedUser();
             });
             options.AddPolicy("Identified", policy =>

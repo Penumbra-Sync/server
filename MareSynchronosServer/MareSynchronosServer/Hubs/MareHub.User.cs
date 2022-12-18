@@ -38,8 +38,6 @@ public partial class MareHub
             await Task.Delay(1000).ConfigureAwait(false);
         }
 
-        await _authServiceClient.RemoveAuthAsync(new UidMessage() { Uid = userid }).ConfigureAwait(false);
-
         _dbContext.ClientPairs.RemoveRange(ownPairData);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)

@@ -4,12 +4,6 @@ option csharp_namespace = "MareSynchronosShared.Protos";
 
 package mareservices;
 
-service AuthService {
-  rpc Authorize (stream AuthRequest) returns (stream AuthReply);
-  rpc RemoveAuth (UidMessage) returns (Empty);
-  rpc ClearUnauthorized (Empty) returns (Empty);
-}
-
 service FileService {
 	rpc UploadFile (stream UploadFileRequest) returns (Empty);
 	rpc GetFileSizes (FileSizeRequest) returns (FileSizeResponse);

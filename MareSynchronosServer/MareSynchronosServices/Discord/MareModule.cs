@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore;
 using Discord.WebSocket;
 using System.Linq;
 using Prometheus;
-using MareSynchronosServices.Authentication;
 using MareSynchronosShared.Models;
 using MareSynchronosServices.Identity;
 using MareSynchronosShared.Metrics;
@@ -304,9 +303,6 @@ public class MareModule : InteractionModuleBase
 
                 await db.Auth.AddAsync(auth).ConfigureAwait(false);
                 await db.SaveChangesAsync().ConfigureAwait(false);
-
-                var authHandler = scope.ServiceProvider.GetService<SecretKeyAuthenticationHandler>();
-                authHandler.RemoveAuthentication(existingLodestoneAuth.User.UID);
             }
         }
 

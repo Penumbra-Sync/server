@@ -1,5 +1,4 @@
-﻿using MareSynchronosServices.Authentication;
-using MareSynchronosShared.Data;
+﻿using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
@@ -19,16 +18,14 @@ namespace MareSynchronosServices;
 public class CleanupService : IHostedService, IDisposable
 {
     private readonly MareMetrics metrics;
-    private readonly SecretKeyAuthenticationHandler _authService;
     private readonly ILogger<CleanupService> _logger;
     private readonly IServiceProvider _services;
     private readonly IConfiguration _configuration;
     private Timer? _timer;
 
-    public CleanupService(MareMetrics metrics, SecretKeyAuthenticationHandler authService, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
+    public CleanupService(MareMetrics metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
     {
         this.metrics = metrics;
-        _authService = authService;
         _logger = logger;
         _services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
@@ -119,8 +116,6 @@ public class CleanupService : IHostedService, IDisposable
             _logger.LogWarning(ex, "Error during Temp Invite purge");
         }
 
-        _authService.ClearUnauthorizedUsers();
-
         _logger.LogInformation($"Cleanup complete");
 
         dbContext.SaveChanges();
@@ -136,8 +131,6 @@ public class CleanupService : IHostedService, IDisposable
         {
             dbContext.Remove(lodestone);
         }
-
-        _authService.RemoveAuthentication(user.UID);
 
         var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
 

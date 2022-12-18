@@ -1,10 +1,6 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
+﻿namespace MareSynchronosShared.Authentication;
 
-namespace MareSynchronosServices.Authentication;
-
-internal class FailedAuthorization
+internal record SecretKeyFailedAuthorization
 {
     private int failedAttempts = 1;
     public int FailedAttempts => failedAttempts;

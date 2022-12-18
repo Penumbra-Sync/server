@@ -22,5 +22,9 @@ public class Program
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);
                 webBuilder.UseStartup<Startup>();
+                webBuilder.ConfigureKestrel(opt =>
+                {
+                    opt.Limits.MaxConcurrentConnections = 5000;
+                });
             });
 }

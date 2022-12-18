@@ -509,7 +509,7 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, "Success"));
     }
 
-    [Authorize(AuthenticationSchemes = SecretKeyGrpcAuthenticationHandler.AuthScheme)]
+    [Authorize(Policy = "Identified")]
     public async Task<List<BannedGroupUserDto>> GroupGetBannedUsers(string gid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid));
