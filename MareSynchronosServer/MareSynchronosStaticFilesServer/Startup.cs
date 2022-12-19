@@ -36,7 +36,7 @@ public class Startup
 
         var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
 
-        //services.AddControllers();
+        services.AddControllers();
 
         var defaultMethodConfig = new MethodConfig
         {
@@ -99,18 +99,10 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.UseStaticFiles(new StaticFileOptions()
-        {
-            FileProvider = new PhysicalFileProvider(Configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"]),
-            RequestPath = "/cache",
-            ServeUnknownFileTypes = true,
-
-        });
-
         app.UseEndpoints(e =>
         {
             e.MapGrpcService<FileService>();
-            //e.MapControllers();
+            e.MapControllers();
         });
     }
 }

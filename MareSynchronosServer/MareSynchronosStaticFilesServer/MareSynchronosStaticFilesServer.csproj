@@ -19,6 +19,10 @@
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.50.0" />
     <PackageReference Include="Grpc.Net.Client" Version="2.50.0" />
+    <PackageReference Include="Meziantou.Analyzer" Version="1.0.757">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="7.0.0" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="7.0.0" />
