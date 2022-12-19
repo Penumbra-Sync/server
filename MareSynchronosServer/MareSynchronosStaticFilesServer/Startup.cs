@@ -96,6 +96,8 @@ public class Startup
         var metricServer = new KestrelMetricServer(4981);
         metricServer.Start();
 
+        app.UseHttpMetrics();
+
         app.UseAuthentication();
         app.UseAuthorization();
 
