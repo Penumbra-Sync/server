@@ -77,6 +77,10 @@ public class Startup
             MetricsAPI.CounterUserPushData,
             MetricsAPI.CounterUserPushDataTo,
             MetricsAPI.CounterUsersRegisteredDeleted,
+            MetricsAPI.CounterAuthenticationCacheHits,
+            MetricsAPI.CounterAuthenticationFailures,
+            MetricsAPI.CounterAuthenticationRequests,
+            MetricsAPI.CounterAuthenticationSuccesses
         }, new List<string>
         {
             MetricsAPI.GaugeAuthorizedConnections,

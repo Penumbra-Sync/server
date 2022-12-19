@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -10,6 +11,7 @@ namespace MareSynchronosShared.Authentication;
 
 public class SecretKeyAuthenticatorService
 {
+    private readonly MareMetrics metrics;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ILogger<SecretKeyAuthenticatorService> _logger;
     private readonly ConcurrentDictionary<string, SecretKeyAuthReply> _cachedPositiveResponses = new(StringComparer.Ordinal);
@@ -18,7 +20,7 @@ public class SecretKeyAuthenticatorService
     private readonly int _tempBanMinutes;
     private readonly List<string> _whitelistedIps;
 
-    public SecretKeyAuthenticatorService(IServiceScopeFactory serviceScopeFactory, IConfiguration configuration, ILogger<SecretKeyAuthenticatorService> logger)
+    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IConfiguration configuration, ILogger<SecretKeyAuthenticatorService> logger)
     {
         _logger = logger;
         var config = configuration.GetRequiredSection("MareSynchronos");
@@ -31,13 +33,18 @@ public class SecretKeyAuthenticatorService
         {
             logger.LogInformation("Whitelisted IP: " + ip);
         }
+
+        this.metrics = metrics;
         _serviceScopeFactory = serviceScopeFactory;
     }
 
     internal async Task<SecretKeyAuthReply> AuthorizeAsync(string ip, string secretKey)
     {
+        metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
+
         if (_cachedPositiveResponses.TryGetValue(secretKey, out var cachedPositiveResponse))
         {
+            metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
             return cachedPositiveResponse;
         }
 
@@ -68,6 +75,8 @@ public class SecretKeyAuthenticatorService
 
         if (reply.Success)
         {
+            metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
+
             _cachedPositiveResponses[secretKey] = reply;
             _ = Task.Run(async () =>
             {
@@ -86,6 +95,8 @@ public class SecretKeyAuthenticatorService
 
     private SecretKeyAuthReply AuthenticationFailure(string ip)
     {
+        metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
+
         _logger.LogWarning("Failed authorization from {ip}", ip);
         if (!_whitelistedIps.Any(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
         {

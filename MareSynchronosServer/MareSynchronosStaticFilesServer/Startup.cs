@@ -35,6 +35,8 @@ public class Startup
 
         bool isSecondary = mareSettings.GetValue<bool>("IsSecondaryInstance", false);
 
+        //services.AddControllers();
+
         var defaultMethodConfig = new MethodConfig
         {
             Names = { MethodName.Default },
@@ -52,6 +54,10 @@ public class Startup
         {
             services.AddSingleton(new MareMetrics(new List<string>
             {
+                MetricsAPI.CounterAuthenticationCacheHits,
+                MetricsAPI.CounterAuthenticationFailures,
+                MetricsAPI.CounterAuthenticationRequests,
+                MetricsAPI.CounterAuthenticationSuccesses
             }, new List<string>
             {
                 MetricsAPI.GaugeFilesTotalSize,
@@ -113,6 +119,7 @@ public class Startup
             app.UseEndpoints(e =>
             {
                 e.MapGrpcService<FileService>();
+                //e.MapControllers();
             });
         }
     }
