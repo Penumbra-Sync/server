@@ -1,18 +1,22 @@
-﻿using Prometheus;
+﻿using Microsoft.Extensions.Logging;
+using Prometheus;
 
 namespace MareSynchronosShared.Metrics;
 
 public class MareMetrics
 {
-    public MareMetrics(List<string> countersToServe, List<string> gaugesToServe)
+    public MareMetrics(ILogger<MareMetrics> logger, List<string> countersToServe, List<string> gaugesToServe)
     {
-        foreach(var counter in countersToServe)
+        logger.LogInformation("Initializing MareMetrics");
+        foreach (var counter in countersToServe)
         {
+            logger.LogInformation($"Creating Metric for Counter {counter}");
             counters.Add(counter, Prometheus.Metrics.CreateCounter(counter, counter));
         }
 
-        foreach(var gauge in gaugesToServe)
+        foreach (var gauge in gaugesToServe)
         {
+            logger.LogInformation($"Creating Metric for Counter {gauge}");
             gauges.Add(gauge, Prometheus.Metrics.CreateGauge(gauge, gauge));
         }
     }

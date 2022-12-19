@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Prometheus;
 using System.Collections.Generic;
 using MareSynchronosServices.Identity;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServices;
 
@@ -32,11 +33,7 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, Configuration.GetValue("DbContextPoolSize", 1024));
 
-        services.AddSingleton(new MareMetrics(new List<string> {
-            MetricsAPI.CounterAuthenticationRequests,
-            MetricsAPI.CounterAuthenticationFailures,
-            MetricsAPI.CounterAuthenticationCacheHits,
-            MetricsAPI.CounterAuthenticationSuccesses
+        services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string> {
         }, new List<string> 
         {
             MetricsAPI.GaugeUsersRegistered

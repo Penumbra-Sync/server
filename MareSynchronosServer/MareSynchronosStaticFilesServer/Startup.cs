@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Logging;
 using Prometheus;
 using System;
 using System.Collections.Generic;
@@ -31,9 +32,9 @@ public class Startup
 
         services.AddTransient(_ => Configuration);
 
-        var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
+        services.AddLogging();
 
-        bool isSecondary = mareSettings.GetValue<bool>("IsSecondaryInstance", false);
+        var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
 
         //services.AddControllers();
 
@@ -50,21 +51,18 @@ public class Startup
             }
         };
 
-        if (!isSecondary)
+        services.AddSingleton<MareMetrics>(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
-            services.AddSingleton(new MareMetrics(new List<string>
-            {
-                MetricsAPI.CounterAuthenticationCacheHits,
-                MetricsAPI.CounterAuthenticationFailures,
-                MetricsAPI.CounterAuthenticationRequests,
-                MetricsAPI.CounterAuthenticationSuccesses
-            }, new List<string>
-            {
-                MetricsAPI.GaugeFilesTotalSize,
-                MetricsAPI.GaugeFilesTotal
-            }));
-            services.AddHostedService<CleanupService>();
-        }
+            MetricsAPI.CounterAuthenticationCacheHits,
+            MetricsAPI.CounterAuthenticationFailures,
+            MetricsAPI.CounterAuthenticationRequests,
+            MetricsAPI.CounterAuthenticationSuccesses
+        }, new List<string>
+        {
+            MetricsAPI.GaugeFilesTotalSize,
+            MetricsAPI.GaugeFilesTotal
+        }));
+        services.AddHostedService<CleanupService>();
 
         services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddDbContextPool<MareDbContext>(options =>
@@ -91,17 +89,12 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
-        bool isSecondary = Configuration.GetSection("MareSynchronos").GetValue<bool>("IsSecondaryInstance", false);
-
         app.UseHttpLogging();
 
         app.UseRouting();
 
-        if (!isSecondary)
-        {
-            var metricServer = new KestrelMetricServer(4981);
-            metricServer.Start();
-        }
+        var metricServer = new KestrelMetricServer(4981);
+        metricServer.Start();
 
         app.UseAuthentication();
         app.UseAuthorization();
@@ -111,16 +104,13 @@ public class Startup
             FileProvider = new PhysicalFileProvider(Configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"]),
             RequestPath = "/cache",
             ServeUnknownFileTypes = true,
-            
+
         });
 
-        if (!isSecondary)
+        app.UseEndpoints(e =>
         {
-            app.UseEndpoints(e =>
-            {
-                e.MapGrpcService<FileService>();
-                //e.MapControllers();
-            });
-        }
+            e.MapGrpcService<FileService>();
+            //e.MapControllers();
+        });
     }
 }

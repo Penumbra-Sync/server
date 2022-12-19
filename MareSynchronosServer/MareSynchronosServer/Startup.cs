@@ -24,6 +24,7 @@ using System.Net.Http;
 using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Services;
+using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer;
 
@@ -71,7 +72,7 @@ public class Startup
             RetryPolicy = null
         };
 
-        services.AddSingleton(new MareMetrics(new List<string>
+        services.AddSingleton<MareMetrics>(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
             MetricsAPI.CounterInitializedConnections,
             MetricsAPI.CounterUserPushData,

@@ -11,7 +11,7 @@ namespace MareSynchronosShared.Authentication;
 
 public class SecretKeyAuthenticatorService
 {
-    private readonly MareMetrics metrics;
+    private readonly MareMetrics _metrics;
     private readonly IServiceScopeFactory _serviceScopeFactory;
     private readonly ILogger<SecretKeyAuthenticatorService> _logger;
     private readonly ConcurrentDictionary<string, SecretKeyAuthReply> _cachedPositiveResponses = new(StringComparer.Ordinal);
@@ -34,17 +34,17 @@ public class SecretKeyAuthenticatorService
             logger.LogInformation("Whitelisted IP: " + ip);
         }
 
-        this.metrics = metrics;
+        _metrics = metrics;
         _serviceScopeFactory = serviceScopeFactory;
     }
 
     internal async Task<SecretKeyAuthReply> AuthorizeAsync(string ip, string secretKey)
     {
-        metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
+        _metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
 
         if (_cachedPositiveResponses.TryGetValue(secretKey, out var cachedPositiveResponse))
         {
-            metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
             return cachedPositiveResponse;
         }
 
@@ -75,7 +75,7 @@ public class SecretKeyAuthenticatorService
 
         if (reply.Success)
         {
-            metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
+            _metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
 
             _cachedPositiveResponses[secretKey] = reply;
             _ = Task.Run(async () =>
@@ -95,7 +95,7 @@ public class SecretKeyAuthenticatorService
 
     private SecretKeyAuthReply AuthenticationFailure(string ip)
     {
-        metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
+        _metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
 
         _logger.LogWarning("Failed authorization from {ip}", ip);
         if (!_whitelistedIps.Any(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
