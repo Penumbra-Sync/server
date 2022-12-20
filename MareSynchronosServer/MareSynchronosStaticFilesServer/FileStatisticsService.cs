@@ -28,14 +28,14 @@ public class FileStatisticsService : IHostedService
         if (!_pastHourFiles.ContainsKey(fileHash))
         {
             _pastHourFiles[fileHash] = length;
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastHour, _pastHourFiles.Count);
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastHourSize, _pastHourFiles.Sum(f => f.Value));
+            _metrics.IncGauge(MetricsAPI.GaugeFilesUniquePastHour);
+            _metrics.IncGauge(MetricsAPI.GaugeFilesUniquePastHourSize, length);
         }
         if (!_pastDayFiles.ContainsKey(fileHash))
         {
             _pastDayFiles[fileHash] = length;
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDay, _pastDayFiles.Count);
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDaySize, _pastDayFiles.Sum(f => f.Value));
+            _metrics.IncGauge(MetricsAPI.GaugeFilesUniquePastDay);
+            _metrics.IncGauge(MetricsAPI.GaugeFilesUniquePastDaySize, length);
         }
     }
 

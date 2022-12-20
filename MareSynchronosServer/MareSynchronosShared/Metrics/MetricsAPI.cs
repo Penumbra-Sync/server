@@ -1,6 +1,4 @@
-﻿using StackExchange.Redis;
-
-namespace MareSynchronosShared.Metrics;
+﻿namespace MareSynchronosShared.Metrics;
 
 public class MetricsAPI
 {

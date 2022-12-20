@@ -29,7 +29,7 @@ public class MareMetrics
     {
         if (gauges.ContainsKey(gaugeName))
         {
-            gauges[gaugeName].IncTo(value);
+            gauges[gaugeName].Set(value);
         }
     }
 

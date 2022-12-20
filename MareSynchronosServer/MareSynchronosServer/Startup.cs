@@ -23,7 +23,6 @@ using MareSynchronosServer.Services;
 using System.Net.Http;
 using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
-using MareSynchronosShared.Services;
 using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer;

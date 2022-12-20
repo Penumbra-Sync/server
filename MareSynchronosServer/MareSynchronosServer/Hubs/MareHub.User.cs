@@ -7,7 +7,6 @@ using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
-using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;

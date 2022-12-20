@@ -1,6 +1,5 @@
 ﻿using MareSynchronos.API;
 using MareSynchronosServer.Utils;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
@@ -8,7 +7,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
