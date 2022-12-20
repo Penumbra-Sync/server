@@ -1,0 +1,78 @@
+﻿using System.Collections.Concurrent;
+
+namespace MareSynchronosStaticFilesServer;
+
+public class CachedFileProvider
+{
+    private readonly ILogger<CachedFileProvider> _logger;
+    private readonly FileStatisticsService _fileStatisticsService;
+    private readonly Uri _remoteCacheSourceUri;
+    private readonly string _basePath;
+    private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
+    private bool IsMainServer => _remoteCacheSourceUri == null;
+
+    public CachedFileProvider(IConfiguration configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService)
+    {
+        _logger = logger;
+        _fileStatisticsService = fileStatisticsService;
+        var configurationSection = configuration.GetRequiredSection("MareSynchronos");
+        _remoteCacheSourceUri = configurationSection.GetValue<Uri>("RemoteCacheSourceUri", null);
+        _basePath = configurationSection["CacheDirectory"];
+    }
+
+    public async Task<FileStream?> GetFileStream(string hash, string auth)
+    {
+        var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+        if (fi == null)
+        {
+            if (IsMainServer) return null;
+            if (!_currentTransfers.ContainsKey(hash))
+            {
+                _currentTransfers[hash] = Task.Run(async () =>
+                {
+                    // download file from remote
+                    var downloadUrl = new Uri(_remoteCacheSourceUri, hash);
+                    _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
+                    using var client = new HttpClient();
+                    client.DefaultRequestHeaders.Add("Authorization", auth);
+                    var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+                    try
+                    {
+                        response.EnsureSuccessStatusCode();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to download {url}", downloadUrl);
+                        return;
+                    }
+
+                    var fileName = FilePathUtil.GetFilePath(_basePath, hash);
+                    var fileStream = File.Create(fileName);
+                    await using (fileStream.ConfigureAwait(false))
+                    {
+                        var bufferSize = response.Content.Headers.ContentLength > 1024 * 1024 ? 4096 : 1024;
+                        var buffer = new byte[bufferSize];
+
+                        var bytesRead = 0;
+                        while ((bytesRead = await (await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ReadAsync(buffer).ConfigureAwait(false)) > 0)
+                        {
+                            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
+                        }
+                    }
+                });
+            }
+
+            await _currentTransfers[hash].ConfigureAwait(false);
+            _currentTransfers.Remove(hash, out _);
+
+            fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+
+            if (fi == null) return null;
+        }
+
+        _fileStatisticsService.LogFile(hash, fi.Length);
+
+        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+    }
+}

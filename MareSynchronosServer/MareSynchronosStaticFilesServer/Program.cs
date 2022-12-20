@@ -1,7 +1,3 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-using System;
-
 namespace MareSynchronosStaticFilesServer;
 
 public class Program

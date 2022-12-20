@@ -18,6 +18,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="ByteSize" Version="2.1.1" />
 		<PackageReference Include="EFCore.NamingConventions" Version="7.0.0" />
 		<PackageReference Include="Grpc.AspNetCore" Version="2.50.0" />
 		<PackageReference Include="Meziantou.Analyzer" Version="1.0.756">

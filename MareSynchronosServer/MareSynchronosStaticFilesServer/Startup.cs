@@ -4,15 +4,8 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Prometheus;
-using System;
-using System.Collections.Generic;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -65,10 +58,11 @@ public class Startup
             MetricsAPI.GaugeFilesUniquePastHour,
             MetricsAPI.GaugeFilesUniquePastHourSize
         }));
+        services.AddSingleton<CachedFileProvider>();
         services.AddSingleton<FileStatisticsService>();
 
         services.AddHostedService(m => m.GetService<FileStatisticsService>());
-        services.AddHostedService<CleanupService>();
+        services.AddHostedService<FileCleanupService>();
 
         services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddDbContextPool<MareDbContext>(options =>
@@ -99,8 +93,8 @@ public class Startup
 
         app.UseRouting();
 
-        var metricServer = new KestrelMetricServer(4981);
-        metricServer.Start();
+        //var metricServer = new KestrelMetricServer(4981);
+        //metricServer.Start();
 
         app.UseHttpMetrics();
 
@@ -109,7 +103,7 @@ public class Startup
 
         app.UseEndpoints(e =>
         {
-            e.MapGrpcService<FileService>();
+            e.MapGrpcService<GrpcFileService>();
             e.MapControllers();
         });
     }

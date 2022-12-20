@@ -1,8 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using System.IO;
-using System.Linq;
 using System.Security.Claims;
 
 namespace MareSynchronosStaticFilesServer;
@@ -11,29 +7,23 @@ namespace MareSynchronosStaticFilesServer;
 public class FilesController : Controller
 {
     private readonly ILogger<FilesController> _logger;
-    private readonly IConfiguration _configuration;
-    private readonly FileStatisticsService _fileStatisticsService;
+    private readonly CachedFileProvider _cachedFileProvider;
 
-    public FilesController(ILogger<FilesController> logger, IConfiguration configuration, FileStatisticsService fileStatisticsService)
+    public FilesController(ILogger<FilesController> logger, CachedFileProvider cachedFileProvider)
     {
         _logger = logger;
-        _configuration = configuration;
-        _fileStatisticsService = fileStatisticsService;
+        _cachedFileProvider = cachedFileProvider;
     }
 
     [HttpGet("{fileId}")]
-    public IActionResult GetFile(string fileId)
+    public async Task<IActionResult> GetFile(string fileId)
     {
         var authedUser = HttpContext.User.Claims.FirstOrDefault(f => string.Equals(f.Type, ClaimTypes.NameIdentifier, System.StringComparison.Ordinal))?.Value ?? "Unknown";
         _logger.LogInformation($"GetFile:{authedUser}:{fileId}");
 
-        FileInfo fi = new(Path.Combine(_configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"], fileId));
-        if (!fi.Exists) return NotFound();
+        var fs = await _cachedFileProvider.GetFileStream(fileId, Request.Headers["Authorization"]);
+        if (fs == null) return NotFound();
 
-        _fileStatisticsService.LogFile(fileId, fi.Length);
-
-        var fileStream = new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-        return File(fileStream, "application/octet-stream");
+        return File(fs, "application/octet-stream");
     }
 }

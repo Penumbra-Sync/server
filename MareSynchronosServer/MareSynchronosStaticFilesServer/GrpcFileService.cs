@@ -3,23 +3,17 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace MareSynchronosStaticFilesServer;
 
-public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBase
+public class GrpcFileService : FileService.FileServiceBase
 {
     private readonly string _basePath;
     private readonly MareDbContext _mareDbContext;
-    private readonly ILogger<FileService> _logger;
+    private readonly ILogger<GrpcFileService> _logger;
     private readonly MareMetrics _metricsClient;
 
-    public FileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<FileService> logger, MareMetrics metricsClient)
+    public GrpcFileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<GrpcFileService> logger, MareMetrics metricsClient)
     {
         _basePath = configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"];
         _mareDbContext = mareDbContext;
@@ -29,21 +23,21 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
 
     public override async Task<Empty> UploadFile(IAsyncStreamReader<UploadFileRequest> requestStream, ServerCallContext context)
     {
-        await requestStream.MoveNext();
+        _ = await requestStream.MoveNext().ConfigureAwait(false);
         var uploadMsg = requestStream.Current;
-        var filePath = Path.Combine(_basePath, uploadMsg.Hash);
+        var filePath = FilePathUtil.GetFilePath(_basePath, uploadMsg.Hash);
         using var fileWriter = File.OpenWrite(filePath);
-        var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader);
+        var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader).ConfigureAwait(false);
         if (file != null)
         {
-            await fileWriter.WriteAsync(uploadMsg.FileData.ToArray());
+            await fileWriter.WriteAsync(uploadMsg.FileData.ToArray()).ConfigureAwait(false);
 
-            while (await requestStream.MoveNext())
+            while (await requestStream.MoveNext().ConfigureAwait(false))
             {
-                await fileWriter.WriteAsync(requestStream.Current.FileData.ToArray());
+                await fileWriter.WriteAsync(requestStream.Current.FileData.ToArray()).ConfigureAwait(false);
             }
 
-            await fileWriter.FlushAsync();
+            await fileWriter.FlushAsync().ConfigureAwait(false);
             fileWriter.Close();
 
             var fileSize = new FileInfo(filePath).Length;
@@ -65,15 +59,15 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
         {
             try
             {
-                FileInfo fi = new FileInfo(Path.Combine(_basePath, hash));
-                fi.Delete();
-                var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+                var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+                fi?.Delete();
+                var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash).ConfigureAwait(false);
                 if (file != null)
                 {
                     _mareDbContext.Files.Remove(file);
 
-                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotal, 1);
-                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotalSize, fi.Length);
+                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotal, fi == null ? 0 : 1);
+                    _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotalSize, fi?.Length ?? 0);
                 }
             }
             catch (Exception ex)
@@ -89,17 +83,10 @@ public class FileService : MareSynchronosShared.Protos.FileService.FileServiceBa
     public override Task<FileSizeResponse> GetFileSizes(FileSizeRequest request, ServerCallContext context)
     {
         FileSizeResponse response = new();
-        foreach (var hash in request.Hash.Distinct())
+        foreach (var hash in request.Hash.Distinct(StringComparer.Ordinal))
         {
-            FileInfo fi = new(Path.Combine(_basePath, hash));
-            if (fi.Exists)
-            {
-                response.HashToFileSize.Add(hash, fi.Length);
-            }
-            else
-            {
-                response.HashToFileSize.Add(hash, 0);
-            }
+            FileInfo? fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+            response.HashToFileSize.Add(hash, fi?.Length ?? 0);
         }
 
         return Task.FromResult(response);
