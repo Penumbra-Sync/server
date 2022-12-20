@@ -11,9 +11,12 @@ namespace MareSynchronosStaticFilesServer;
 
 public class Startup
 {
+    private bool _isMain;
     public Startup(IConfiguration configuration)
     {
         Configuration = configuration;
+        var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
+        _isMain = string.IsNullOrEmpty(mareSettings.GetValue("RemoteCacheSourceUri", string.Empty));
     }
 
     public IConfiguration Configuration { get; }
@@ -29,19 +32,6 @@ public class Startup
         var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
 
         services.AddControllers();
-
-        var defaultMethodConfig = new MethodConfig
-        {
-            Names = { MethodName.Default },
-            RetryPolicy = new RetryPolicy
-            {
-                MaxAttempts = 100,
-                InitialBackoff = TimeSpan.FromSeconds(1),
-                MaxBackoff = TimeSpan.FromSeconds(5),
-                BackoffMultiplier = 1.5,
-                RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable }
-            }
-        };
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
@@ -93,8 +83,8 @@ public class Startup
 
         app.UseRouting();
 
-        //var metricServer = new KestrelMetricServer(4981);
-        //metricServer.Start();
+        var metricServer = new KestrelMetricServer(4981);
+        metricServer.Start();
 
         app.UseHttpMetrics();
 
@@ -103,7 +93,8 @@ public class Startup
 
         app.UseEndpoints(e =>
         {
-            e.MapGrpcService<GrpcFileService>();
+            if(_isMain)
+                e.MapGrpcService<GrpcFileService>();
             e.MapControllers();
         });
     }

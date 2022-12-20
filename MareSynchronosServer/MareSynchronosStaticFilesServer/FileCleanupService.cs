@@ -35,10 +35,9 @@ public class FileCleanupService : IHostedService
         _cleanupCts = new();
 
         DirectoryInfo dir = new(_cacheDir);
-        var allFiles = dir.GetFiles();
+        var allFiles = dir.GetFiles("*", SearchOption.AllDirectories);
         _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
         _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
-
 
         _ = CleanUpTask(_cleanupCts.Token);
 

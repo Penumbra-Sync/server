@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using MareSynchronosShared.Metrics;
+using System.Collections.Concurrent;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -6,15 +7,17 @@ public class CachedFileProvider
 {
     private readonly ILogger<CachedFileProvider> _logger;
     private readonly FileStatisticsService _fileStatisticsService;
+    private readonly MareMetrics _metrics;
     private readonly Uri _remoteCacheSourceUri;
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
     private bool IsMainServer => _remoteCacheSourceUri == null;
 
-    public CachedFileProvider(IConfiguration configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService)
+    public CachedFileProvider(IConfiguration configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService, MareMetrics metrics)
     {
         _logger = logger;
         _fileStatisticsService = fileStatisticsService;
+        _metrics = metrics;
         var configurationSection = configuration.GetRequiredSection("MareSynchronos");
         _remoteCacheSourceUri = configurationSection.GetValue<Uri>("RemoteCacheSourceUri", null);
         _basePath = configurationSection["CacheDirectory"];
@@ -60,6 +63,9 @@ public class CachedFileProvider
                             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
                         }
                     }
+
+                    _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
+                    _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
                 });
             }
 
