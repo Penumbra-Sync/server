@@ -51,7 +51,7 @@ public class Startup
             }
         };
 
-        services.AddSingleton<MareMetrics>(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
+        services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
             MetricsAPI.CounterAuthenticationCacheHits,
             MetricsAPI.CounterAuthenticationFailures,
@@ -60,8 +60,15 @@ public class Startup
         }, new List<string>
         {
             MetricsAPI.GaugeFilesTotalSize,
-            MetricsAPI.GaugeFilesTotal
+            MetricsAPI.GaugeFilesTotal,
+            MetricsAPI.GaugeFilesUniquePastDay,
+            MetricsAPI.GaugeFilesUniquePastDaySize,
+            MetricsAPI.GaugeFilesUniquePastHour,
+            MetricsAPI.GaugeFilesUniquePastHourSize
         }));
+        services.AddSingleton<FileStatisticsService>();
+
+        services.AddHostedService(m => m.GetService<FileStatisticsService>());
         services.AddHostedService<CleanupService>();
 
         services.AddSingleton<SecretKeyAuthenticatorService>();

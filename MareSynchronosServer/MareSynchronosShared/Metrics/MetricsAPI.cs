@@ -1,4 +1,6 @@
-﻿namespace MareSynchronosShared.Metrics;
+﻿using StackExchange.Redis;
+
+namespace MareSynchronosShared.Metrics;
 
 public class MetricsAPI
 {
@@ -22,4 +24,8 @@ public class MetricsAPI
     public const string GaugeGroups = "mare_groups";
     public const string GaugeGroupPairs = "mare_groups_pairs";
     public const string GaugeGroupPairsPaused = "mare_groups_pairs_paused";
+    public const string GaugeFilesUniquePastHour = "mare_files_unique_past_hour";
+    public const string GaugeFilesUniquePastHourSize = "mare_files_unique_past_hour_size";
+    public const string GaugeFilesUniquePastDay = "mare_files_unique_past_day";
+    public const string GaugeFilesUniquePastDaySize = "mare_files_unique_past_day_size";
 }
