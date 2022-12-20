@@ -47,22 +47,28 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("register", "Starts the registration process for the Mare Synchronos server of this Discord")]
     public async Task Register([Summary("overwrite", "Overwrites your old account")] bool overwrite = false)
     {
-        if (overwrite)
+        await TryRespondAsync(async () =>
         {
-            await DeletePreviousUserAccount(Context.User.Id).ConfigureAwait(false);
-        }
+            if (overwrite)
+            {
+                await DeletePreviousUserAccount(Context.User.Id).ConfigureAwait(false);
+            }
 
-        await RespondWithModalAsync<LodestoneModal>("register_modal").ConfigureAwait(false);
+            await RespondWithModalAsync<LodestoneModal>("register_modal").ConfigureAwait(false);
+        });
     }
 
     [SlashCommand("setvanityuid", "Sets your Vanity UID.")]
     public async Task SetVanityUid([Summary("vanity_uid", "Desired Vanity UID")] string vanityUid)
     {
-        EmbedBuilder eb = new();
+        await TryRespondAsync(async () =>
+        {
+            EmbedBuilder eb = new();
 
-        eb = await HandleVanityUid(eb, Context.User.Id, vanityUid);
+            eb = await HandleVanityUid(eb, Context.User.Id, vanityUid);
 
-        await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [SlashCommand("setsyncshellvanityid", "Sets a Vanity GID for a Syncshell")]
@@ -70,57 +76,66 @@ public class MareModule : InteractionModuleBase
         [Summary("syncshell_id", "Syncshell ID")] string syncshellId,
         [Summary("vanity_syncshell_id", "Desired Vanity Syncshell ID")] string vanityId)
     {
-        EmbedBuilder eb = new();
+        await TryRespondAsync(async () =>
+        {
+            EmbedBuilder eb = new();
 
-        eb = await HandleVanityGid(eb, Context.User.Id, syncshellId, vanityId);
+            eb = await HandleVanityGid(eb, Context.User.Id, syncshellId, vanityId);
 
-        await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [SlashCommand("verify", "Finishes the registration process for the Mare Synchronos server of this Discord")]
     public async Task Verify()
     {
-        EmbedBuilder eb = new();
-        if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+        await TryRespondAsync(async () =>
         {
-            eb.WithTitle("Already queued for verfication");
-            eb.WithDescription("You are already queued for verification. Please wait.");
-            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        }
-        else if (!_botServices.DiscordLodestoneMapping.ContainsKey(Context.User.Id))
-        {
-            eb.WithTitle("Cannot verify registration");
-            eb.WithDescription("You need to **/register** first before you can **/verify**");
-            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        }
-        else
-        {
-            await DeferAsync(ephemeral: true).ConfigureAwait(false);
-            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
-        }
+            EmbedBuilder eb = new();
+            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            {
+                eb.WithTitle("Already queued for verfication");
+                eb.WithDescription("You are already queued for verification. Please wait.");
+                await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            }
+            else if (!_botServices.DiscordLodestoneMapping.ContainsKey(Context.User.Id))
+            {
+                eb.WithTitle("Cannot verify registration");
+                eb.WithDescription("You need to **/register** first before you can **/verify**");
+                await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            }
+            else
+            {
+                await DeferAsync(ephemeral: true).ConfigureAwait(false);
+                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
+            }
+        });
     }
 
     [SlashCommand("verify_relink", "Finishes the relink process for your user on the Mare Synchronos server of this Discord")]
     public async Task VerifyRelink()
     {
-        EmbedBuilder eb = new();
-        if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+        await TryRespondAsync(async () =>
         {
-            eb.WithTitle("Already queued for verfication");
-            eb.WithDescription("You are already queued for verification. Please wait.");
-            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        }
-        else if (!_botServices.DiscordRelinkLodestoneMapping.ContainsKey(Context.User.Id))
-        {
-            eb.WithTitle("Cannot verify relink");
-            eb.WithDescription("You need to **/relink** first before you can **/verify_relink**");
-            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        }
-        else
-        {
-            await DeferAsync(ephemeral: true).ConfigureAwait(false);
-            _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
-        }
+            EmbedBuilder eb = new();
+            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            {
+                eb.WithTitle("Already queued for verfication");
+                eb.WithDescription("You are already queued for verification. Please wait.");
+                await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            }
+            else if (!_botServices.DiscordRelinkLodestoneMapping.ContainsKey(Context.User.Id))
+            {
+                eb.WithTitle("Cannot verify relink");
+                eb.WithDescription("You need to **/relink** first before you can **/verify_relink**");
+                await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            }
+            else
+            {
+                await DeferAsync(ephemeral: true).ConfigureAwait(false);
+                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
+            }
+        });
     }
 
     [SlashCommand("recover", "Allows you to recover your account by generating a new secret key")]
@@ -134,11 +149,14 @@ public class MareModule : InteractionModuleBase
         [Summary("discord_user", "ADMIN ONLY: Discord User to check for")] IUser? discordUser = null,
         [Summary("uid", "ADMIN ONLY: UID to check for")] string? uid = null)
     {
-        EmbedBuilder eb = new();
+        await TryRespondAsync(async () =>
+        {
+            EmbedBuilder eb = new();
 
-        eb = await HandleUserInfo(eb, Context.User.Id, discordUser?.Id ?? null, uid);
+            eb = await HandleUserInfo(eb, Context.User.Id, discordUser?.Id ?? null, uid);
 
-        await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+            await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [SlashCommand("relink", "Allows you to link a new Discord account to an existing Mare account")]
@@ -150,22 +168,47 @@ public class MareModule : InteractionModuleBase
     [ModalInteraction("recover_modal")]
     public async Task RecoverModal(LodestoneModal modal)
     {
-        var embed = await HandleRecoverModalAsync(modal, Context.User.Id).ConfigureAwait(false);
-        await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        await TryRespondAsync(async () =>
+        {
+            var embed = await HandleRecoverModalAsync(modal, Context.User.Id).ConfigureAwait(false);
+            await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [ModalInteraction("register_modal")]
     public async Task RegisterModal(LodestoneModal modal)
     {
-        var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
-        await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        await TryRespondAsync(async () =>
+        {
+            var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
+            await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [ModalInteraction("relink_modal")]
     public async Task RelinkModal(LodestoneModal modal)
     {
-        var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
-        await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        await TryRespondAsync(async () =>
+        {
+            var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
+            await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
+        });
+    }
+
+    private async Task TryRespondAsync(Action act)
+    {
+        try
+        {
+            act();
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, ulong? optionalUser = null, string? uid = null)
