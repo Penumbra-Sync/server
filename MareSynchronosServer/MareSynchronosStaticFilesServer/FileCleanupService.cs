@@ -30,14 +30,7 @@ public class FileCleanupService : IHostedService
     {
         _logger.LogInformation("Cleanup Service started");
 
-        _logger.LogInformation("Calculating initial files");
-
         _cleanupCts = new();
-
-        DirectoryInfo dir = new(_cacheDir);
-        var allFiles = dir.GetFiles("*", SearchOption.AllDirectories);
-        _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
-        _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
 
         _ = CleanUpTask(_cleanupCts.Token);
 
@@ -50,6 +43,11 @@ public class FileCleanupService : IHostedService
 
         while (!ct.IsCancellationRequested)
         {
+            DirectoryInfo dir = new(_cacheDir);
+            var allFiles = dir.GetFiles("*", SearchOption.AllDirectories);
+            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
+            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
+
             using var scope = _services.CreateScope();
             using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
