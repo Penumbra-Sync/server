@@ -108,15 +108,18 @@ public class FileCleanupService : IHostedService
     {
         try
         {
-            if (!int.TryParse(_configuration["UnusedFileRetentionPeriodInDays"], CultureInfo.InvariantCulture, out int filesOlderThanDays))
-            {
-                filesOlderThanDays = 7;
-            }
+            var filesOlderThanDays = _configuration.GetValue("UnusedFileRetentionPeriodInDays", 7);
+            var forcedDeletionHours = _configuration.GetValue("ForcedDeletionOfFilesAfterHours", -1);
 
             _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", filesOlderThanDays);
+            if (forcedDeletionHours > 0)
+            {
+                _logger.LogInformation("Cleaning up files written to longer than {hours}h ago", forcedDeletionHours);
+            }
 
             // clean up files in DB but not on disk or last access is expired
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
+            var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionHours));
             var allFiles = dbContext.Files.ToList();
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
             {
@@ -131,6 +134,15 @@ public class FileCleanupService : IHostedService
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     _logger.LogInformation("File outdated: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
+                    file.Delete();
+                    if (_isMainServer)
+                        dbContext.Files.Remove(fileCache);
+                }
+                else if (file != null && forcedDeletionHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
                     if (_isMainServer)
                         dbContext.Files.Remove(fileCache);
