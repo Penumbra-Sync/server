@@ -22,7 +22,7 @@ public class FileCleanupService : IHostedService
         _logger = logger;
         _services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
-        _isMainServer = !string.IsNullOrEmpty(_configuration.GetValue("RemoteCacheSource", string.Empty));
+        _isMainServer = string.IsNullOrEmpty(_configuration.GetValue("RemoteCacheSource", string.Empty));
         _cacheDir = _configuration.GetValue<string>("CacheDirectory");
     }
 
