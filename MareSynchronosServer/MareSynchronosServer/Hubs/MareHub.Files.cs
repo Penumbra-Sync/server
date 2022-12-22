@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using Grpc.Core;
@@ -18,6 +19,8 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
+    private static readonly SemaphoreSlim _uploadSemaphore = new(20);
+
     [Authorize(Policy = "Identified")]
     public async Task FilesAbortUpload()
     {
@@ -144,10 +147,20 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(hash));
 
+        await _uploadSemaphore.WaitAsync(Context.ConnectionAborted).ConfigureAwait(false);
+
         var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && !f.Uploaded);
-        if (relatedFile == null) return;
+        if (relatedFile == null)
+        {
+            _uploadSemaphore.Release();
+            return;
+        }
         var forbiddenFile = _dbContext.ForbiddenUploadEntries.SingleOrDefault(f => f.Hash == hash);
-        if (forbiddenFile != null) return;
+        if (forbiddenFile != null)
+        {
+            _uploadSemaphore.Release();
+            return;
+        }
 
         var tempFileName = Path.GetTempFileName();
         using var fileStream = new FileStream(tempFileName, FileMode.OpenOrCreate);
@@ -181,6 +194,7 @@ public partial class MareHub
                 File.Delete(tempFileName);
             }
 
+            _uploadSemaphore.Release();
             return;
         }
 
@@ -199,6 +213,7 @@ public partial class MareHub
                 _dbContext.Remove(relatedFile);
                 await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+                _uploadSemaphore.Release();
                 return;
             }
 
@@ -234,6 +249,7 @@ public partial class MareHub
         }
         finally
         {
+            _uploadSemaphore.Release();
             File.Delete(tempFileName);
         }
     }
