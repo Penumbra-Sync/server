@@ -28,26 +28,42 @@ public class GrpcFileService : FileService.FileServiceBase
         var filePath = FilePathUtil.GetFilePath(_basePath, uploadMsg.Hash);
         using var fileWriter = File.OpenWrite(filePath);
         var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader).ConfigureAwait(false);
-        if (file != null)
+        try
         {
-            await fileWriter.WriteAsync(uploadMsg.FileData.ToArray()).ConfigureAwait(false);
 
-            while (await requestStream.MoveNext().ConfigureAwait(false))
+            if (file != null)
             {
-                await fileWriter.WriteAsync(requestStream.Current.FileData.ToArray()).ConfigureAwait(false);
+                await fileWriter.WriteAsync(uploadMsg.FileData.ToArray()).ConfigureAwait(false);
+
+                while (await requestStream.MoveNext().ConfigureAwait(false))
+                {
+                    await fileWriter.WriteAsync(requestStream.Current.FileData.ToArray()).ConfigureAwait(false);
+                }
+
+                await fileWriter.FlushAsync().ConfigureAwait(false);
+                fileWriter.Close();
+
+                var fileSize = new FileInfo(filePath).Length;
+                file.Uploaded = true;
+
+                await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+
+                _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
+                _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, fileSize);
+
+                _logger.LogInformation("User {user} uploaded file {hash}", uploadMsg.Uploader, uploadMsg.Hash);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during UploadFile");
+            var fileNew = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader).ConfigureAwait(false);
+            if (fileNew != null)
+            {
+                _mareDbContext.Files.Remove(fileNew);
             }
 
-            await fileWriter.FlushAsync().ConfigureAwait(false);
-            fileWriter.Close();
-
-            var fileSize = new FileInfo(filePath).Length;
-            file.Uploaded = true;
-
-            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
-            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, fileSize);
-
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
-            _logger.LogInformation("User {user} uploaded file {hash}", uploadMsg.Uploader, uploadMsg.Hash);
         }
 
         return new Empty();

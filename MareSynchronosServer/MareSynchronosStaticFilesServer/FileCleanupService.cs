@@ -22,7 +22,7 @@ public class FileCleanupService : IHostedService
         _logger = logger;
         _services = services;
         _configuration = configuration.GetRequiredSection("MareSynchronos");
-        _isMainServer = string.IsNullOrEmpty(_configuration.GetValue("RemoteCacheSource", string.Empty));
+        _isMainServer = string.IsNullOrEmpty(_configuration.GetValue("RemoteCacheSourceUri", string.Empty));
         _cacheDir = _configuration.GetValue<string>("CacheDirectory");
     }
 
@@ -164,7 +164,7 @@ public class FileCleanupService : IHostedService
                         _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
                         _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                         file.Delete();
-                        _logger.LogInformation("File not in DB, deleting: {fileName}", file.FullName);
+                        _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
                     }
 
                     ct.ThrowIfCancellationRequested();
