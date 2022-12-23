@@ -12,8 +12,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -33,18 +33,18 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxGroupUserCount;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
-        MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IConfiguration configuration, IHttpContextAccessor contextAccessor,
+        MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IOptions<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
         GrpcClientIdentificationService clientIdentService)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        var config = configuration.GetRequiredSection("MareSynchronos");
-        _cdnFullUri = new Uri(config.GetValue<string>("CdnFullUrl"));
-        _shardName = config.GetValue("ShardName", "Main");
-        _maxExistingGroupsByUser = config.GetValue<int>("MaxExistingGroupsByUser", 3);
-        _maxJoinedGroupsByUser = config.GetValue<int>("MaxJoinedGroupsByUser", 6);
-        _maxGroupUserCount = config.GetValue<int>("MaxGroupUserCount", 100);
+        var config = configuration.Value;
+        _cdnFullUri = config.CdnFullUrl;
+        _shardName = config.ShardName;
+        _maxExistingGroupsByUser = config.MaxExistingGroupsByUser;
+        _maxJoinedGroupsByUser = config.MaxJoinedGroupsByUser;
+        _maxGroupUserCount = config.MaxGroupUserCount;
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
         _logger = new MareHubLogger(this, logger);

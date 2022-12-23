@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+
 namespace MareSynchronosStaticFilesServer;
 
 public class Program
@@ -6,6 +8,14 @@ public class Program
     {
         var hostBuilder = CreateHostBuilder(args);
         var host = hostBuilder.Build();
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var options = host.Services.GetService<IOptions<StaticFilesServerConfiguration>>();
+            var logger = host.Services.GetService<ILogger<Program>>();
+            logger.LogInformation("Loaded MareSynchronos Static Files Server Configuration");
+            logger.LogInformation(options.Value.ToString());
+        }
 
         host.Run();
     }

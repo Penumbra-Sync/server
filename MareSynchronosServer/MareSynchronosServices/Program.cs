@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Linq;
 
@@ -22,6 +23,11 @@ public class Program
             var metrics = services.GetRequiredService<MareMetrics>();
 
             metrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, dbContext.Users.Count());
+
+            var options = host.Services.GetService<IOptions<ServicesConfiguration>>();
+            var logger = host.Services.GetService<ILogger<Program>>();
+            logger.LogInformation("Loaded MareSynchronos Services Configuration");
+            logger.LogInformation(options.Value.ToString());
         }
 
         host.Run();

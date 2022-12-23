@@ -10,6 +10,7 @@ using Prometheus;
 using System.Collections.Generic;
 using MareSynchronosServices.Identity;
 using Microsoft.Extensions.Logging;
+using MareSynchronosShared.Utils;
 
 namespace MareSynchronosServices;
 
@@ -31,7 +32,7 @@ public class Startup
                 builder.MigrationsHistoryTable("_efmigrationshistory", "public");
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
-        }, Configuration.GetValue("DbContextPoolSize", 1024));
+        }, Configuration.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string> {
         }, new List<string> 
@@ -39,7 +40,8 @@ public class Startup
             MetricsAPI.GaugeUsersRegistered
         }));
 
-        services.AddTransient(_ => Configuration);
+        services.Configure<ServicesConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.AddSingleton(Configuration);
         services.AddSingleton<DiscordBotServices>();
         services.AddSingleton<IdentityHandler>();
         services.AddSingleton<CleanupService>();

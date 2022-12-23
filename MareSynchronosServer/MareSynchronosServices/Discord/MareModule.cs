@@ -12,7 +12,6 @@ using Prometheus;
 using MareSynchronosShared.Models;
 using MareSynchronosServices.Identity;
 using MareSynchronosShared.Metrics;
-using Microsoft.Extensions.Configuration;
 using System.Net.Http;
 using MareSynchronosShared.Utils;
 using System.Collections.Generic;
@@ -758,9 +757,9 @@ public class MareModule : InteractionModuleBase
                         user.IsAdmin = true;
                     }
 
-                    if (_botServices.Configuration.GetValue<bool>("PurgeUnusedAccounts"))
+                    if (_botServices.Configuration.PurgeUnusedAccounts)
                     {
-                        var purgedDays = _botServices.Configuration.GetValue<int>("PurgeUnusedAccountsPeriodInDays");
+                        var purgedDays = _botServices.Configuration.PurgeUnusedAccountsPeriodInDays;
                         user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
                     }
 

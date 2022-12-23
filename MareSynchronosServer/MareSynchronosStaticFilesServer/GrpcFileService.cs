@@ -3,6 +3,7 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -13,9 +14,9 @@ public class GrpcFileService : FileService.FileServiceBase
     private readonly ILogger<GrpcFileService> _logger;
     private readonly MareMetrics _metricsClient;
 
-    public GrpcFileService(MareDbContext mareDbContext, IConfiguration configuration, ILogger<GrpcFileService> logger, MareMetrics metricsClient)
+    public GrpcFileService(MareDbContext mareDbContext, IOptions<StaticFilesServerConfiguration> configuration, ILogger<GrpcFileService> logger, MareMetrics metricsClient)
     {
-        _basePath = configuration.GetRequiredSection("MareSynchronos")["CacheDirectory"];
+        _basePath = configuration.Value.CacheDirectory;
         _mareDbContext = mareDbContext;
         _logger = logger;
         _metricsClient = metricsClient;

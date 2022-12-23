@@ -8,7 +8,6 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,7 +24,7 @@ public class SystemInfoService : IHostedService, IDisposable
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IConfiguration configuration, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
         _services = services;

@@ -2,7 +2,7 @@
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
-using System.Globalization;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -11,19 +11,19 @@ public class FileCleanupService : IHostedService
     private readonly MareMetrics _metrics;
     private readonly ILogger<FileCleanupService> _logger;
     private readonly IServiceProvider _services;
-    private readonly IConfiguration _configuration;
+    private readonly StaticFilesServerConfiguration _configuration;
     private readonly bool _isMainServer;
     private readonly string _cacheDir;
     private CancellationTokenSource _cleanupCts;
 
-    public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IConfiguration configuration)
+    public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IOptions<StaticFilesServerConfiguration> configuration)
     {
         _metrics = metrics;
         _logger = logger;
         _services = services;
-        _configuration = configuration.GetRequiredSection("MareSynchronos");
-        _isMainServer = string.IsNullOrEmpty(_configuration.GetValue("RemoteCacheSourceUri", string.Empty));
-        _cacheDir = _configuration.GetValue<string>("CacheDirectory");
+        _configuration = configuration.Value;
+        _isMainServer = _configuration.RemoteCacheSourceUri == null;
+        _cacheDir = _configuration.CacheDirectory;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -67,21 +67,19 @@ public class FileCleanupService : IHostedService
 
     private void CleanUpFilesBeyondSizeLimit(MareDbContext dbContext, CancellationToken ct)
     {
-        var cacheSizeLimitInGiB = _configuration.GetValue<double>("CacheSizeHardLimitInGiB", -1);
-
-        if (cacheSizeLimitInGiB <= 0)
+        if (_configuration.CacheSizeHardLimitInGiB <= 0)
         {
             return;
         }
 
         try
         {
-            _logger.LogInformation("Cleaning up files beyond the cache size limit of {cacheSizeLimit} GiB", cacheSizeLimitInGiB);
+            _logger.LogInformation("Cleaning up files beyond the cache size limit of {cacheSizeLimit} GiB", _configuration.CacheSizeHardLimitInGiB);
             var allLocalFiles = Directory.EnumerateFiles(_cacheDir, "*", SearchOption.AllDirectories)
                 .Select(f => new FileInfo(f)).ToList()
                 .OrderBy(f => f.LastAccessTimeUtc).ToList();
             var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
-            long cacheSizeLimitInBytes = (long)ByteSize.FromGibiBytes(cacheSizeLimitInGiB).Bytes;
+            long cacheSizeLimitInBytes = (long)ByteSize.FromGibiBytes(_configuration.CacheSizeHardLimitInGiB).Bytes;
             while (totalCacheSizeInBytes > cacheSizeLimitInBytes && allLocalFiles.Any() && !ct.IsCancellationRequested)
             {
                 var oldestFile = allLocalFiles[0];
@@ -108,18 +106,15 @@ public class FileCleanupService : IHostedService
     {
         try
         {
-            var filesOlderThanDays = _configuration.GetValue("UnusedFileRetentionPeriodInDays", 7);
-            var forcedDeletionHours = _configuration.GetValue("ForcedDeletionOfFilesAfterHours", -1);
-
-            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", filesOlderThanDays);
-            if (forcedDeletionHours > 0)
+            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", _configuration.UnusedFileRetentionPeriodInDays);
+            if (_configuration.ForcedDeletionOfFilesAfterHours > 0)
             {
-                _logger.LogInformation("Cleaning up files written to longer than {hours}h ago", forcedDeletionHours);
+                _logger.LogInformation("Cleaning up files written to longer than {hours}h ago", _configuration.ForcedDeletionOfFilesAfterHours);
             }
 
             // clean up files in DB but not on disk or last access is expired
-            var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(filesOlderThanDays));
-            var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionHours));
+            var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(_configuration.UnusedFileRetentionPeriodInDays));
+            var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(_configuration.ForcedDeletionOfFilesAfterHours));
             var allFiles = dbContext.Files.ToList();
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
             {
@@ -138,7 +133,7 @@ public class FileCleanupService : IHostedService
                     if (_isMainServer)
                         dbContext.Files.Remove(fileCache);
                 }
-                else if (file != null && forcedDeletionHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
+                else if (file != null && _configuration.ForcedDeletionOfFilesAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
                 {
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);

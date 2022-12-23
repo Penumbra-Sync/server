@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServer;
 
@@ -40,6 +41,11 @@ public class Program
 
             metrics.SetGaugeTo(MetricsAPI.GaugePairs, context.ClientPairs.Count());
             metrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, context.ClientPairs.Count(p => p.IsPaused));
+
+            var options = host.Services.GetService<IOptions<ServerConfiguration>>();
+            var logger = host.Services.GetService<ILogger<Program>>();
+            logger.LogInformation("Loaded MareSynchronos Server Configuration");
+            logger.LogInformation(options.Value.ToString());
         }
 
         if (args.Length == 0 || !string.Equals(args[0], "dry", StringComparison.Ordinal))

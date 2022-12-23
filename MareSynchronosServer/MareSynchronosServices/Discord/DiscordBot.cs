@@ -10,10 +10,10 @@ using Discord.WebSocket;
 using MareSynchronosServices.Identity;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServices.Discord;
 
@@ -22,22 +22,19 @@ internal class DiscordBot : IHostedService
     private readonly DiscordBotServices _botServices;
     private readonly IdentityHandler _identityHandler;
     private readonly IServiceProvider _services;
-    private readonly IConfiguration _configuration;
+    private readonly ServicesConfiguration _configuration;
     private readonly ILogger<DiscordBot> _logger;
-    private string _discordAuthToken = string.Empty;
     private readonly DiscordSocketClient _discordClient;
     private CancellationTokenSource? _updateStatusCts;
     private CancellationTokenSource? _vanityUpdateCts;
 
-    public DiscordBot(DiscordBotServices botServices, IdentityHandler identityHandler, IServiceProvider services, IConfiguration configuration, ILogger<DiscordBot> logger)
+    public DiscordBot(DiscordBotServices botServices, IdentityHandler identityHandler, IServiceProvider services, IOptions<ServicesConfiguration> configuration, ILogger<DiscordBot> logger)
     {
         _botServices = botServices;
         _identityHandler = identityHandler;
         _services = services;
-        _configuration = configuration.GetRequiredSection("MareSynchronos");
+        _configuration = configuration.Value;
         _logger = logger;
-
-        _discordAuthToken = _configuration.GetValue<string>("DiscordBotToken");
 
         _discordClient = new(new DiscordSocketConfig()
         {
@@ -188,11 +185,9 @@ internal class DiscordBot : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(_discordAuthToken))
+        if (!string.IsNullOrEmpty(_configuration.DiscordBotToken))
         {
-            _discordAuthToken = _configuration.GetValue<string>("DiscordBotToken");
-
-            await _discordClient.LoginAsync(TokenType.Bot, _discordAuthToken).ConfigureAwait(false);
+            await _discordClient.LoginAsync(TokenType.Bot, _configuration.DiscordBotToken).ConfigureAwait(false);
             await _discordClient.StartAsync().ConfigureAwait(false);
 
             _discordClient.Ready += DiscordClient_Ready;
@@ -204,7 +199,7 @@ internal class DiscordBot : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(_discordAuthToken))
+        if (!string.IsNullOrEmpty(_configuration.DiscordBotToken))
         {
             await _botServices.Stop();
             _updateStatusCts?.Cancel();

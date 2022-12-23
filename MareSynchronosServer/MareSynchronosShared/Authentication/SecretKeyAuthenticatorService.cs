@@ -3,9 +3,9 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MareSynchronosShared.Authentication;
 
@@ -20,15 +20,13 @@ public class SecretKeyAuthenticatorService
     private readonly int _tempBanMinutes;
     private readonly List<string> _whitelistedIps;
 
-    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IConfiguration configuration, ILogger<SecretKeyAuthenticatorService> logger)
+    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IOptions<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
     {
         _logger = logger;
-        var config = configuration.GetRequiredSection("MareSynchronos");
-        _failedAttemptsForTempBan = config.GetValue<int>("FailedAuthForTempBan", 5);
-        logger.LogInformation("FailedAuthForTempBan: {num}", _failedAttemptsForTempBan);
-        _tempBanMinutes = config.GetValue<int>("TempBanDurationInMinutes", 30);
-        logger.LogInformation("TempBanMinutes: {num}", _tempBanMinutes);
-        _whitelistedIps = config.GetSection("WhitelistedIps").Get<List<string>>();
+        var config = configuration.Value;
+        _failedAttemptsForTempBan = config.FailedAuthForTempBan;
+        _tempBanMinutes = config.TempBanDurationInMinutes;
+        _whitelistedIps = config.WhitelistedIps;
         foreach (var ip in _whitelistedIps)
         {
             logger.LogInformation("Whitelisted IP: " + ip);

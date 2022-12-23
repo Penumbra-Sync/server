@@ -3,10 +3,10 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,15 +20,15 @@ public class CleanupService : IHostedService, IDisposable
     private readonly MareMetrics metrics;
     private readonly ILogger<CleanupService> _logger;
     private readonly IServiceProvider _services;
-    private readonly IConfiguration _configuration;
+    private readonly ServicesConfiguration _configuration;
     private Timer? _timer;
 
-    public CleanupService(MareMetrics metrics, ILogger<CleanupService> logger, IServiceProvider services, IConfiguration configuration)
+    public CleanupService(MareMetrics metrics, ILogger<CleanupService> logger, IServiceProvider services, IOptions<ServicesConfiguration> configuration)
     {
         this.metrics = metrics;
         _logger = logger;
         _services = services;
-        _configuration = configuration.GetRequiredSection("MareSynchronos");
+        _configuration = configuration.Value;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -68,17 +68,9 @@ public class CleanupService : IHostedService, IDisposable
 
         try
         {
-            if (!bool.TryParse(_configuration["PurgeUnusedAccounts"], out var purgeUnusedAccounts))
+            if (_configuration.PurgeUnusedAccounts)
             {
-                purgeUnusedAccounts = false;
-            }
-
-            if (purgeUnusedAccounts)
-            {
-                if (!int.TryParse(_configuration["PurgeUnusedAccountsPeriodInDays"], out var usersOlderThanDays))
-                {
-                    usersOlderThanDays = 14;
-                }
+                var usersOlderThanDays = _configuration.PurgeUnusedAccountsPeriodInDays;
 
                 _logger.LogInformation("Cleaning up users older than {usersOlderThanDays} days", usersOlderThanDays);
 
@@ -160,7 +152,7 @@ public class CleanupService : IHostedService, IDisposable
                 }
                 else
                 {
-                    _ = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.GetValue<int>("MaxExistingGroupsByUser", 3)).ConfigureAwait(false);
+                    _ = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.MaxExistingGroupsByUser).ConfigureAwait(false);
                 }
             }
 

@@ -2,8 +2,8 @@
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -17,8 +17,8 @@ public class GrpcClientIdentificationService : GrpcBaseService
     private readonly string _shardName;
     private readonly ILogger<GrpcClientIdentificationService> _logger;
     private readonly IdentificationService.IdentificationServiceClient _grpcIdentClient;
-    private readonly IdentificationService.IdentificationServiceClient grpcIdentClientStreamOut;
-    private readonly IdentificationService.IdentificationServiceClient grpcIdentClientStreamIn;
+    private readonly IdentificationService.IdentificationServiceClient _grpcIdentClientStreamOut;
+    private readonly IdentificationService.IdentificationServiceClient _grpcIdentClientStreamIn;
     private readonly MareMetrics _metrics;
     protected readonly ConcurrentDictionary<string, UidWithIdent> OnlineClients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, UidWithIdent> RemoteCachedIdents = new(StringComparer.Ordinal);
@@ -26,14 +26,13 @@ public class GrpcClientIdentificationService : GrpcBaseService
 
     public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient,
         IdentificationService.IdentificationServiceClient gprcIdentClientStreamOut,
-        IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, MareMetrics metrics, IConfiguration configuration) : base(logger)
+        IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, MareMetrics metrics, IOptions<ServerConfiguration> configuration) : base(logger)
     {
-        var config = configuration.GetSection("MareSynchronos");
-        _shardName = config.GetValue("ShardName", "Main");
+        _shardName = configuration.Value.ShardName;
         _logger = logger;
         _grpcIdentClient = gprcIdentClient;
-        this.grpcIdentClientStreamOut = gprcIdentClientStreamOut;
-        this.grpcIdentClientStreamIn = gprcIdentClientStreamIn;
+        _grpcIdentClientStreamOut = gprcIdentClientStreamOut;
+        _grpcIdentClientStreamIn = gprcIdentClientStreamIn;
         _metrics = metrics;
     }
 
@@ -136,7 +135,7 @@ public class GrpcClientIdentificationService : GrpcBaseService
     {
         try
         {
-            using var stream = grpcIdentClientStreamOut.SendStreamIdentStatusChange(cancellationToken: cts);
+            using var stream = _grpcIdentClientStreamOut.SendStreamIdentStatusChange(cancellationToken: cts);
             _logger.LogInformation("Starting Send Online Client Data stream");
             await stream.RequestStream.WriteAsync(new IdentChangeMessage()
             {
@@ -169,7 +168,7 @@ public class GrpcClientIdentificationService : GrpcBaseService
     {
         try
         {
-            using var stream = grpcIdentClientStreamIn.ReceiveStreamIdentStatusChange(new ServerMessage()
+            using var stream = _grpcIdentClientStreamIn.ReceiveStreamIdentStatusChange(new ServerMessage()
             {
                 ServerId = _shardName,
             });

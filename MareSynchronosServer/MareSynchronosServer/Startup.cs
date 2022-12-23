@@ -24,6 +24,7 @@ using System.Net.Http;
 using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
 using Microsoft.Extensions.Logging;
+using MareSynchronosShared.Utils;
 
 namespace MareSynchronosServer;
 
@@ -40,6 +41,8 @@ public class Startup
     {
         services.AddHttpContextAccessor();
 
+        services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<IpRateLimitOptions>(Configuration.GetSection("IpRateLimiting"));
         services.Configure<IpRateLimitPolicies>(Configuration.GetSection("IpRateLimitPolicies"));
         services.AddTransient(_ => Configuration);
@@ -96,14 +99,14 @@ public class Startup
 
         services.AddGrpcClient<FileService.FileServiceClient>(c =>
         {
-            c.Address = new Uri(mareConfig.GetValue<string>("StaticFileServiceAddress"));
+            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.StaticFileServiceAddress)));
         }).ConfigureChannel(c =>
         {
             c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
         });
         services.AddGrpcClient<IdentificationService.IdentificationServiceClient>(c =>
         {
-            c.Address = new Uri(mareConfig.GetValue<string>("ServiceAddress"));
+            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.ServiceAddress)));
         }).ConfigureChannel(c =>
         {
             c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
@@ -126,7 +129,7 @@ public class Startup
                 builder.MigrationsAssembly("MareSynchronosShared");
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
-        }, mareConfig.GetValue("DbContextPoolSize", 1024));
+        }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
 
         services.AddAuthentication(SecretKeyAuthenticationHandler.AuthScheme)
             .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { options.Validate(); });
@@ -168,7 +171,7 @@ public class Startup
         });
 
         // add redis related options
-        var redis = mareConfig.GetValue("RedisConnectionString", string.Empty);
+        var redis = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
         if (!string.IsNullOrEmpty(redis))
         {
             signalRServiceBuilder.AddStackExchangeRedis(redis, options =>
