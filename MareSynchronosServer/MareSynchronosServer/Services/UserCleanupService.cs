@@ -1,50 +1,114 @@
 ﻿using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace MareSynchronosServices;
+namespace MareSynchronosServer.Services;
 
-public class CleanupService : IHostedService, IDisposable
+public class UserCleanupService : IHostedService
 {
     private readonly MareMetrics metrics;
-    private readonly ILogger<CleanupService> _logger;
+    private readonly ILogger<UserCleanupService> _logger;
     private readonly IServiceProvider _services;
-    private readonly ServicesConfiguration _configuration;
-    private Timer? _timer;
+    private readonly IConfigurationService<ServerConfiguration> _configuration;
+    private CancellationTokenSource _cleanupCts;
 
-    public CleanupService(MareMetrics metrics, ILogger<CleanupService> logger, IServiceProvider services, IOptions<ServicesConfiguration> configuration)
+    public UserCleanupService(MareMetrics metrics, ILogger<UserCleanupService> logger, IServiceProvider services, IConfigurationService<ServerConfiguration> configuration)
     {
         this.metrics = metrics;
         _logger = logger;
         _services = services;
-        _configuration = configuration.Value;
+        _configuration = configuration;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Cleanup Service started");
+        _cleanupCts = new();
 
-        _timer = new Timer(CleanUp, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
+        _ = CleanUp(_cleanupCts.Token);
 
         return Task.CompletedTask;
     }
 
-    private async void CleanUp(object state)
+    private async Task CleanUp(CancellationToken ct)
     {
-        using var scope = _services.CreateScope();
-        using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+        while (!ct.IsCancellationRequested)
+        {
+            using var scope = _services.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
+            CleanUpOutdatedLodestoneAuths(dbContext);
+
+            await PurgeUnusedAccounts(dbContext).ConfigureAwait(false);
+
+            await PurgeTempInvites(dbContext).ConfigureAwait(false);
+
+            dbContext.SaveChanges();
+
+            var now = DateTime.Now;
+            TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
+            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 10, 0);
+            var span = futureTime.AddMinutes(10) - currentTime;
+
+            _logger.LogInformation("User Cleanup Complete, next run at {date}", now.Add(span));
+            await Task.Delay(span, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task PurgeTempInvites(MareDbContext dbContext)
+    {
+        try
+        {
+            var tempInvites = await dbContext.GroupTempInvites.ToListAsync().ConfigureAwait(false);
+            dbContext.RemoveRange(tempInvites.Where(i => i.ExpirationDate < DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during Temp Invite purge");
+        }
+    }
+
+    private async Task PurgeUnusedAccounts(MareDbContext dbContext)
+    {
+        try
+        {
+            if (_configuration.GetValueOrDefault(nameof(ServerConfiguration.PurgeUnusedAccounts), false))
+            {
+                var usersOlderThanDays = _configuration.GetValueOrDefault(nameof(ServerConfiguration.PurgeUnusedAccountsPeriodInDays), 14);
+                var maxGroupsByUser = _configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 3);
+
+                _logger.LogInformation("Cleaning up users older than {usersOlderThanDays} days", usersOlderThanDays);
+
+                var allUsers = dbContext.Users.Where(u => string.IsNullOrEmpty(u.Alias)).ToList();
+                List<User> usersToRemove = new();
+                foreach (var user in allUsers)
+                {
+                    if (user.LastLoggedIn < DateTime.UtcNow - TimeSpan.FromDays(usersOlderThanDays))
+                    {
+                        _logger.LogInformation("User outdated: {userUID}", user.UID);
+                        usersToRemove.Add(user);
+                    }
+                }
+
+                foreach (var user in usersToRemove)
+                {
+                    await SharedDbFunctions.PurgeUser(_logger, user, dbContext, maxGroupsByUser).ConfigureAwait(false);
+                }
+            }
+
+            _logger.LogInformation("Cleaning up unauthorized users");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error during user purge");
+        }
+    }
+
+    private void CleanUpOutdatedLodestoneAuths(MareDbContext dbContext)
+    {
         try
         {
             _logger.LogInformation($"Cleaning up expired lodestone authentications");
@@ -65,52 +129,6 @@ public class CleanupService : IHostedService, IDisposable
         {
             _logger.LogWarning(ex, "Error during expired auths cleanup");
         }
-
-        try
-        {
-            if (_configuration.PurgeUnusedAccounts)
-            {
-                var usersOlderThanDays = _configuration.PurgeUnusedAccountsPeriodInDays;
-
-                _logger.LogInformation("Cleaning up users older than {usersOlderThanDays} days", usersOlderThanDays);
-
-                var allUsers = dbContext.Users.Where(u => string.IsNullOrEmpty(u.Alias)).ToList();
-                List<User> usersToRemove = new();
-                foreach (var user in allUsers)
-                {
-                    if (user.LastLoggedIn < (DateTime.UtcNow - TimeSpan.FromDays(usersOlderThanDays)))
-                    {
-                        _logger.LogInformation("User outdated: {userUID}", user.UID);
-                        usersToRemove.Add(user);
-                    }
-                }
-
-                foreach (var user in usersToRemove)
-                {
-                    await PurgeUser(user, dbContext);
-                }
-            }
-
-            _logger.LogInformation("Cleaning up unauthorized users");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error during user purge");
-        }
-
-        try
-        {
-            var tempInvites = await dbContext.GroupTempInvites.ToListAsync();
-            dbContext.RemoveRange(tempInvites.Where(i => i.ExpirationDate < DateTime.UtcNow));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error during Temp Invite purge");
-        }
-
-        _logger.LogInformation($"Cleanup complete");
-
-        dbContext.SaveChanges();
     }
 
     public async Task PurgeUser(User user, MareDbContext dbContext)
@@ -152,13 +170,13 @@ public class CleanupService : IHostedService, IDisposable
                 }
                 else
                 {
-                    _ = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.MaxExistingGroupsByUser).ConfigureAwait(false);
+                    _ = await SharedDbFunctions.MigrateOrDeleteGroup(dbContext, userGroupPair.Group, groupPairs, _configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxExistingGroupsByUser), 3)).ConfigureAwait(false);
                 }
             }
 
             dbContext.GroupPairs.Remove(userGroupPair);
 
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
         _logger.LogInformation("User purged: {uid}", user.UID);
@@ -166,20 +184,15 @@ public class CleanupService : IHostedService, IDisposable
         dbContext.Auth.Remove(auth);
         dbContext.Users.Remove(user);
 
-        await dbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         metrics.DecGauge(MetricsAPI.GaugeUsersRegistered, 1);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        _timer?.Change(Timeout.Infinite, 0);
+        _cleanupCts.Cancel();
 
         return Task.CompletedTask;
-    }
-
-    public void Dispose()
-    {
-        _timer?.Dispose();
     }
 }

@@ -1,32 +1,45 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 
 namespace MareSynchronosShared.Utils;
 
-public class MareConfigurationBase
+public class MareConfigurationBase : IMareConfiguration
 {
     public int DbContextPoolSize { get; set; } = 100;
+    public string ShardName { get; set; } = string.Empty;
 
-    public override string ToString()
+    public T GetValue<T>(string key)
     {
-        StringBuilder sb = new();
-        sb.AppendLine($"{nameof(DbContextPoolSize)} => {DbContextPoolSize}");
-        return sb.ToString();
+        var prop = GetType().GetProperty(key);
+        if (prop == null) throw new KeyNotFoundException(key);
+        if (prop.PropertyType != typeof(T)) throw new ArgumentException($"Requested {key} with T:{typeof(T)}, where {key} is {prop.PropertyType}");
+        return (T)prop.GetValue(this);
     }
-}
 
-public class MareConfigurationAuthBase : MareConfigurationBase
-{
-    public int DbContextPoolSize { get; set; } = 100;
-    public int FailedAuthForTempBan { get; set; } = 5;
-    public int TempBanDurationInMinutes { get; set; } = 5;
-    public List<string> WhitelistedIps { get; set; } = new();
+    public T GetValueOrDefault<T>(string key, T defaultValue)
+    {
+        var prop = GetType().GetProperty(key);
+        if (prop.PropertyType != typeof(T)) throw new ArgumentException($"Requested {key} with T:{typeof(T)}, where {key} is {prop.PropertyType}");
+        if (prop == null) return defaultValue;
+        return (T)prop.GetValue(this);
+    }
+
+    public string SerializeValue(string key, string defaultValue)
+    {
+        var prop = GetType().GetProperty(key);
+        if (prop == null) return defaultValue;
+        if (prop.GetCustomAttribute<RemoteConfigurationAttribute>() == null) return defaultValue;
+        return JsonSerializer.Serialize(prop.GetValue(this), prop.PropertyType);
+    }
 
     public override string ToString()
     {
         StringBuilder sb = new();
-        sb.AppendLine($"{nameof(FailedAuthForTempBan)} => {FailedAuthForTempBan}");
-        sb.AppendLine($"{nameof(TempBanDurationInMinutes)} => {TempBanDurationInMinutes}");
-        sb.AppendLine($"{nameof(WhitelistedIps)} => {string.Join(", ", WhitelistedIps)}");
+        sb.AppendLine(base.ToString());
+        sb.AppendLine($"{nameof(ShardName)} => {ShardName}");
+        sb.AppendLine($"{nameof(DbContextPoolSize)} => {DbContextPoolSize}");
         return sb.ToString();
     }
 }

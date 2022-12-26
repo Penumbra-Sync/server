@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+﻿using System.Text.RegularExpressions;
 using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
@@ -72,7 +68,7 @@ public partial class MareHub
         var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
         var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(ownIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Where(t => !string.IsNullOrEmpty(t)).Distinct(System.StringComparer.Ordinal).ToList();
+        return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Where(t => !string.IsNullOrEmpty(t)).Distinct(StringComparer.Ordinal).ToList();
     }
 
     [Authorize(Policy = "Identified")]
@@ -152,8 +148,8 @@ public partial class MareHub
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
-        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => _clientIdentService.GetCharacterIdentForUid(f), System.StringComparer.Ordinal)
-            .Where(f => visibleCharacterIds.Contains(f.Value, System.StringComparer.Ordinal));
+        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => _clientIdentService.GetCharacterIdentForUid(f), StringComparer.Ordinal)
+            .Where(f => visibleCharacterIds.Contains(f.Value, StringComparer.Ordinal));
 
         var ownIdent = _clientIdentService.GetCharacterIdentForUid(AuthenticatedUserId);
 
@@ -172,7 +168,7 @@ public partial class MareHub
 
         // don't allow adding yourself or nothing
         uid = uid.Trim();
-        if (string.Equals(uid, AuthenticatedUserId, System.StringComparison.Ordinal) || string.IsNullOrWhiteSpace(uid)) return;
+        if (string.Equals(uid, AuthenticatedUserId, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(uid)) return;
 
         // grab other user, check if it exists and if a pair already exists
         var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
@@ -231,7 +227,7 @@ public partial class MareHub
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
-        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, uid, System.StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
+        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, uid, StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
         {
             await Clients.User(user.UID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
             await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
@@ -243,7 +239,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused));
 
-        if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
+        if (string.Equals(otherUserUid, AuthenticatedUserId, StringComparison.Ordinal)) return;
         ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == AuthenticatedUserId && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
         if (pair == null) return;
 
@@ -288,7 +284,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(otherUserUid));
 
-        if (string.Equals(otherUserUid, AuthenticatedUserId, System.StringComparison.Ordinal)) return;
+        if (string.Equals(otherUserUid, AuthenticatedUserId, StringComparison.Ordinal)) return;
 
         // check if client pair even exists
         ClientPair callerPair =
@@ -331,7 +327,7 @@ public partial class MareHub
         if (!callerHadPaused && otherHadPaused) return;
 
         var allUsers = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
-        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, otherUserUid, System.StringComparison.Ordinal));
+        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, otherUserUid, StringComparison.Ordinal));
         var isPausedInGroup = pauseEntry == null || pauseEntry.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection;
 
         // if neither user had paused each other and both are in unpaused groups, state will be online for both, do nothing

@@ -1,6 +1,4 @@
 ﻿using MareSynchronos.API;
-using System.Threading.Tasks;
-using System;
 
 namespace MareSynchronosServer.Hubs
 {

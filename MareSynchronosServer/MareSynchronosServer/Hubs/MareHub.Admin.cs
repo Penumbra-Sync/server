@@ -1,7 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using MareSynchronos.API;
+﻿using MareSynchronos.API;
 using MareSynchronosShared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -11,6 +8,7 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
+    // TODO: remove all of this and migrate it to the discord bot eventually
     private List<string> OnlineAdmins => _dbContext.Users.Where(u => (u.IsModerator || u.IsAdmin)).Select(u => u.UID).ToList();
 
     [Authorize(Policy = "Admin")]
@@ -116,11 +114,11 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         await Clients.Users(OnlineAdmins).Client_AdminUpdateOrAddBannedUser(dto).ConfigureAwait(false);
-        var bannedUser = _clientIdentService.GetUidForCharacterIdent(dto.CharacterHash);
-        if (!string.IsNullOrEmpty(bannedUser))
-        {
-            await Clients.User(bannedUser).Client_AdminForcedReconnect().ConfigureAwait(false);
-        }
+        //var bannedUser = _clientIdentService.GetUidForCharacterIdent(dto.CharacterHash);
+        //if (!string.IsNullOrEmpty(bannedUser))
+        //{
+        //    await Clients.User(bannedUser).Client_AdminForcedReconnect().ConfigureAwait(false);
+        //}
     }
 
     [Authorize(Policy = "Admin")]

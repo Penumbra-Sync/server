@@ -1,8 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Text.Encodings.Web;
-using MareSynchronosServer;
-using MareSynchronosShared.Data;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,7 +12,6 @@ public class SecretKeyAuthenticationHandler : AuthenticationHandler<Authenticati
 {
     public const string AuthScheme = "SecretKeyGrpcAuth";
 
-    private readonly MareDbContext _mareDbContext;
     private readonly IHttpContextAccessor _accessor;
     private readonly SecretKeyAuthenticatorService secretKeyAuthenticatorService;
 
@@ -26,6 +24,12 @@ public class SecretKeyAuthenticationHandler : AuthenticationHandler<Authenticati
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        var endpoint = Context.GetEndpoint();
+        if (endpoint?.Metadata?.GetMetadata<IAllowAnonymous>() != null)
+        {
+            return AuthenticateResult.NoResult();
+        }
+
         if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
             authHeader = string.Empty;

@@ -1,15 +1,10 @@
-﻿using System;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Security.Claims;
 using AspNetCoreRateLimit;
-using Microsoft.AspNetCore.Http;
+using MareSynchronosShared;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace MareSynchronosServer.Utils;
+namespace MareSynchronosServer.Hubs;
 public class SignalRLimitFilter : IHubFilter
 {
     private readonly IRateLimitProcessor _processor;

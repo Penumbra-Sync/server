@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,25 +14,15 @@ public class SecretKeyAuthenticatorService
 {
     private readonly MareMetrics _metrics;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IConfigurationService<MareConfigurationAuthBase> _configurationService;
     private readonly ILogger<SecretKeyAuthenticatorService> _logger;
     private readonly ConcurrentDictionary<string, SecretKeyAuthReply> _cachedPositiveResponses = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SecretKeyFailedAuthorization?> _failedAuthorizations = new(StringComparer.Ordinal);
-    private readonly int _failedAttemptsForTempBan;
-    private readonly int _tempBanMinutes;
-    private readonly List<string> _whitelistedIps;
 
-    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IOptions<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
+    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IConfigurationService<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
     {
         _logger = logger;
-        var config = configuration.Value;
-        _failedAttemptsForTempBan = config.FailedAuthForTempBan;
-        _tempBanMinutes = config.TempBanDurationInMinutes;
-        _whitelistedIps = config.WhitelistedIps;
-        foreach (var ip in _whitelistedIps)
-        {
-            logger.LogInformation("Whitelisted IP: " + ip);
-        }
-
+        _configurationService = configuration;
         _metrics = metrics;
         _serviceScopeFactory = serviceScopeFactory;
     }
@@ -46,7 +37,8 @@ public class SecretKeyAuthenticatorService
             return cachedPositiveResponse;
         }
 
-        if (_failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization) && existingFailedAuthorization.FailedAttempts > _failedAttemptsForTempBan)
+        if (_failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization)
+            && existingFailedAuthorization.FailedAttempts > _configurationService.GetValueOrDefault(nameof(MareConfigurationAuthBase.FailedAuthForTempBan), 5))
         {
             if (existingFailedAuthorization.ResetTask == null)
             {
@@ -54,7 +46,7 @@ public class SecretKeyAuthenticatorService
 
                 existingFailedAuthorization.ResetTask = Task.Run(async () =>
                 {
-                    await Task.Delay(TimeSpan.FromMinutes(_tempBanMinutes)).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromMinutes(_configurationService.GetValueOrDefault(nameof(MareConfigurationAuthBase.TempBanDurationInMinutes), 5))).ConfigureAwait(false);
 
                 }).ContinueWith((t) =>
                 {
@@ -96,7 +88,8 @@ public class SecretKeyAuthenticatorService
         _metrics.IncCounter(MetricsAPI.CounterAuthenticationFailures);
 
         _logger.LogWarning("Failed authorization from {ip}", ip);
-        if (!_whitelistedIps.Any(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
+        var whitelisted = _configurationService.GetValueOrDefault(nameof(MareConfigurationAuthBase.WhitelistedIps), new List<string>());
+        if (!whitelisted.Any(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
         {
             if (_failedAuthorizations.TryGetValue(ip, out var auth))
             {

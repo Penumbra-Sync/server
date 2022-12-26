@@ -2,17 +2,12 @@
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using System;
+using MareSynchronosShared.Utils;
 using System.Collections.Concurrent;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MareSynchronosServer.Services;
 
-public class GrpcClientIdentificationService : GrpcBaseService
+public class GrpcClientIdentificationService : GrpcBaseService, IClientIdentificationService
 {
     private readonly string _shardName;
     private readonly ILogger<GrpcClientIdentificationService> _logger;
@@ -22,13 +17,15 @@ public class GrpcClientIdentificationService : GrpcBaseService
     private readonly MareMetrics _metrics;
     protected readonly ConcurrentDictionary<string, UidWithIdent> OnlineClients = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, UidWithIdent> RemoteCachedIdents = new(StringComparer.Ordinal);
-    private ConcurrentQueue<IdentChange> _identChangeQueue = new();
+    private readonly ConcurrentQueue<IdentChange> _identChangeQueue = new();
 
-    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger, IdentificationService.IdentificationServiceClient gprcIdentClient,
+    public GrpcClientIdentificationService(ILogger<GrpcClientIdentificationService> logger,
+        IdentificationService.IdentificationServiceClient gprcIdentClient,
         IdentificationService.IdentificationServiceClient gprcIdentClientStreamOut,
-        IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, MareMetrics metrics, IOptions<ServerConfiguration> configuration) : base(logger)
+        IdentificationService.IdentificationServiceClient gprcIdentClientStreamIn, 
+        MareMetrics metrics, IConfigurationService<ServerConfiguration> configuration) : base(logger)
     {
-        _shardName = configuration.Value.ShardName;
+        _shardName = configuration.GetValueOrDefault(nameof(ServerConfiguration.ShardName), string.Empty);
         _logger = logger;
         _grpcIdentClient = gprcIdentClient;
         _grpcIdentClientStreamOut = gprcIdentClientStreamOut;
@@ -171,7 +168,7 @@ public class GrpcClientIdentificationService : GrpcBaseService
             using var stream = _grpcIdentClientStreamIn.ReceiveStreamIdentStatusChange(new ServerMessage()
             {
                 ServerId = _shardName,
-            });
+            }, cancellationToken: cts);
             _logger.LogInformation("Starting Receive Online Client Data stream");
             await foreach (var cur in stream.ResponseStream.ReadAllAsync(cts).ConfigureAwait(false))
             {
@@ -201,7 +198,7 @@ public class GrpcClientIdentificationService : GrpcBaseService
 
     protected override async Task StopAsyncInternal(CancellationToken cancellationToken)
     {
-        await ExecuteOnGrpc(_grpcIdentClient.ClearIdentsForServerAsync(new ServerMessage() { ServerId = _shardName })).ConfigureAwait(false);
+        await ExecuteOnGrpc(_grpcIdentClient.ClearIdentsForServerAsync(new ServerMessage() { ServerId = _shardName }, cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
 
     protected override async Task OnGrpcRestore()

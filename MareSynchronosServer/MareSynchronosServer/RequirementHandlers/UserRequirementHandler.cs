@@ -1,23 +1,19 @@
-﻿using System.Threading.Tasks;
-using System;
-using System.Linq;
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MareSynchronosServer.Services;
 
 namespace MareSynchronosServer.RequirementHandlers;
 
 public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubInvocationContext>
 {
-    private readonly GrpcClientIdentificationService identClient;
+    private readonly IClientIdentificationService identClient;
     private readonly MareDbContext dbContext;
     private readonly ILogger<UserRequirementHandler> logger;
 
-    public UserRequirementHandler(GrpcClientIdentificationService identClient, MareDbContext dbContext, ILogger<UserRequirementHandler> logger)
+    public UserRequirementHandler(IClientIdentificationService identClient, MareDbContext dbContext, ILogger<UserRequirementHandler> logger)
     {
         this.identClient = identClient;
         this.dbContext = dbContext;

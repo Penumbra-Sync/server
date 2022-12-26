@@ -1,32 +1,30 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using MareSynchronos.API;
+﻿using MareSynchronos.API;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosServer.Services;
 
 public class SystemInfoService : IHostedService, IDisposable
 {
     private readonly MareMetrics _mareMetrics;
+    private readonly IConfigurationService<ServerConfiguration> _config;
     private readonly IServiceProvider _services;
-    private readonly GrpcClientIdentificationService _clientIdentService;
+    private readonly IClientIdentificationService _clientIdentService;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub, IMareHub> _hubContext;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
-    public SystemInfoService(MareMetrics mareMetrics, IServiceProvider services, GrpcClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
+    public SystemInfoService(MareMetrics mareMetrics, IConfigurationService<ServerConfiguration> configurationService, IServiceProvider services,
+        IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
     {
         _mareMetrics = mareMetrics;
+        _config = configurationService;
         _services = services;
         _clientIdentService = clientIdentService;
         _logger = logger;
@@ -49,13 +47,15 @@ public class SystemInfoService : IHostedService, IDisposable
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
-        var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
-        if (string.IsNullOrEmpty(secondaryServer) || string.Equals(secondaryServer, "0", StringComparison.Ordinal))
+        if (_config.IsMain)
         {
+            var onlineUsers = (int)_clientIdentService.GetOnlineUsers().Result;
             SystemInfoDto = new SystemInfoDto()
             {
-                OnlineUsers = (int)_clientIdentService.GetOnlineUsers().Result,
+                OnlineUsers = onlineUsers,
             };
+
+            _logger.LogInformation("Sending System Info, Online Users: {onlineUsers}", onlineUsers);
 
             _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);
 

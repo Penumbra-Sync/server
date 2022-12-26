@@ -1,41 +1,34 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.Interactions;
 using Discord.Rest;
 using Discord.WebSocket;
-using MareSynchronosServices.Identity;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
+using static MareSynchronosShared.Protos.IdentificationService;
 
 namespace MareSynchronosServices.Discord;
 
 internal class DiscordBot : IHostedService
 {
     private readonly DiscordBotServices _botServices;
-    private readonly IdentityHandler _identityHandler;
     private readonly IServiceProvider _services;
-    private readonly ServicesConfiguration _configuration;
+    private readonly IConfigurationService<ServicesConfiguration> _configurationService;
     private readonly ILogger<DiscordBot> _logger;
+    private readonly IdentificationServiceClient _identificationServiceClient;
     private readonly DiscordSocketClient _discordClient;
     private CancellationTokenSource? _updateStatusCts;
     private CancellationTokenSource? _vanityUpdateCts;
 
-    public DiscordBot(DiscordBotServices botServices, IdentityHandler identityHandler, IServiceProvider services, IOptions<ServicesConfiguration> configuration, ILogger<DiscordBot> logger)
+    public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration, 
+        ILogger<DiscordBot> logger, IdentificationServiceClient identificationServiceClient)
     {
         _botServices = botServices;
-        _identityHandler = identityHandler;
         _services = services;
-        _configuration = configuration.Value;
+        _configurationService = configuration;
         _logger = logger;
-
+        this._identificationServiceClient = identificationServiceClient;
         _discordClient = new(new DiscordSocketConfig()
         {
             DefaultRetryMode = RetryMode.AlwaysRetry
@@ -176,7 +169,7 @@ internal class DiscordBot : IHostedService
         _updateStatusCts = new();
         while (!_updateStatusCts.IsCancellationRequested)
         {
-            var onlineUsers = _identityHandler.GetOnlineUsers(string.Empty);
+            var onlineUsers = await _identificationServiceClient.GetOnlineUserCountAsync(new MareSynchronosShared.Protos.ServerMessage());
             _logger.LogInformation("Users online: " + onlineUsers);
             await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
@@ -185,9 +178,10 @@ internal class DiscordBot : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(_configuration.DiscordBotToken))
+        var token = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.DiscordBotToken), string.Empty);
+        if (!string.IsNullOrEmpty(token))
         {
-            await _discordClient.LoginAsync(TokenType.Bot, _configuration.DiscordBotToken).ConfigureAwait(false);
+            await _discordClient.LoginAsync(TokenType.Bot, token).ConfigureAwait(false);
             await _discordClient.StartAsync().ConfigureAwait(false);
 
             _discordClient.Ready += DiscordClient_Ready;
@@ -199,7 +193,7 @@ internal class DiscordBot : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrEmpty(_configuration.DiscordBotToken))
+        if (!string.IsNullOrEmpty(_configurationService.GetValueOrDefault(nameof(ServicesConfiguration.DiscordBotToken), string.Empty)))
         {
             await _botServices.Stop();
             _updateStatusCts?.Cancel();

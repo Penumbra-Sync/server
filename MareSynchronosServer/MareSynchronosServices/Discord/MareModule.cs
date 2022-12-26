@@ -2,20 +2,14 @@
 using Discord.Interactions;
 using MareSynchronosShared.Data;
 using System.Text.RegularExpressions;
-using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Discord.WebSocket;
-using System.Linq;
 using Prometheus;
 using MareSynchronosShared.Models;
-using MareSynchronosServices.Identity;
 using MareSynchronosShared.Metrics;
-using System.Net.Http;
 using MareSynchronosShared.Utils;
-using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
+using MareSynchronosShared.Services;
+using static MareSynchronosShared.Protos.IdentificationService;
 
 namespace MareSynchronosServices.Discord;
 
@@ -30,17 +24,21 @@ public class LodestoneModal : IModal
 
 public class MareModule : InteractionModuleBase
 {
+    private readonly ILogger<MareModule> _logger;
     private readonly IServiceProvider _services;
     private readonly DiscordBotServices _botServices;
-    private readonly IdentityHandler _identityHandler;
-    private readonly CleanupService _cleanupService;
+    private readonly IdentificationServiceClient _identificationServiceClient;
+    private readonly IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
+    private Random random = new();
 
-    public MareModule(IServiceProvider services, DiscordBotServices botServices, IdentityHandler identityHandler, CleanupService cleanupService)
+    public MareModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
+        IdentificationServiceClient identificationServiceClient, IConfigurationService<ServerConfiguration> mareClientConfigurationService)
     {
+        _logger = logger;
         _services = services;
         _botServices = botServices;
-        _identityHandler = identityHandler;
-        _cleanupService = cleanupService;
+        _identificationServiceClient = identificationServiceClient;
+        _mareClientConfigurationService = mareClientConfigurationService;
     }
 
     [SlashCommand("register", "Starts the registration process for the Mare Synchronos server of this Discord")]
@@ -258,7 +256,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userToCheckForDiscordId).ConfigureAwait(false);
         var dbUser = lodestoneUser.User;
         var auth = await db.Auth.SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
-        var identity = await _identityHandler.GetIdentForuid(dbUser.UID).ConfigureAwait(false);
+        var identity = await _identificationServiceClient.GetIdentForUidAsync(new MareSynchronosShared.Protos.UidMessage { Uid = dbUser.UID });
         var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
 
@@ -271,7 +269,7 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Vanity UID", dbUser.Alias);
         }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
-        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.CharacterIdent));
+        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.Ident));
         eb.AddField("Hashed Secret Key", auth.HashedKey);
         eb.AddField("Joined Syncshells", groupsJoined.Count);
         eb.AddField("Owned Syncshells", groups.Count);
@@ -285,9 +283,9 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
         }
 
-        if (isAdminCall && !string.IsNullOrEmpty(identity.CharacterIdent))
+        if (isAdminCall && !string.IsNullOrEmpty(identity.Ident))
         {
-            eb.AddField("Character Ident", identity.CharacterIdent);
+            eb.AddField("Character Ident", identity.Ident);
         }
 
         return eb;
@@ -635,7 +633,9 @@ public class MareModule : InteractionModuleBase
         {
             if (discordAuthedUser.User != null)
             {
-                await _cleanupService.PurgeUser(discordAuthedUser.User, db);
+                var maxGroupsByUser = _mareClientConfigurationService.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 3);
+
+                await SharedDbFunctions.PurgeUser(_logger, discordAuthedUser.User, db, maxGroupsByUser);
             }
             else
             {
@@ -657,7 +657,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
         if (lodestoneAuth != null && _botServices.DiscordRelinkLodestoneMapping.ContainsKey(cmd.User.Id))
         {
-            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
             var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordRelinkLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
@@ -731,7 +731,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
         if (lodestoneAuth != null && _botServices.DiscordLodestoneMapping.ContainsKey(cmd.User.Id))
         {
-            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
             var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
@@ -757,11 +757,7 @@ public class MareModule : InteractionModuleBase
                         user.IsAdmin = true;
                     }
 
-                    if (_botServices.Configuration.PurgeUnusedAccounts)
-                    {
-                        var purgedDays = _botServices.Configuration.PurgeUnusedAccountsPeriodInDays;
-                        user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
-                    }
+                    user.LastLoggedIn = DateTime.UtcNow;
 
                     var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
                     var auth = new Auth()

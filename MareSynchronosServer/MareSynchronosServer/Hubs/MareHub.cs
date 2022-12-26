@@ -1,19 +1,16 @@
-﻿using System;
-using System.Linq;
-using System.Security.Claims;
-using System.Threading.Tasks;
+﻿using System.Security.Claims;
 using MareSynchronos.API;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
+using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -23,7 +20,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly FileService.FileServiceClient _fileServiceClient;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
-    private readonly GrpcClientIdentificationService _clientIdentService;
+    private readonly IClientIdentificationService _clientIdentService;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _cdnFullUri;
@@ -33,18 +30,18 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxGroupUserCount;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
-        MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService, IOptions<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        GrpcClientIdentificationService clientIdentService)
+        MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
+        IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
+        IClientIdentificationService clientIdentService)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        var config = configuration.Value;
-        _cdnFullUri = config.CdnFullUrl;
-        _shardName = config.ShardName;
-        _maxExistingGroupsByUser = config.MaxExistingGroupsByUser;
-        _maxJoinedGroupsByUser = config.MaxJoinedGroupsByUser;
-        _maxGroupUserCount = config.MaxGroupUserCount;
+        _cdnFullUri = configuration.GetValue<Uri>(nameof(ServerConfiguration.CdnFullUrl));
+        _shardName = configuration.GetValue<string>(nameof(ServerConfiguration.ShardName));
+        _maxExistingGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxExistingGroupsByUser), 3);
+        _maxJoinedGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxJoinedGroupsByUser), 6);
+        _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
         _logger = new MareHubLogger(this, logger);
@@ -109,14 +106,14 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     }
 
     [Authorize(Policy = "Authenticated")]
-    public async Task<bool> CheckClientHealth()
+    public Task<bool> CheckClientHealth()
     {
         var needsReconnect = !_clientIdentService.IsOnCurrentServer(AuthenticatedUserId);
         if (needsReconnect)
         {
             _logger.LogCallWarning(MareHubLogger.Args(needsReconnect));
         }
-        return needsReconnect;
+        return Task.FromResult(needsReconnect);
     }
 
     public override async Task OnConnectedAsync()

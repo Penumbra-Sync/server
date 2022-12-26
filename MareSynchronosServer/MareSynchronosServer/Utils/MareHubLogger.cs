@@ -1,5 +1,4 @@
 ﻿using MareSynchronosServer.Hubs;
-using Microsoft.Extensions.Logging;
 using System.Runtime.CompilerServices;
 
 namespace MareSynchronosServer.Utils;
@@ -14,6 +13,7 @@ public class MareHubLogger
         _hub = hub;
         _logger = logger;
     }
+
     public static object[] Args(params object[] args)
     {
         return args;
