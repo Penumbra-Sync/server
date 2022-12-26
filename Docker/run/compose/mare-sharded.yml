@@ -77,7 +77,7 @@ services:
     restart: on-failure
     volumes:
       - ../config/sharded/files-shard-main.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
-      - ../log/files-shard-main/:/opt/MareSynchronosStaticFilesServer/logs/:rw
+      - ../log/files-standalone/:/opt/MareSynchronosStaticFilesServer/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
       - ../data/files-shard-main/:/marecache/:rw
     depends_on:
