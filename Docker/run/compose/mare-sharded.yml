@@ -28,6 +28,8 @@ services:
   mare-server:
     image: darkarchon/mare-synchronos-server:latest
     restart: on-failure
+    environment:
+      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
     volumes:
       - ../config/sharded/server-shard-main.json:/opt/MareSynchronosServer/appsettings.json
       - ../log/server-shard-main/:/opt/MareSynchronosServer/logs/:rw
@@ -60,6 +62,8 @@ services:
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
     restart: on-failure
+    environment:
+      MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw

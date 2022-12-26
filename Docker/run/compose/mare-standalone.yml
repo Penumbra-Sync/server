@@ -15,6 +15,8 @@ services:
     restart: on-failure
     ports:
       - 6000:6000/tcp
+    environment:
+      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
     volumes:
       - ../config/standalone/server-standalone.json:/opt/MareSynchronosServer/appsettings.json
       - ../log/server-standalone/:/opt/MareSynchronosServer/logs/:rw
@@ -25,6 +27,8 @@ services:
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
     restart: on-failure
+    environment:
+      MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw

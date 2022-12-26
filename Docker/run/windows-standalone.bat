@@ -1,2 +1,2 @@
 @echo off
-docker compose -f compose\mare-sharded.yml -p sharded up
+docker compose -f compose\mare-standalone.yml -p standalone up
