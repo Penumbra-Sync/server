@@ -1,0 +1,31 @@
+FROM mcr.microsoft.com/dotnet/sdk:7.0 as BUILD
+
+COPY MareAPI /server/MareAPI
+COPY MareSynchronosServer/MareSynchronosShared /server/MareSynchronosServer/MareSynchronosShared
+COPY MareSynchronosServer/MareSynchronosServices /server/MareSynchronosServer/MareSynchronosServices
+
+WORKDIR /server/MareSynchronosServer/MareSynchronosServices/
+
+RUN dotnet publish \
+        --configuration=Release \
+        --os=linux \
+        --output=/build \
+        MareSynchronosServices.csproj
+
+FROM mcr.microsoft.com/dotnet/aspnet:7.0
+
+RUN adduser \
+        --disabled-password \
+        --group \
+        --no-create-home \
+        --quiet \
+        --system \
+        mare
+
+COPY --from=BUILD /build /opt/MareSynchronosServices
+RUN chown -R mare:mare /opt/MareSynchronosServices
+
+USER mare:mare
+WORKDIR /opt/MareSynchronosServices
+
+CMD ["./MareSynchronosServices"]
