@@ -73,7 +73,7 @@ public class FileCleanupService : IHostedService
 
     private void CleanUpFilesBeyondSizeLimit(MareDbContext dbContext, CancellationToken ct)
     {
-        var sizeLimit = (double)_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CacheSizeHardLimitInGiB), -1);
+        var sizeLimit = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.CacheSizeHardLimitInGiB), -1);
         if (sizeLimit <= 0)
         {
             return;
@@ -113,8 +113,8 @@ public class FileCleanupService : IHostedService
     {
         try
         {
-            var unusedRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
-            var forcedDeletionAfterHours = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
+            var unusedRetention = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
+            var forcedDeletionAfterHours = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
 
             _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", unusedRetention);
             if (forcedDeletionAfterHours > 0)
