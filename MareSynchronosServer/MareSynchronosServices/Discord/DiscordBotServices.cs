@@ -5,7 +5,7 @@ namespace MareSynchronosServices.Discord;
 
 public class DiscordBotServices
 {
-    public readonly ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> verificationQueue = new();
+    public ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> VerificationQueue { get; } = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     public ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
@@ -41,7 +41,7 @@ public class DiscordBotServices
         verificationTaskCts = new CancellationTokenSource();
         while (!verificationTaskCts.IsCancellationRequested)
         {
-            if (verificationQueue.TryDequeue(out var queueitem))
+            if (VerificationQueue.TryDequeue(out var queueitem))
             {
                 try
                 {

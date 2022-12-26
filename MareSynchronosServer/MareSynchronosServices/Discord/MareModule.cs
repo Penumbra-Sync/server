@@ -10,6 +10,7 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using static MareSynchronosShared.Protos.IdentificationService;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace MareSynchronosServices.Discord;
 
@@ -103,7 +104,7 @@ public class MareModule : InteractionModuleBase
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
-            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
             {
                 eb.WithTitle("Already queued for verfication");
                 eb.WithDescription("You are already queued for verification. Please wait.");
@@ -118,7 +119,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
+                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         });
     }
@@ -131,7 +132,7 @@ public class MareModule : InteractionModuleBase
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
-            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
             {
                 eb.WithTitle("Already queued for verfication");
                 eb.WithDescription("You are already queued for verification. Please wait.");
@@ -146,7 +147,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
+                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         });
     }
@@ -183,6 +184,21 @@ public class MareModule : InteractionModuleBase
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Client.CurrentUser.Id, nameof(Relink));
         await RespondWithModalAsync<LodestoneModal>("relink_modal").ConfigureAwait(false);
+    }
+
+    [SlashCommand("useradd", "ADMIN ONLY: add a user unconditionally to the Database")]
+    public async Task UserAdd([Summary("desired_uid", "Desired UID")] string desiredUid)
+    {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
+            Context.Client.CurrentUser.Id, nameof(UserAdd),
+            string.Join(",", new[] { $"{nameof(desiredUid)}:{desiredUid}" }));
+
+        await TryRespondAsync(async () =>
+        {
+            var embed = await HandleUserAdd(desiredUid, Context.User.Id);
+
+            await RespondAsync(embeds: new[] { embed }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [ModalInteraction("recover_modal")]
@@ -222,6 +238,51 @@ public class MareModule : InteractionModuleBase
             var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
             await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
         });
+    }
+
+    public async Task<Embed> HandleUserAdd(string desiredUid, ulong discordUserId)
+    {
+        var embed = new EmbedBuilder();
+
+        using var scope = _services.CreateScope();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        if (!(await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(a => a.DiscordId == discordUserId))?.User?.IsAdmin ?? true)
+        {
+            embed.WithTitle("Failed to add user");
+            embed.WithDescription("No permission");
+        }
+        else if (db.Users.Any(u => u.UID == desiredUid || u.Alias == desiredUid))
+        {
+            embed.WithTitle("Failed to add user");
+            embed.WithDescription("Already in Database");
+        }
+        else
+        {
+            User newUser = new()
+            {
+                IsAdmin = false,
+                IsModerator = false,
+                LastLoggedIn = DateTime.UtcNow,
+                UID = desiredUid,
+            };
+
+            var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+            var auth = new Auth()
+            {
+                HashedKey = StringUtils.Sha256String(computedHash),
+                User = newUser,
+            };
+
+            await db.Users.AddAsync(newUser);
+            await db.Auth.AddAsync(auth);
+
+            await db.SaveChangesAsync();
+
+            embed.WithTitle("Successfully added " + desiredUid);
+            embed.WithDescription("Secret Key: " + computedHash);
+        }
+
+        return embed.Build();
     }
 
     private async Task TryRespondAsync(Action act)

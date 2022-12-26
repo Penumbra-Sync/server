@@ -21,7 +21,7 @@ internal class DiscordBot : IHostedService
     private CancellationTokenSource? _updateStatusCts;
     private CancellationTokenSource? _vanityUpdateCts;
 
-    public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration, 
+    public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration,
         ILogger<DiscordBot> logger, IdentificationServiceClient identificationServiceClient)
     {
         _botServices = botServices;
@@ -65,7 +65,8 @@ internal class DiscordBot : IHostedService
         _vanityUpdateCts = new();
         var guild = (await _discordClient.Rest.GetGuildsAsync()).First();
         var commands = await guild.GetApplicationCommandsAsync();
-        var vanityCommandId = commands.First(c => c.Name == "setvanityuid").Id;
+        var appId = await _discordClient.GetApplicationInfoAsync().ConfigureAwait(false);
+        var vanityCommandId = commands.First(c => c.ApplicationId == appId.Id && c.Name == "setvanityuid").Id;
 
         while (!_vanityUpdateCts.IsCancellationRequested)
         {
@@ -170,8 +171,8 @@ internal class DiscordBot : IHostedService
         while (!_updateStatusCts.IsCancellationRequested)
         {
             var onlineUsers = await _identificationServiceClient.GetOnlineUserCountAsync(new MareSynchronosShared.Protos.ServerMessage());
-            _logger.LogInformation("Users online: " + onlineUsers);
-            await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
+            _logger.LogInformation("Users online: " + onlineUsers.Count);
+            await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers.Count + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         }
     }

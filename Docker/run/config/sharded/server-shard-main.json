@@ -36,7 +36,7 @@
         ],
         "RedisConnectionString": "redis,password=secretredispassword",
         "CdnFullUrl": "http://localhost:6200/cache/",
-        "StaticFileServiceAddress": "http://mare-staticfilesserver:6205",
+        "StaticFileServiceAddress": "http://mare-files:6205",
         "MaxExistingGroupsByUser": 3,
         "MaxJoinedGroupsByUser": 6,
         "MaxGroupUserCount": 100,
