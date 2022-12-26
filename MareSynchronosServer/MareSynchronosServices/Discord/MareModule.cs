@@ -99,7 +99,7 @@ public class MareModule : InteractionModuleBase
     public async Task Verify()
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(Verify);
+            Context.Client.CurrentUser.Id, nameof(Verify));
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();

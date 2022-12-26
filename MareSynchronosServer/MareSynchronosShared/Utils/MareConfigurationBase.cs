@@ -9,6 +9,7 @@ public class MareConfigurationBase : IMareConfiguration
 {
     public int DbContextPoolSize { get; set; } = 100;
     public string ShardName { get; set; } = string.Empty;
+    public int MetricsPort { get; set; } = 4981;
 
     public T GetValue<T>(string key)
     {

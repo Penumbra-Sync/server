@@ -33,6 +33,7 @@ public class Startup
         services.AddLogging();
 
         services.Configure<StaticFilesServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.AddSingleton(Configuration);
 
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
@@ -138,10 +139,12 @@ public class Startup
         app.UseHttpLogging();
 
         app.UseRouting();
-#if !DEBUG
-        var metricServer = new KestrelMetricServer(4981);
+
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4981));
         metricServer.Start();
-#endif
+
         app.UseHttpMetrics();
 
         app.UseAuthentication();

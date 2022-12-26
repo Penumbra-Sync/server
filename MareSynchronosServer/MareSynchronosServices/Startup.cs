@@ -81,9 +81,9 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
-#if !DEBUG
-        var metricServer = new KestrelMetricServer(4982);
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4982));
         metricServer.Start();
-#endif
     }
 }

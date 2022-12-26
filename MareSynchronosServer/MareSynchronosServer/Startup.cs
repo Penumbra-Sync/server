@@ -10,7 +10,6 @@ using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
 using Grpc.Net.Client.Configuration;
-using Prometheus;
 using MareSynchronosShared.Metrics;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
@@ -18,7 +17,7 @@ using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Utils;
 using MareSynchronosServer.Identity;
 using MareSynchronosShared.Services;
-using System;
+using Prometheus;
 
 namespace MareSynchronosServer;
 
@@ -170,7 +169,7 @@ public class Startup
             MetricsAPI.CounterAuthenticationCacheHits,
             MetricsAPI.CounterAuthenticationFailures,
             MetricsAPI.CounterAuthenticationRequests,
-            MetricsAPI.CounterAuthenticationSuccesses
+            MetricsAPI.CounterAuthenticationSuccesses,
         }, new List<string>
         {
             MetricsAPI.GaugeAuthorizedConnections,
@@ -181,7 +180,8 @@ public class Startup
             MetricsAPI.GaugeAvailableWorkerThreads,
             MetricsAPI.GaugeGroups,
             MetricsAPI.GaugeGroupPairs,
-            MetricsAPI.GaugeGroupPairsPaused
+            MetricsAPI.GaugeGroupPairsPaused,
+            MetricsAPI.GaugeUsersRegistered
         }));
     }
 
@@ -262,8 +262,8 @@ public class Startup
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)
     {
         logger.LogInformation("Running Configure");
-        var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
-        bool isMainServer = mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerGrpcAddress), defaultValue: null) == null;
+
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
 
         app.UseIpRateLimiting();
 
@@ -271,10 +271,8 @@ public class Startup
 
         app.UseWebSockets();
 
-#if !DEBUG
-        var metricServer = new KestrelMetricServer(4980);
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4981));
         metricServer.Start();
-#endif
 
         app.UseAuthentication();
         app.UseAuthorization();
@@ -288,7 +286,7 @@ public class Startup
                 options.Transports = HttpTransportType.WebSockets | HttpTransportType.ServerSentEvents | HttpTransportType.LongPolling;
             });
 
-            if (isMainServer)
+            if (config.IsMain)
             {
                 endpoints.MapGrpcService<GrpcIdentityService>().AllowAnonymous();
                 endpoints.MapGrpcService<GrpcConfigurationService<ServerConfiguration>>().AllowAnonymous();
