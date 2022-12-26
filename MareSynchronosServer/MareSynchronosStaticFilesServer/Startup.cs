@@ -138,10 +138,10 @@ public class Startup
         app.UseHttpLogging();
 
         app.UseRouting();
-
-        //var metricServer = new KestrelMetricServer(4981);
-        //metricServer.Start();
-
+#if !DEBUG
+        var metricServer = new KestrelMetricServer(4981);
+        metricServer.Start();
+#endif
         app.UseHttpMetrics();
 
         app.UseAuthentication();

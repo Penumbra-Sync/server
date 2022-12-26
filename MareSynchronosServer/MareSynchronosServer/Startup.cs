@@ -271,8 +271,10 @@ public class Startup
 
         app.UseWebSockets();
 
-        //var metricServer = new KestrelMetricServer(4980);
-        //metricServer.Start();
+#if !DEBUG
+        var metricServer = new KestrelMetricServer(4980);
+        metricServer.Start();
+#endif
 
         app.UseAuthentication();
         app.UseAuthorization();
