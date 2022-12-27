@@ -1,13 +1,8 @@
 using MareSynchronosServices;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using System;
-using System.Linq;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 
 public class Program
 {
@@ -24,10 +19,13 @@ public class Program
 
             metrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, dbContext.Users.Count());
 
-            var options = host.Services.GetService<IOptions<ServicesConfiguration>>();
+            var options = host.Services.GetService<IConfigurationService<ServicesConfiguration>>();
+            var optionsServer = host.Services.GetService<IConfigurationService<ServerConfiguration>>();
             var logger = host.Services.GetService<ILogger<Program>>();
-            logger.LogInformation("Loaded MareSynchronos Services Configuration");
-            logger.LogInformation(options.Value.ToString());
+            logger.LogInformation("Loaded MareSynchronos Services Configuration (IsMain: {isMain})", options.IsMain);
+            logger.LogInformation(options.ToString());
+            logger.LogInformation("Loaded MareSynchronos Server Configuration (IsMain: {isMain})", optionsServer.IsMain);
+            logger.LogInformation(optionsServer.ToString());
         }
 
         host.Run();

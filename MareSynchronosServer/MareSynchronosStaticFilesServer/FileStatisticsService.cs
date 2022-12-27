@@ -51,7 +51,13 @@ public class FileStatisticsService : IHostedService
             _pastHourFiles = new(StringComparer.Ordinal);
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastHour, 0);
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastHourSize, 0);
-            await Task.Delay(TimeSpan.FromHours(1), _resetCancellationTokenSource.Token).ConfigureAwait(false);
+
+            var now = DateTime.UtcNow;
+            TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
+            TimeOnly futureTime = new(now.Hour, 0, 0);
+            var span = futureTime.AddHours(1) - currentTime;
+
+            await Task.Delay(span, _resetCancellationTokenSource.Token).ConfigureAwait(false);
         }
     }
 
@@ -64,7 +70,13 @@ public class FileStatisticsService : IHostedService
             _pastDayFiles = new(StringComparer.Ordinal);
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDay, 0);
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDaySize, 0);
-            await Task.Delay(TimeSpan.FromDays(1), _resetCancellationTokenSource.Token).ConfigureAwait(false);
+
+            var now = DateTime.UtcNow;
+            TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
+            TimeOnly futureTime = new(0, 0, 0);
+            var span = futureTime - currentTime;
+
+            await Task.Delay(span, _resetCancellationTokenSource.Token).ConfigureAwait(false);
         }
     }
 

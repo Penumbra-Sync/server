@@ -1,0 +1,49 @@
+{
+    "ConnectionStrings": {
+        "DefaultConnection": "Host=/var/run/postgresql;Port=5432;Database=mare;Username=mare;Keepalive=15;Minimum Pool Size=10;Maximum Pool Size=50;No Reset On Close=true;Max Auto Prepare=50;Enlist=false"
+    },
+    "Logging": {
+        "LogLevel": {
+            "Default": "Warning",
+            "Microsoft": "Warning",
+            "Microsoft.Hosting.Lifetime": "Information",
+            "MareSynchronosStaticFilesServer": "Information",
+            "MareSynchronosShared": "Information",
+            "System.IO": "Information"
+        },
+        "File": {
+            "BasePath": "logs",
+            "FileAccessMode": "KeepOpenAndAutoFlush",
+            "FileEncodingName": "utf-8",
+            "DateFormat": "yyyMMdd",
+            "MaxFileSize": 104857600,
+            "Files": [
+                {
+                    "Path": "<date:yyyy>/<date:MM>/<date:dd>/mare-<date:HH>-<counter:0000>.log"
+                }
+            ]
+        }
+    },
+    "MareSynchronos": {
+        "DbContextPoolSize": 512,
+        "ShardName": "Files Shard 2",
+        "MetricsPort": 6250,
+        "FileServerGrpcAddress": "http://mare-files:6205",
+        "ForcedDeletionOfFilesAfterHours": 2,
+        "CacheSizeHardLimitInGiB": 5,
+        "UnusedFileRetentionPeriodInDays": 14,
+        "CacheDirectory": "/marecache/",
+        "RemoteCacheSourceUri": "http://mare-files:6200/cache/",
+        "MainServerGrpcAddress": "http://mare-server:6005"
+    },
+    "AllowedHosts": "*",
+    "Kestrel": {
+        "Endpoints": {
+            "Http": {
+                "Url": "http://+:6200"
+            }
+        }
+    },
+    "IpRateLimiting": {},
+    "IPRateLimitPolicies": {}
+}

@@ -2,20 +2,15 @@
 using Discord.Interactions;
 using MareSynchronosShared.Data;
 using System.Text.RegularExpressions;
-using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Discord.WebSocket;
-using System.Linq;
 using Prometheus;
 using MareSynchronosShared.Models;
-using MareSynchronosServices.Identity;
 using MareSynchronosShared.Metrics;
-using System.Net.Http;
 using MareSynchronosShared.Utils;
-using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
+using MareSynchronosShared.Services;
+using static MareSynchronosShared.Protos.IdentificationService;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace MareSynchronosServices.Discord;
 
@@ -30,22 +25,30 @@ public class LodestoneModal : IModal
 
 public class MareModule : InteractionModuleBase
 {
+    private readonly ILogger<MareModule> _logger;
     private readonly IServiceProvider _services;
     private readonly DiscordBotServices _botServices;
-    private readonly IdentityHandler _identityHandler;
-    private readonly CleanupService _cleanupService;
+    private readonly IdentificationServiceClient _identificationServiceClient;
+    private readonly IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
+    private Random random = new();
 
-    public MareModule(IServiceProvider services, DiscordBotServices botServices, IdentityHandler identityHandler, CleanupService cleanupService)
+    public MareModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
+        IdentificationServiceClient identificationServiceClient, IConfigurationService<ServerConfiguration> mareClientConfigurationService)
     {
+        _logger = logger;
         _services = services;
         _botServices = botServices;
-        _identityHandler = identityHandler;
-        _cleanupService = cleanupService;
+        _identificationServiceClient = identificationServiceClient;
+        _mareClientConfigurationService = mareClientConfigurationService;
     }
 
     [SlashCommand("register", "Starts the registration process for the Mare Synchronos server of this Discord")]
     public async Task Register([Summary("overwrite", "Overwrites your old account")] bool overwrite = false)
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
+            Context.Client.CurrentUser.Id, nameof(Register),
+            string.Join(",", new[] { $"{nameof(overwrite)}:{overwrite}" }));
+
         await TryRespondAsync(async () =>
         {
             if (overwrite)
@@ -60,6 +63,10 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("setvanityuid", "Sets your Vanity UID.")]
     public async Task SetVanityUid([Summary("vanity_uid", "Desired Vanity UID")] string vanityUid)
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
+            Context.Client.CurrentUser.Id, nameof(SetVanityUid),
+            string.Join(",", new[] { $"{nameof(vanityUid)}:{vanityUid}" }));
+
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
@@ -75,6 +82,10 @@ public class MareModule : InteractionModuleBase
         [Summary("syncshell_id", "Syncshell ID")] string syncshellId,
         [Summary("vanity_syncshell_id", "Desired Vanity Syncshell ID")] string vanityId)
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
+            Context.Client.CurrentUser.Id, nameof(SetSyncshellVanityId),
+            string.Join(",", new[] { $"{nameof(syncshellId)}:{syncshellId}", $"{nameof(vanityId)}:{vanityId}" }));
+
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
@@ -88,10 +99,12 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("verify", "Finishes the registration process for the Mare Synchronos server of this Discord")]
     public async Task Verify()
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(Verify));
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
-            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
             {
                 eb.WithTitle("Already queued for verfication");
                 eb.WithDescription("You are already queued for verification. Please wait.");
@@ -106,7 +119,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
+                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         });
     }
@@ -114,10 +127,12 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("verify_relink", "Finishes the relink process for your user on the Mare Synchronos server of this Discord")]
     public async Task VerifyRelink()
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(VerifyRelink));
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
-            if (_botServices.verificationQueue.Any(u => u.Key == Context.User.Id))
+            if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
             {
                 eb.WithTitle("Already queued for verfication");
                 eb.WithDescription("You are already queued for verification. Please wait.");
@@ -132,7 +147,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.verificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
+                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         });
     }
@@ -140,6 +155,8 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("recover", "Allows you to recover your account by generating a new secret key")]
     public async Task Recover()
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(Recover));
         await RespondWithModalAsync<LodestoneModal>("recover_modal").ConfigureAwait(false);
     }
 
@@ -148,6 +165,9 @@ public class MareModule : InteractionModuleBase
         [Summary("discord_user", "ADMIN ONLY: Discord User to check for")] IUser? discordUser = null,
         [Summary("uid", "ADMIN ONLY: UID to check for")] string? uid = null)
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(UserInfo));
+
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
@@ -161,12 +181,32 @@ public class MareModule : InteractionModuleBase
     [SlashCommand("relink", "Allows you to link a new Discord account to an existing Mare account")]
     public async Task Relink()
     {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(Relink));
         await RespondWithModalAsync<LodestoneModal>("relink_modal").ConfigureAwait(false);
+    }
+
+    [SlashCommand("useradd", "ADMIN ONLY: add a user unconditionally to the Database")]
+    public async Task UserAdd([Summary("desired_uid", "Desired UID")] string desiredUid)
+    {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
+            Context.Client.CurrentUser.Id, nameof(UserAdd),
+            string.Join(",", new[] { $"{nameof(desiredUid)}:{desiredUid}" }));
+
+        await TryRespondAsync(async () =>
+        {
+            var embed = await HandleUserAdd(desiredUid, Context.User.Id);
+
+            await RespondAsync(embeds: new[] { embed }, ephemeral: true).ConfigureAwait(false);
+        });
     }
 
     [ModalInteraction("recover_modal")]
     public async Task RecoverModal(LodestoneModal modal)
     {
+        _logger.LogInformation("Modal:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(RecoverModal));
+
         await TryRespondAsync(async () =>
         {
             var embed = await HandleRecoverModalAsync(modal, Context.User.Id).ConfigureAwait(false);
@@ -177,6 +217,9 @@ public class MareModule : InteractionModuleBase
     [ModalInteraction("register_modal")]
     public async Task RegisterModal(LodestoneModal modal)
     {
+        _logger.LogInformation("Modal:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(RegisterModal));
+
         await TryRespondAsync(async () =>
         {
             var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
@@ -187,11 +230,59 @@ public class MareModule : InteractionModuleBase
     [ModalInteraction("relink_modal")]
     public async Task RelinkModal(LodestoneModal modal)
     {
+        _logger.LogInformation("Modal:{userId}:{Method}",
+            Context.Client.CurrentUser.Id, nameof(RelinkModal));
+
         await TryRespondAsync(async () =>
         {
             var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
             await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
         });
+    }
+
+    public async Task<Embed> HandleUserAdd(string desiredUid, ulong discordUserId)
+    {
+        var embed = new EmbedBuilder();
+
+        using var scope = _services.CreateScope();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        if (!(await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(a => a.DiscordId == discordUserId))?.User?.IsAdmin ?? true)
+        {
+            embed.WithTitle("Failed to add user");
+            embed.WithDescription("No permission");
+        }
+        else if (db.Users.Any(u => u.UID == desiredUid || u.Alias == desiredUid))
+        {
+            embed.WithTitle("Failed to add user");
+            embed.WithDescription("Already in Database");
+        }
+        else
+        {
+            User newUser = new()
+            {
+                IsAdmin = false,
+                IsModerator = false,
+                LastLoggedIn = DateTime.UtcNow,
+                UID = desiredUid,
+            };
+
+            var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+            var auth = new Auth()
+            {
+                HashedKey = StringUtils.Sha256String(computedHash),
+                User = newUser,
+            };
+
+            await db.Users.AddAsync(newUser);
+            await db.Auth.AddAsync(auth);
+
+            await db.SaveChangesAsync();
+
+            embed.WithTitle("Successfully added " + desiredUid);
+            embed.WithDescription("Secret Key: " + computedHash);
+        }
+
+        return embed.Build();
     }
 
     private async Task TryRespondAsync(Action act)
@@ -258,7 +349,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userToCheckForDiscordId).ConfigureAwait(false);
         var dbUser = lodestoneUser.User;
         var auth = await db.Auth.SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
-        var identity = await _identityHandler.GetIdentForuid(dbUser.UID).ConfigureAwait(false);
+        var identity = await _identificationServiceClient.GetIdentForUidAsync(new MareSynchronosShared.Protos.UidMessage { Uid = dbUser.UID });
         var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
 
@@ -271,7 +362,7 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Vanity UID", dbUser.Alias);
         }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
-        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.CharacterIdent));
+        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.Ident));
         eb.AddField("Hashed Secret Key", auth.HashedKey);
         eb.AddField("Joined Syncshells", groupsJoined.Count);
         eb.AddField("Owned Syncshells", groups.Count);
@@ -285,9 +376,9 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
         }
 
-        if (isAdminCall && !string.IsNullOrEmpty(identity.CharacterIdent))
+        if (isAdminCall && !string.IsNullOrEmpty(identity.Ident))
         {
-            eb.AddField("Character Ident", identity.CharacterIdent);
+            eb.AddField("Character Ident", identity.Ident);
         }
 
         return eb;
@@ -635,7 +726,9 @@ public class MareModule : InteractionModuleBase
         {
             if (discordAuthedUser.User != null)
             {
-                await _cleanupService.PurgeUser(discordAuthedUser.User, db);
+                var maxGroupsByUser = _mareClientConfigurationService.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 3);
+
+                await SharedDbFunctions.PurgeUser(_logger, discordAuthedUser.User, db, maxGroupsByUser);
             }
             else
             {
@@ -657,7 +750,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
         if (lodestoneAuth != null && _botServices.DiscordRelinkLodestoneMapping.ContainsKey(cmd.User.Id))
         {
-            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
             var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordRelinkLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
@@ -731,7 +824,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneAuth = db.LodeStoneAuth.SingleOrDefault(u => u.DiscordId == cmd.User.Id);
         if (lodestoneAuth != null && _botServices.DiscordLodestoneMapping.ContainsKey(cmd.User.Id))
         {
-            var randomServer = _botServices.LodestoneServers[_botServices.Random.Next(_botServices.LodestoneServers.Length)];
+            var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
             var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordLodestoneMapping[cmd.User.Id]}").ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
@@ -757,11 +850,7 @@ public class MareModule : InteractionModuleBase
                         user.IsAdmin = true;
                     }
 
-                    if (_botServices.Configuration.PurgeUnusedAccounts)
-                    {
-                        var purgedDays = _botServices.Configuration.PurgeUnusedAccountsPeriodInDays;
-                        user.LastLoggedIn = DateTime.UtcNow - TimeSpan.FromDays(purgedDays) + TimeSpan.FromDays(1);
-                    }
+                    user.LastLoggedIn = DateTime.UtcNow;
 
                     var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
                     var auth = new Auth()

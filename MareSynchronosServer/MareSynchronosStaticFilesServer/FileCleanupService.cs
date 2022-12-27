@@ -2,6 +2,7 @@
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Services;
 using Microsoft.Extensions.Options;
 
 namespace MareSynchronosStaticFilesServer;
@@ -11,19 +12,19 @@ public class FileCleanupService : IHostedService
     private readonly MareMetrics _metrics;
     private readonly ILogger<FileCleanupService> _logger;
     private readonly IServiceProvider _services;
-    private readonly StaticFilesServerConfiguration _configuration;
+    private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
     private readonly bool _isMainServer;
     private readonly string _cacheDir;
     private CancellationTokenSource _cleanupCts;
 
-    public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IOptions<StaticFilesServerConfiguration> configuration)
+    public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
     {
         _metrics = metrics;
         _logger = logger;
         _services = services;
-        _configuration = configuration.Value;
-        _isMainServer = _configuration.RemoteCacheSourceUri == null;
-        _cacheDir = _configuration.CacheDirectory;
+        _configuration = configuration;
+        _isMainServer = configuration.IsMain;
+        _cacheDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -60,26 +61,32 @@ public class FileCleanupService : IHostedService
                 await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             }
 
-            _logger.LogInformation("File Cleanup Complete, next run at {date}", DateTime.Now.Add(TimeSpan.FromMinutes(10)));
-            await Task.Delay(TimeSpan.FromMinutes(10), ct).ConfigureAwait(false);
+            var now = DateTime.Now;
+            TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
+            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 10, 0);
+            var span = futureTime.AddMinutes(10) - currentTime;
+
+            _logger.LogInformation("File Cleanup Complete, next run at {date}", now.Add(span));
+            await Task.Delay(span, ct).ConfigureAwait(false);
         }
     }
 
     private void CleanUpFilesBeyondSizeLimit(MareDbContext dbContext, CancellationToken ct)
     {
-        if (_configuration.CacheSizeHardLimitInGiB <= 0)
+        var sizeLimit = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.CacheSizeHardLimitInGiB), -1);
+        if (sizeLimit <= 0)
         {
             return;
         }
 
         try
         {
-            _logger.LogInformation("Cleaning up files beyond the cache size limit of {cacheSizeLimit} GiB", _configuration.CacheSizeHardLimitInGiB);
+            _logger.LogInformation("Cleaning up files beyond the cache size limit of {cacheSizeLimit} GiB", sizeLimit);
             var allLocalFiles = Directory.EnumerateFiles(_cacheDir, "*", SearchOption.AllDirectories)
                 .Select(f => new FileInfo(f)).ToList()
                 .OrderBy(f => f.LastAccessTimeUtc).ToList();
             var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
-            long cacheSizeLimitInBytes = (long)ByteSize.FromGibiBytes(_configuration.CacheSizeHardLimitInGiB).Bytes;
+            long cacheSizeLimitInBytes = (long)ByteSize.FromGibiBytes(sizeLimit).Bytes;
             while (totalCacheSizeInBytes > cacheSizeLimitInBytes && allLocalFiles.Any() && !ct.IsCancellationRequested)
             {
                 var oldestFile = allLocalFiles[0];
@@ -106,15 +113,18 @@ public class FileCleanupService : IHostedService
     {
         try
         {
-            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", _configuration.UnusedFileRetentionPeriodInDays);
-            if (_configuration.ForcedDeletionOfFilesAfterHours > 0)
+            var unusedRetention = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
+            var forcedDeletionAfterHours = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
+
+            _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", unusedRetention);
+            if (forcedDeletionAfterHours > 0)
             {
-                _logger.LogInformation("Cleaning up files written to longer than {hours}h ago", _configuration.ForcedDeletionOfFilesAfterHours);
+                _logger.LogInformation("Cleaning up files written to longer than {hours}h ago", forcedDeletionAfterHours);
             }
 
             // clean up files in DB but not on disk or last access is expired
-            var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(_configuration.UnusedFileRetentionPeriodInDays));
-            var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(_configuration.ForcedDeletionOfFilesAfterHours));
+            var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(unusedRetention));
+            var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             var allFiles = dbContext.Files.ToList();
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
             {
@@ -133,7 +143,7 @@ public class FileCleanupService : IHostedService
                     if (_isMainServer)
                         dbContext.Files.Remove(fileCache);
                 }
-                else if (file != null && _configuration.ForcedDeletionOfFilesAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
+                else if (file != null && forcedDeletionAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
                 {
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
@@ -147,28 +157,33 @@ public class FileCleanupService : IHostedService
             }
 
             // clean up files that are on disk but not in DB for some reason
-            if (_isMainServer)
-            {
-                var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
-                DirectoryInfo dir = new(_cacheDir);
-                var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
-                foreach (var file in allFilesInDir)
-                {
-                    if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
-                    {
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
-                        file.Delete();
-                        _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
-                    }
-
-                    ct.ThrowIfCancellationRequested();
-                }
-            }
+            CleanUpOrphanedFiles(allFiles, ct);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error during file cleanup of old files");
+        }
+    }
+
+    private void CleanUpOrphanedFiles(List<FileCache> allFiles, CancellationToken ct)
+    {
+        if (_isMainServer)
+        {
+            var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
+            DirectoryInfo dir = new(_cacheDir);
+            var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
+            foreach (var file in allFilesInDir)
+            {
+                if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    file.Delete();
+                    _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
+                }
+
+                ct.ThrowIfCancellationRequested();
+            }
         }
     }
 

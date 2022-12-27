@@ -1,0 +1,29 @@
+FROM mcr.microsoft.com/dotnet/sdk:7.0 as BUILD
+
+RUN git clone --recurse-submodules https://github.com/Penumbra-Sync/server
+
+WORKDIR /server/MareSynchronosServer/MareSynchronosStaticFilesServer/
+
+RUN dotnet publish \
+        --configuration=Release \
+        --os=linux \
+        --output=/MareSynchronosStaticFilesServer \
+        MareSynchronosStaticFilesServer.csproj
+
+FROM mcr.microsoft.com/dotnet/aspnet:7.0
+
+RUN adduser \
+        --disabled-password \
+        --group \
+        --no-create-home \
+        --quiet \
+        --system \
+        mare
+
+COPY --from=BUILD /MareSynchronosStaticFilesServer /opt/MareSynchronosStaticFilesServer
+RUN chown -R mare:mare /opt/MareSynchronosStaticFilesServer
+
+USER mare:mare
+WORKDIR /opt/MareSynchronosStaticFilesServer
+
+CMD ["./MareSynchronosStaticFilesServer"]

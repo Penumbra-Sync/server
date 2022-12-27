@@ -1,0 +1,31 @@
+FROM mcr.microsoft.com/dotnet/sdk:7.0 as BUILD
+
+COPY MareAPI /server/MareAPI
+COPY MareSynchronosServer/MareSynchronosShared /server/MareSynchronosServer/MareSynchronosShared
+COPY MareSynchronosServer/MareSynchronosStaticFilesServer /server/MareSynchronosServer/MareSynchronosStaticFilesServer
+
+WORKDIR /server/MareSynchronosServer/MareSynchronosStaticFilesServer/
+
+RUN dotnet publish \
+        --configuration=Release \
+        --os=linux \
+        --output=/build \
+        MareSynchronosStaticFilesServer.csproj
+
+FROM mcr.microsoft.com/dotnet/aspnet:7.0
+
+RUN adduser \
+        --disabled-password \
+        --group \
+        --no-create-home \
+        --quiet \
+        --system \
+        mare
+
+COPY --from=BUILD /build /opt/MareSynchronosStaticFilesServer
+RUN chown -R mare:mare /opt/MareSynchronosStaticFilesServer
+
+USER mare:mare
+WORKDIR /opt/MareSynchronosStaticFilesServer
+
+CMD ["./MareSynchronosStaticFilesServer"]

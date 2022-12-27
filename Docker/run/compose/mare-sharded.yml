@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_DB: mare
+      POSTGRES_USER: mare
+      POSTGRES_PASSWORD: secretdevpassword
+    volumes:
+      - ../data/postgresql/:/var/lib/postgresql/data
+      - postgres_socket:/var/run/postgresql:rw
+
+  haproxy:
+    image: haproxy:latest
+    restart: always
+    ports: 
+      - 6000:6000/tcp
+      - 6200:6200/tcp
+    volumes:
+      - ../config/sharded/haproxy-shards.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+
+  redis:
+    image: redis:latest
+    command: [sh, -c, "rm -f /data/dump.rdb && redis-server --save \"\" --appendonly no --requirepass secretredispassword"]
+    volumes:
+      - cache:/data
+
+  mare-server:
+    image: darkarchon/mare-synchronos-server:latest
+    restart: on-failure
+    environment:
+      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
+    volumes:
+      - ../config/sharded/server-shard-main.json:/opt/MareSynchronosServer/appsettings.json
+      - ../log/server-shard-main/:/opt/MareSynchronosServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+
+  mare-shard-1:
+    image: darkarchon/mare-synchronos-server:latest
+    restart: on-failure
+    volumes:
+      - ../config/sharded/server-shard-1.json:/opt/MareSynchronosServer/appsettings.json
+      - ../log/server-shard-1/:/opt/MareSynchronosServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+  mare-shard-2:
+    image: darkarchon/mare-synchronos-server:latest
+    restart: on-failure
+    volumes:
+      - ../config/sharded/server-shard-2.json:/opt/MareSynchronosServer/appsettings.json
+      - ../log/server-shard-2/:/opt/MareSynchronosServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+  mare-services:
+    image: darkarchon/mare-synchronos-services:latest
+    restart: on-failure
+    environment:
+      MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
+    volumes:
+      - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
+      - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+  mare-files:
+    image: darkarchon/mare-synchronos-staticfilesserver:latest
+    restart: on-failure
+    volumes:
+      - ../config/sharded/files-shard-main.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
+      - ../log/files-standalone/:/opt/MareSynchronosStaticFilesServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+      - ../data/files-shard-main/:/marecache/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+  mare-files-shard-1:
+    image: darkarchon/mare-synchronos-staticfilesserver:latest
+    restart: on-failure
+    volumes:
+      - ../config/sharded/files-shard-1.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
+      - ../log/files-shard-1/:/opt/MareSynchronosStaticFilesServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+      - ../data/files-shard-1/:/marecache/:rw
+    depends_on:
+      - "postgres"
+      - "mare-files"
+
+  mare-files-shard-2:
+    image: darkarchon/mare-synchronos-staticfilesserver:latest
+    restart: on-failure
+    volumes:
+      - ../config/sharded/files-shard-2.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
+      - ../log/files-shard-2/:/opt/MareSynchronosStaticFilesServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+      - ../data/files-shard-2/:/marecache/:rw
+    depends_on:
+      - "postgres"
+      - "mare-files"
+
+volumes:
+  cache:
+    driver: local
+  postgres_socket:

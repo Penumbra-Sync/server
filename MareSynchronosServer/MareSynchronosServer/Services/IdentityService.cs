@@ -1,16 +1,16 @@
 ﻿using Grpc.Core;
+using MareSynchronosServer.Identity;
 using MareSynchronosShared.Protos;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 
-namespace MareSynchronosServices.Identity;
+namespace MareSynchronosServer.Services;
 
-internal class IdentityService : IdentificationService.IdentificationServiceBase
+internal class GrpcIdentityService : IdentificationService.IdentificationServiceBase
 {
-    private readonly ILogger<IdentityService> _logger;
+    private readonly ILogger<GrpcIdentityService> _logger;
     private readonly IdentityHandler _handler;
 
-    public IdentityService(ILogger<IdentityService> logger, IdentityHandler handler)
+    public GrpcIdentityService(ILogger<GrpcIdentityService> logger, IdentityHandler handler)
     {
         _logger = logger;
         _handler = handler;
@@ -18,7 +18,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
     public override async Task<CharacterIdentMessage> GetIdentForUid(UidMessage request, ServerCallContext context)
     {
-        var result = await _handler.GetIdentForuid(request.Uid);
+        var result = await _handler.GetIdentForUid(request.Uid).ConfigureAwait(false);
         return new CharacterIdentMessage()
         {
             Ident = result.CharacterIdent,
@@ -26,6 +26,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
         };
     }
 
+    [AllowAnonymous]
     public override Task<OnlineUserCountResponse> GetOnlineUserCount(ServerMessage request, ServerCallContext context)
     {
         return Task.FromResult(new OnlineUserCountResponse() { Count = _handler.GetOnlineUsers(request.ServerId) });
@@ -66,7 +67,7 @@ internal class IdentityService : IdentificationService.IdentificationServiceBase
 
     public override async Task<Empty> SendStreamIdentStatusChange(IAsyncStreamReader<IdentChangeMessage> requestStream, ServerCallContext context)
     {
-        await requestStream.MoveNext();
+        await requestStream.MoveNext().ConfigureAwait(false);
         var server = requestStream.Current.Server;
         if (server == null) throw new System.Exception("First message needs to be server message");
         _handler.RegisterServerForQueue(server.ServerId);

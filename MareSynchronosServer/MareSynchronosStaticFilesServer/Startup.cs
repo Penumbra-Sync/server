@@ -1,10 +1,15 @@
+using Grpc.Net.Client.Configuration;
+using Grpc.Net.ClientFactory;
 using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Protos;
+using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Prometheus;
 
 namespace MareSynchronosStaticFilesServer;
@@ -27,11 +32,11 @@ public class Startup
 
         services.AddLogging();
 
-        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<StaticFilesServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.AddSingleton(Configuration);
 
-        var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
+        var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
 
         services.AddControllers();
 
@@ -64,7 +69,37 @@ public class Startup
                 builder.MigrationsHistoryTable("_efmigrationshistory", "public");
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
-        }, mareSettings.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
+        }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
+
+        var noRetryConfig = new MethodConfig
+        {
+            Names = { MethodName.Default },
+            RetryPolicy = null
+        };
+
+        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("FileServer", c =>
+        {
+            c.Address = new Uri(mareConfig.GetValue<string>(nameof(StaticFilesServerConfiguration.FileServerGrpcAddress)));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
+            c.HttpHandler = new SocketsHttpHandler()
+            {
+                EnableMultipleHttp2Connections = true
+            };
+        });
+
+        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
+        {
+            c.Address = new Uri(mareConfig.GetValue<string>(nameof(StaticFilesServerConfiguration.MainServerGrpcAddress)));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
+            c.HttpHandler = new SocketsHttpHandler()
+            {
+                EnableMultipleHttp2Connections = true
+            };
+        });
 
         services.AddAuthentication(options =>
             {
@@ -73,10 +108,30 @@ public class Startup
             .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { });
         services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
-        services.AddGrpc(o =>
+        if (_isMain)
         {
-            o.MaxReceiveMessageSize = null;
-        });
+            services.AddGrpc(o =>
+            {
+                o.MaxReceiveMessageSize = null;
+            });
+
+            services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>, MareConfigurationServiceServer<StaticFilesServerConfiguration>>();
+        }
+        else
+        {
+            services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>>(p => new MareConfigurationServiceClient<StaticFilesServerConfiguration>(
+                p.GetRequiredService<ILogger<MareConfigurationServiceClient<StaticFilesServerConfiguration>>>(),
+                p.GetRequiredService<IOptions<StaticFilesServerConfiguration>>(),
+                p.GetRequiredService<GrpcClientFactory>(),
+                "FileServer"));
+        }
+
+        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(p =>
+             new MareConfigurationServiceClient<MareConfigurationAuthBase>(
+                p.GetRequiredService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
+                p.GetService<IOptions<MareConfigurationAuthBase>>(),
+                p.GetRequiredService<GrpcClientFactory>(), "MainServer")
+        );
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -85,7 +140,9 @@ public class Startup
 
         app.UseRouting();
 
-        var metricServer = new KestrelMetricServer(4981);
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4981));
         metricServer.Start();
 
         app.UseHttpMetrics();
@@ -95,8 +152,10 @@ public class Startup
 
         app.UseEndpoints(e =>
         {
-            if(_isMain)
+            if (_isMain)
+            {
                 e.MapGrpcService<GrpcFileService>();
+            }
             e.MapControllers();
         });
     }

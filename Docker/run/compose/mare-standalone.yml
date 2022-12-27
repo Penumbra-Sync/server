@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:latest
+    restart: always
+    environment:
+      POSTGRES_DB: mare
+      POSTGRES_USER: mare
+      POSTGRES_PASSWORD: secretdevpassword
+    volumes:
+      - ../data/postgresql/:/var/lib/postgresql/data
+      - postgres_socket:/var/run/postgresql:rw
+
+  mare-server:
+    image: darkarchon/mare-synchronos-server:latest
+    restart: on-failure
+    ports:
+      - 6000:6000/tcp
+    environment:
+      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
+    volumes:
+      - ../config/standalone/server-standalone.json:/opt/MareSynchronosServer/appsettings.json
+      - ../log/server-standalone/:/opt/MareSynchronosServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+
+  mare-services:
+    image: darkarchon/mare-synchronos-services:latest
+    restart: on-failure
+    environment:
+      MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
+    volumes:
+      - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
+      - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+  mare-files:
+    image: darkarchon/mare-synchronos-staticfilesserver:latest
+    ports:
+      - 6200:6200/tcp
+    restart: on-failure
+    volumes:
+      - ../config/standalone/files-standalone.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
+      - ../log/files-standalone/:/opt/MareSynchronosStaticFilesServer/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+      - ../data/files-standalone/:/marecache/:rw
+    depends_on:
+      - "postgres"
+      - "mare-server"
+
+volumes:
+  postgres_socket:

@@ -1,17 +1,11 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using MareSynchronosShared.Metrics;
-using Microsoft.Extensions.Logging;
-using System.Threading;
-using Microsoft.Extensions.Options;
 
 namespace MareSynchronosServices.Discord;
 
 public class DiscordBotServices
 {
-    public readonly ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> verificationQueue = new();
+    public ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> VerificationQueue { get; } = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     public ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
@@ -19,29 +13,27 @@ public class DiscordBotServices
     public readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
     private readonly IServiceProvider _serviceProvider;
 
-    public ServicesConfiguration Configuration { get; init; }
     public ILogger<DiscordBotServices> Logger { get; init; }
     public MareMetrics Metrics { get; init; }
-    public Random Random { get; init; }
     private CancellationTokenSource? verificationTaskCts;
 
-    public DiscordBotServices(IOptions<ServicesConfiguration> configuration, IServiceProvider serviceProvider, ILogger<DiscordBotServices> logger, MareMetrics metrics)
+    public DiscordBotServices(IServiceProvider serviceProvider, ILogger<DiscordBotServices> logger, MareMetrics metrics)
     {
-        Configuration = configuration.Value;
         _serviceProvider = serviceProvider;
         Logger = logger;
         Metrics = metrics;
-        Random = new();
     }
 
-    public async Task Start()
+    public Task Start()
     {
         _ = ProcessVerificationQueue();
+        return Task.CompletedTask;
     }
 
-    public async Task Stop()
+    public Task Stop()
     {
         verificationTaskCts?.Cancel();
+        return Task.CompletedTask;
     }
 
     private async Task ProcessVerificationQueue()
@@ -49,7 +41,7 @@ public class DiscordBotServices
         verificationTaskCts = new CancellationTokenSource();
         while (!verificationTaskCts.IsCancellationRequested)
         {
-            if (verificationQueue.TryDequeue(out var queueitem))
+            if (VerificationQueue.TryDequeue(out var queueitem))
             {
                 try
                 {
@@ -61,8 +53,8 @@ public class DiscordBotServices
                 {
                     Logger.LogError(e, "Error during queue work");
                 }
-
             }
+
             await Task.Delay(TimeSpan.FromSeconds(2), verificationTaskCts.Token).ConfigureAwait(false);
         }
     }

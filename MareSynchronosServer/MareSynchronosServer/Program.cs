@@ -1,14 +1,8 @@
-using System;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using Microsoft.Extensions.Options;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 
 namespace MareSynchronosServer;
 
@@ -22,9 +16,12 @@ public class Program
         {
             var services = scope.ServiceProvider;
             using var context = services.GetRequiredService<MareDbContext>();
+            var options = services.GetRequiredService<IConfigurationService<ServerConfiguration>>();
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("Loaded MareSynchronos Server Configuration (IsMain: {isMain})", options.IsMain);
+            logger.LogInformation(options.ToString());
 
-            var secondaryServer = Environment.GetEnvironmentVariable("SECONDARY_SERVER");
-            if (string.IsNullOrEmpty(secondaryServer) || string.Equals(secondaryServer, "0", StringComparison.Ordinal))
+            if (options.IsMain)
             {
                 context.Database.Migrate();
                 context.SaveChanges();
@@ -42,15 +39,18 @@ public class Program
             metrics.SetGaugeTo(MetricsAPI.GaugePairs, context.ClientPairs.Count());
             metrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, context.ClientPairs.Count(p => p.IsPaused));
 
-            var options = host.Services.GetService<IOptions<ServerConfiguration>>();
-            var logger = host.Services.GetService<ILogger<Program>>();
-            logger.LogInformation("Loaded MareSynchronos Server Configuration");
-            logger.LogInformation(options.Value.ToString());
         }
 
         if (args.Length == 0 || !string.Equals(args[0], "dry", StringComparison.Ordinal))
         {
-            host.Run();
+            try
+            {
+                host.Run();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
         }
     }
 
