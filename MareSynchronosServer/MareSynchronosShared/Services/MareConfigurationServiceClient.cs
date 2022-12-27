@@ -20,7 +20,6 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
     private readonly ILogger<MareConfigurationServiceClient<T>> _logger;
     private readonly GrpcClientFactory _grpcClientFactory;
     private readonly string _grpcClientName;
-    private static readonly SemaphoreSlim _readLock = new(1);
 
     public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptions<T> config, GrpcClientFactory grpcClientFactory, string grpcClientName)
     {
@@ -40,10 +39,8 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
         if (isRemote)
         {
-            _readLock.Wait();
             if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry))
             {
-                _readLock.Release();
                 return (T1)_cachedRemoteProperties[key].Value;
             }
 
@@ -66,10 +63,6 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
                     _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning default", key);
                     return defaultValue;
                 }
-            }
-            finally
-            {
-                _readLock.Release();
             }
         }
 
@@ -103,10 +96,8 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
         if (isRemote)
         {
-            _readLock.Wait();
-            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(60))
+            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry))
             {
-                _readLock.Release();
                 return (T1)_cachedRemoteProperties[key].Value;
             }
 
@@ -129,10 +120,6 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
                     _logger.LogWarning(ex, "Could not get value for {key} from Grpc, throwing exception", key);
                     throw new KeyNotFoundException(key);
                 }
-            }
-            finally
-            {
-                _readLock.Release();
             }
         }
 
