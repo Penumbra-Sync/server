@@ -41,7 +41,7 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         if (isRemote)
         {
             _readLock.Wait();
-            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(60))
+            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry))
             {
                 _readLock.Release();
                 return (T1)_cachedRemoteProperties[key].Value;
