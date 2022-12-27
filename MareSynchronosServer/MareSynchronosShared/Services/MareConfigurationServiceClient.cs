@@ -52,10 +52,26 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
 
             if (!isCurrent)
             {
-                var result = GetValueFromGrpc(key, defaultValue, prop.PropertyType);
-                if (result == null) return defaultValue;
-                _cachedRemoteProperties[key] = result;
-                return (T1)_cachedRemoteProperties[key].Value;
+                try
+                {
+                    var result = GetValueFromGrpc(key, defaultValue, prop.PropertyType);
+                    if (result == null) return defaultValue;
+                    _cachedRemoteProperties[key] = result;
+                    return (T1)_cachedRemoteProperties[key].Value;
+                }
+                catch (Exception ex)
+                {
+                    if (existingEntry != null)
+                    {
+                        _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning existing", key);
+                        return (T1)existingEntry.Value;
+                    }
+                    else
+                    {
+                        _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning default", key);
+                        return defaultValue;
+                    }
+                }
             }
         }
 
