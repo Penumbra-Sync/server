@@ -80,6 +80,21 @@ public class CachedFileProvider
 
         _fileStatisticsService.LogFile(hash, fi.Length);
 
-        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+        int attempts = 0;
+        while (attempts < 5)
+        {
+            try
+            {
+                return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+            }
+            catch (Exception ex)
+            {
+                attempts++;
+                _logger.LogWarning(ex, "Error opening file, retrying");
+                await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            }
+        }
+
+        throw new IOException("Could not open file " + fi.FullName);
     }
 }
