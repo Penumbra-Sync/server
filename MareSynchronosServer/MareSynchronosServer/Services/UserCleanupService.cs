@@ -185,8 +185,6 @@ public class UserCleanupService : IHostedService
         dbContext.Users.Remove(user);
 
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        metrics.DecGauge(MetricsAPI.GaugeUsersRegistered, 1);
     }
 
     public Task StopAsync(CancellationToken cancellationToken)

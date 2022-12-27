@@ -36,8 +36,9 @@ public class Program
 
             var metrics = services.GetRequiredService<MareMetrics>();
 
-            metrics.SetGaugeTo(MetricsAPI.GaugePairs, context.ClientPairs.Count());
-            metrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, context.ClientPairs.Count(p => p.IsPaused));
+            metrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, context.Users.AsNoTracking().Count());
+            metrics.SetGaugeTo(MetricsAPI.GaugePairs, context.ClientPairs.AsNoTracking().Count());
+            metrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, context.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
 
         }
 

@@ -864,8 +864,6 @@ public class MareModule : InteractionModuleBase
 
                     _botServices.Logger.LogInformation("User registered: {userUID}", user.UID);
 
-                    _botServices.Metrics.IncGauge(MetricsAPI.GaugeUsersRegistered, 1);
-
                     lodestoneAuth.StartedAt = null;
                     lodestoneAuth.User = user;
                     lodestoneAuth.LodestoneAuthString = null;

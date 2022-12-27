@@ -15,9 +15,6 @@ public class Program
         {
             var services = scope.ServiceProvider;
             using var dbContext = services.GetRequiredService<MareDbContext>();
-            var metrics = services.GetRequiredService<MareMetrics>();
-
-            metrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, dbContext.Users.Count());
 
             var options = host.Services.GetService<IConfigurationService<ServicesConfiguration>>();
             var optionsServer = host.Services.GetService<IConfigurationService<ServerConfiguration>>();

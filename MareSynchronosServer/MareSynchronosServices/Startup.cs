@@ -33,10 +33,7 @@ public class Startup
         }, Configuration.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string> { },
-        new List<string>
-        {
-            MetricsAPI.GaugeUsersRegistered
-        }));
+        new List<string> {}));
 
         var noRetryConfig = new MethodConfig
         {
