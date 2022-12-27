@@ -271,7 +271,7 @@ public class Startup
 
         app.UseWebSockets();
 
-        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4981));
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4980));
         metricServer.Start();
 
         app.UseAuthentication();
