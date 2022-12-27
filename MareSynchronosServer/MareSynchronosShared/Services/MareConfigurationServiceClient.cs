@@ -20,7 +20,7 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
     private readonly ILogger<MareConfigurationServiceClient<T>> _logger;
     private readonly GrpcClientFactory _grpcClientFactory;
     private readonly string _grpcClientName;
-    private static SemaphoreSlim _readLock = new(1);
+    private static readonly SemaphoreSlim _readLock = new(1);
 
     public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptions<T> config, GrpcClientFactory grpcClientFactory, string grpcClientName)
     {
