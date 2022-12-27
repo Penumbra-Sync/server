@@ -7,6 +7,9 @@ using MareSynchronosShared.Utils;
 using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
+using Grpc.Net.ClientFactory;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MareSynchronosServices;
 
@@ -33,7 +36,7 @@ public class Startup
         }, Configuration.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string> { },
-        new List<string> {}));
+        new List<string> { }));
 
         var noRetryConfig = new MethodConfig
         {
@@ -53,7 +56,7 @@ public class Startup
             };
         });
 
-        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>(c =>
+        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
         {
             c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
         }).ConfigureChannel(c =>
@@ -72,8 +75,16 @@ public class Startup
         services.AddSingleton<DiscordBotServices>();
         services.AddHostedService<DiscordBot>();
         services.AddSingleton<IConfigurationService<ServicesConfiguration>, MareConfigurationServiceServer<ServicesConfiguration>>();
-        services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
-        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
+        services.AddSingleton<IConfigurationService<ServerConfiguration>>(c => new MareConfigurationServiceClient<ServerConfiguration>(
+                c.GetService<ILogger<MareConfigurationServiceClient<ServerConfiguration>>>(),
+                c.GetService<IOptions<ServerConfiguration>>(),
+                c.GetService<GrpcClientFactory>(),
+                "MainServer"));
+        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(c => new MareConfigurationServiceClient<MareConfigurationAuthBase>(
+            c.GetService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
+            c.GetService<IOptions<MareConfigurationAuthBase>>(),
+            c.GetService<GrpcClientFactory>(),
+            "MainServer"));
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

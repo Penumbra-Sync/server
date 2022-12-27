@@ -18,6 +18,8 @@ using MareSynchronosShared.Utils;
 using MareSynchronosServer.Identity;
 using MareSynchronosShared.Services;
 using Prometheus;
+using Microsoft.Extensions.Options;
+using Grpc.Net.ClientFactory;
 
 namespace MareSynchronosServer;
 
@@ -207,7 +209,7 @@ public class Startup
                 };
             });
 
-            services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>(c =>
+            services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
             {
                 c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.MainServerGrpcAddress)));
             }).ConfigureChannel(c =>
@@ -221,8 +223,16 @@ public class Startup
 
             services.AddSingleton<IClientIdentificationService, GrpcClientIdentificationService>();
             services.AddHostedService(p => p.GetService<IClientIdentificationService>());
-            services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
-            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
+            services.AddSingleton<IConfigurationService<ServerConfiguration>>(c => new MareConfigurationServiceClient<ServerConfiguration>(
+                c.GetService<ILogger<MareConfigurationServiceClient<ServerConfiguration>>>(),
+                c.GetService<IOptions<ServerConfiguration>>(),
+                c.GetService<GrpcClientFactory>(),
+                "MainServer"));
+            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(c => new MareConfigurationServiceClient<MareConfigurationAuthBase>(
+                c.GetService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
+                c.GetService<IOptions<MareConfigurationAuthBase>>(),
+                c.GetService<GrpcClientFactory>(),
+                "MainServer"));
         }
         else
         {

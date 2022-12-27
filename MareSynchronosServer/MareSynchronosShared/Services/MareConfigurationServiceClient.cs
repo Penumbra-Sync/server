@@ -18,20 +18,16 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
     private readonly T _config;
     private readonly ConcurrentDictionary<string, RemoteCachedEntry> _cachedRemoteProperties = new(StringComparer.Ordinal);
     private readonly ILogger<MareConfigurationServiceClient<T>> _logger;
-    private readonly ConfigurationServiceClient _configurationServiceClient;
-
-    public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptions<T> config, ConfigurationServiceClient configurationServiceClient)
-    {
-        _config = config.Value;
-        _logger = logger;
-        _configurationServiceClient = configurationServiceClient;
-    }
+    private readonly GrpcClientFactory _grpcClientFactory;
+    private readonly string _grpcClientName;
+    private static SemaphoreSlim _readLock = new(1);
 
     public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptions<T> config, GrpcClientFactory grpcClientFactory, string grpcClientName)
     {
         _config = config.Value;
         _logger = logger;
-        _configurationServiceClient = grpcClientFactory.CreateClient<ConfigurationServiceClient>(grpcClientName);
+        _grpcClientFactory = grpcClientFactory;
+        _grpcClientName = grpcClientName;
     }
 
     public bool IsMain => false;
@@ -44,34 +40,36 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
         if (isRemote)
         {
-            bool isCurrent = false;
-            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(30))
+            _readLock.Wait();
+            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(60))
             {
-                isCurrent = true;
+                _readLock.Release();
+                return (T1)_cachedRemoteProperties[key].Value;
             }
 
-            if (!isCurrent)
+            try
             {
-                try
+                var result = GetValueFromGrpc(key, defaultValue, prop.PropertyType);
+                if (result == null) return defaultValue;
+                _cachedRemoteProperties[key] = result;
+                return (T1)_cachedRemoteProperties[key].Value;
+            }
+            catch (Exception ex)
+            {
+                if (existingEntry != null)
                 {
-                    var result = GetValueFromGrpc(key, defaultValue, prop.PropertyType);
-                    if (result == null) return defaultValue;
-                    _cachedRemoteProperties[key] = result;
-                    return (T1)_cachedRemoteProperties[key].Value;
+                    _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning existing", key);
+                    return (T1)existingEntry.Value;
                 }
-                catch (Exception ex)
+                else
                 {
-                    if (existingEntry != null)
-                    {
-                        _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning existing", key);
-                        return (T1)existingEntry.Value;
-                    }
-                    else
-                    {
-                        _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning default", key);
-                        return defaultValue;
-                    }
+                    _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning default", key);
+                    return defaultValue;
                 }
+            }
+            finally
+            {
+                _readLock.Release();
             }
         }
 
@@ -85,12 +83,14 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         try
         {
             _logger.LogInformation("Getting {key} from Grpc", key);
-            var response = _configurationServiceClient.GetConfigurationEntry(new KeyMessage { Key = key, Default = Convert.ToString(defaultValue, CultureInfo.InvariantCulture) });
+            var configClient = _grpcClientFactory.CreateClient<ConfigurationServiceClient>(_grpcClientName);
+            var response = configClient.GetConfigurationEntry(new KeyMessage { Key = key, Default = Convert.ToString(defaultValue, CultureInfo.InvariantCulture) });
             _logger.LogInformation("Grpc Response for {key} = {value}", key, response.Value);
             return new RemoteCachedEntry(JsonSerializer.Deserialize(response.Value, t), DateTime.Now);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Failure Getting Cached Entry");
             return null;
         }
     }
@@ -103,22 +103,37 @@ public class MareConfigurationServiceClient<T> : IConfigurationService<T> where 
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
         if (isRemote)
         {
-            bool isCurrent = false;
-            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(30))
+            _readLock.Wait();
+            if (_cachedRemoteProperties.TryGetValue(key, out var existingEntry) && existingEntry.Inserted > DateTime.Now - TimeSpan.FromMinutes(60))
             {
-                isCurrent = true;
+                _readLock.Release();
+                return (T1)_cachedRemoteProperties[key].Value;
             }
 
-            if (!isCurrent)
+            try
             {
                 var result = GetValueFromGrpc(key, null, prop.PropertyType);
                 if (result == null) throw new KeyNotFoundException(key);
                 _cachedRemoteProperties[key] = result;
+                return (T1)_cachedRemoteProperties[key].Value;
             }
-
-            if (!_cachedRemoteProperties.ContainsKey(key)) throw new KeyNotFoundException(key);
-
-            return (T1)_cachedRemoteProperties[key].Value;
+            catch (Exception ex)
+            {
+                if (existingEntry != null)
+                {
+                    _logger.LogWarning(ex, "Could not get value for {key} from Grpc, returning existing", key);
+                    return (T1)existingEntry.Value;
+                }
+                else
+                {
+                    _logger.LogWarning(ex, "Could not get value for {key} from Grpc, throwing exception", key);
+                    throw new KeyNotFoundException(key);
+                }
+            }
+            finally
+            {
+                _readLock.Release();
+            }
         }
 
         var value = prop.GetValue(_config);
