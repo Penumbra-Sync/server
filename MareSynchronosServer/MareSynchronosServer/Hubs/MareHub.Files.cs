@@ -50,7 +50,7 @@ public partial class MareHub
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
-        var cacheFile = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).Select(k => new { k.Hash, k.Size }).ToListAsync().ConfigureAwait(false);
+        var cacheFile = await _dbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size }).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
         foreach (var file in cacheFile)
         {
