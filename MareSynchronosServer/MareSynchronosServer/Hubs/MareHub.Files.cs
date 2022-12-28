@@ -50,27 +50,21 @@ public partial class MareHub
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
-        FileSizeRequest request = new FileSizeRequest();
-        request.Hash.AddRange(hashes);
-        Metadata headers = new Metadata()
-        {
-            { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
-        };
-        var grpcResponse = await _fileServiceClient.GetFileSizesAsync(request, headers).ConfigureAwait(false);
+        var cacheFile = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).Select(k => new { k.Hash, k.Size }).ToListAsync().ConfigureAwait(false);
 
-        foreach (var hash in grpcResponse.HashToFileSize)
+        foreach (var file in cacheFile)
         {
-            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, hash.Key, StringComparison.Ordinal));
-            var downloadFile = allFiles.SingleOrDefault(f => string.Equals(f.Hash, hash.Key, StringComparison.Ordinal));
+            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
+            var downloadFile = allFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
 
             response.Add(new DownloadFileDto
             {
-                FileExists = hash.Value > 0,
+                FileExists = file.Size > 0,
                 ForbiddenBy = forbiddenFile?.ForbiddenBy ?? string.Empty,
                 IsForbidden = forbiddenFile != null,
-                Hash = hash.Key,
-                Size = hash.Value,
-                Url = new Uri(_cdnFullUri, hash.Key.ToUpperInvariant()).ToString()
+                Hash = file.Hash,
+                Size = file.Size,
+                Url = new Uri(_cdnFullUri, file.Hash.ToUpperInvariant()).ToString()
             });
         }
 

@@ -6,7 +6,6 @@ package mareservices;
 
 service FileService {
 	rpc UploadFile (stream UploadFileRequest) returns (Empty);
-	rpc GetFileSizes (FileSizeRequest) returns (FileSizeResponse);
 	rpc DeleteFiles (DeleteFilesRequest) returns (Empty);
 }
 
@@ -98,14 +97,6 @@ message UploadFileRequest {
 
 message DeleteFilesRequest {
 	repeated string hash = 1;
-}
-
-message FileSizeRequest {
-	repeated string hash = 1;
-}
-
-message FileSizeResponse {
-	map<string, int64> hashToFileSize = 1;
 }
 
 message AuthRequest {

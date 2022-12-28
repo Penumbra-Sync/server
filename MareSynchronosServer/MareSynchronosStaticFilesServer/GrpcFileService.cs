@@ -46,6 +46,7 @@ public class GrpcFileService : FileService.FileServiceBase
 
                 var fileSize = new FileInfo(filePath).Length;
                 file.Uploaded = true;
+                file.Size = fileSize;
 
                 await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -95,17 +96,5 @@ public class GrpcFileService : FileService.FileServiceBase
 
         await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
         return new Empty();
-    }
-
-    public override Task<FileSizeResponse> GetFileSizes(FileSizeRequest request, ServerCallContext context)
-    {
-        FileSizeResponse response = new();
-        foreach (var hash in request.Hash.Distinct(StringComparer.Ordinal))
-        {
-            FileInfo? fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-            response.HashToFileSize.Add(hash, fi?.Length ?? 0);
-        }
-
-        return Task.FromResult(response);
     }
 }

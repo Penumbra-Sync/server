@@ -3,7 +3,7 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
-using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -52,7 +52,7 @@ public class FileCleanupService : IHostedService
             using var scope = _services.CreateScope();
             using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
 
-            CleanUpOutdatedFiles(dbContext, ct);
+            await CleanUpOutdatedFiles(dbContext, ct).ConfigureAwait(false);
 
             CleanUpFilesBeyondSizeLimit(dbContext, ct);
 
@@ -109,7 +109,7 @@ public class FileCleanupService : IHostedService
         }
     }
 
-    private void CleanUpOutdatedFiles(MareDbContext dbContext, CancellationToken ct)
+    private async Task CleanUpOutdatedFiles(MareDbContext dbContext, CancellationToken ct)
     {
         try
         {
@@ -125,14 +125,17 @@ public class FileCleanupService : IHostedService
             // clean up files in DB but not on disk or last access is expired
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(unusedRetention));
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
-            var allFiles = dbContext.Files.ToList();
+            var allFiles = await dbContext.Files.ToListAsync().ConfigureAwait(false);
+            int fileCounter = 0;
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
             {
                 var file = FilePathUtil.GetFileInfoForHash(_cacheDir, fileCache.Hash);
+                bool fileDeleted = false;
                 if (file == null && _isMainServer)
                 {
                     _logger.LogInformation("File does not exist anymore: {fileName}", fileCache.Hash);
                     dbContext.Files.Remove(fileCache);
+                    fileDeleted = true;
                 }
                 else if (file != null && file.LastAccessTime < prevTime)
                 {
@@ -141,7 +144,10 @@ public class FileCleanupService : IHostedService
                     _logger.LogInformation("File outdated: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
                     if (_isMainServer)
+                    {
+                        fileDeleted = true;
                         dbContext.Files.Remove(fileCache);
+                    }
                 }
                 else if (file != null && forcedDeletionAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
                 {
@@ -150,8 +156,20 @@ public class FileCleanupService : IHostedService
                     _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
                     if (_isMainServer)
+                    {
+                        fileDeleted = true;
                         dbContext.Files.Remove(fileCache);
+                    }
                 }
+
+                if (_isMainServer && !fileDeleted && file != null && fileCache.Size == 0)
+                {
+                    fileCache.Size = file.Length;
+                    // commit every 1000 files to db
+                    if (fileCounter % 1000 == 0) await dbContext.SaveChangesAsync().ConfigureAwait(false);
+                }
+
+                fileCounter++;
 
                 ct.ThrowIfCancellationRequested();
             }

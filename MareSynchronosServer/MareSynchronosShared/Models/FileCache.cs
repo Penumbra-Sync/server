@@ -13,4 +13,5 @@ public class FileCache
     public bool Uploaded { get; set; }
     [Timestamp]
     public byte[] Timestamp { get; set; }
+    public long Size { get; set; }
 }
