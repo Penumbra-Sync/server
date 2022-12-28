@@ -124,6 +124,8 @@ public class Startup
                 p.GetRequiredService<IOptions<StaticFilesServerConfiguration>>(),
                 p.GetRequiredService<GrpcClientFactory>(),
                 "FileServer"));
+
+            services.AddHostedService(p => (MareConfigurationServiceClient<StaticFilesServerConfiguration>)p.GetService<IConfigurationService<StaticFilesServerConfiguration>>());
         }
 
         services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(p =>
@@ -132,6 +134,8 @@ public class Startup
                 p.GetService<IOptions<MareConfigurationAuthBase>>(),
                 p.GetRequiredService<GrpcClientFactory>(), "MainServer")
         );
+
+        services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

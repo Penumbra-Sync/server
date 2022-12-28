@@ -233,6 +233,8 @@ public class Startup
                 c.GetService<IOptions<MareConfigurationAuthBase>>(),
                 c.GetService<GrpcClientFactory>(),
                 "MainServer"));
+            services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());
+            services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
         }
         else
         {

@@ -18,8 +18,6 @@ public class Program
             using var context = services.GetRequiredService<MareDbContext>();
             var options = services.GetRequiredService<IConfigurationService<ServerConfiguration>>();
             var logger = host.Services.GetRequiredService<ILogger<Program>>();
-            logger.LogInformation("Loaded MareSynchronos Server Configuration (IsMain: {isMain})", options.IsMain);
-            logger.LogInformation(options.ToString());
 
             if (options.IsMain)
             {

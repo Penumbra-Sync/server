@@ -9,6 +9,11 @@ services:
     volumes:
       - ../data/postgresql/:/var/lib/postgresql/data
       - postgres_socket:/var/run/postgresql:rw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mare-server:
     image: darkarchon/mare-synchronos-server:latest
@@ -22,7 +27,8 @@ services:
       - ../log/server-standalone/:/opt/MareSynchronosServer/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
+      postgres:
+        condition: service_healthy
 
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
@@ -34,7 +40,8 @@ services:
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
+      postgres:
+        condition: service_healthy
       - "mare-server"
 
   mare-files:
@@ -48,7 +55,8 @@ services:
       - postgres_socket:/var/run/postgresql/:rw
       - ../data/files-standalone/:/marecache/:rw
     depends_on:
-      - "postgres"
+      postgres:
+        condition: service_healthy
       - "mare-server"
 
 volumes:

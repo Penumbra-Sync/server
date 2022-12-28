@@ -9,6 +9,11 @@ services:
     volumes:
       - ../data/postgresql/:/var/lib/postgresql/data
       - postgres_socket:/var/run/postgresql:rw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mare"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   haproxy:
     image: haproxy:latest
@@ -35,7 +40,8 @@ services:
       - ../log/server-shard-main/:/opt/MareSynchronosServer/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
+      postgres:
+        condition: service_healthy
 
   mare-shard-1:
     image: darkarchon/mare-synchronos-server:latest
