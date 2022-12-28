@@ -164,6 +164,7 @@ public class FileCleanupService : IHostedService
 
                 if (_isMainServer && !fileDeleted && file != null && fileCache.Size == 0)
                 {
+                    _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
                     fileCache.Size = file.Length;
                     // commit every 1000 files to db
                     if (fileCounter % 1000 == 0) await dbContext.SaveChangesAsync().ConfigureAwait(false);
