@@ -68,7 +68,7 @@ public class CachedFileProvider
             _currentTransfers[hash] = DownloadTask(hash, auth).ContinueWith(r => _currentTransfers.Remove(hash, out _));
         }
 
-        if (fi == null && _currentTransfers.TryGetValue(hash, out var downloadTask))
+        if (_currentTransfers.TryGetValue(hash, out var downloadTask))
         {
             await downloadTask.ConfigureAwait(false);
         }
