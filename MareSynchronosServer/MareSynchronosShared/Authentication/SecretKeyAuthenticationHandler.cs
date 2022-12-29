@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.Collections.Concurrent;
+using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -14,6 +15,7 @@ public class SecretKeyAuthenticationHandler : AuthenticationHandler<Authenticati
 
     private readonly IHttpContextAccessor _accessor;
     private readonly SecretKeyAuthenticatorService secretKeyAuthenticatorService;
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> IPLocks = new(StringComparer.Ordinal);
 
     public SecretKeyAuthenticationHandler(IHttpContextAccessor accessor, SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, ISystemClock clock) : base(options, logger, encoder, clock)
@@ -32,28 +34,41 @@ public class SecretKeyAuthenticationHandler : AuthenticationHandler<Authenticati
 
         if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
         {
-            authHeader = string.Empty;
+            return AuthenticateResult.Fail("Failed Authorization");
         }
 
         var ip = _accessor.GetIpAddress();
 
-        var authResult = await secretKeyAuthenticatorService.AuthorizeAsync(ip, authHeader).ConfigureAwait(false);
-
-        if (!authResult.Success)
+        if (!IPLocks.TryGetValue(ip, out var semaphore))
         {
-            return AuthenticateResult.Fail("Failed Authorization");
+            semaphore = new SemaphoreSlim(1);
+            IPLocks[ip] = semaphore;
         }
 
-        var claims = new List<Claim>
+        try
         {
-            new(ClaimTypes.NameIdentifier, authResult.Uid),
-            new(ClaimTypes.Authentication, authHeader)
-        };
+            await semaphore.WaitAsync(Context.RequestAborted).ConfigureAwait(false);
+            var authResult = await secretKeyAuthenticatorService.AuthorizeAsync(ip, authHeader).ConfigureAwait(false);
 
-        var identity = new ClaimsIdentity(claims, nameof(SecretKeyAuthenticationHandler));
-        var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme.Name);
+            if (!authResult.Success)
+            {
+                return AuthenticateResult.Fail("Failed Authorization");
+            }
 
-        return AuthenticateResult.Success(ticket);
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, authResult.Uid),
+            };
+
+            var identity = new ClaimsIdentity(claims, nameof(SecretKeyAuthenticationHandler));
+            var principal = new ClaimsPrincipal(identity);
+            var ticket = new AuthenticationTicket(principal, Scheme.Name);
+
+            return AuthenticateResult.Success(ticket);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 }

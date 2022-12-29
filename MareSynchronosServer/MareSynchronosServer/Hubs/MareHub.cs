@@ -131,8 +131,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         if (!string.IsNullOrEmpty(userCharaIdent))
         {
-            _mareMetrics.DecGauge(MetricsAPI.GaugeAuthorizedConnections);
-
             _logger.LogCallInfo();
             _clientIdentService.MarkUserOffline(AuthenticatedUserId);
 

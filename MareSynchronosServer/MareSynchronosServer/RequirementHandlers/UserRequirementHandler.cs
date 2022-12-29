@@ -23,9 +23,8 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, UserRequirement requirement, HubInvocationContext resource)
     {
         var uid = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value;
-        var auth = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value;
 
-        if (uid == null || auth == null) context.Fail();
+        if (uid == null) context.Fail();
 
         if ((requirement.Requirements & UserRequirements.Identified) is UserRequirements.Identified)
         {
