@@ -27,10 +27,11 @@ public class CachedFileProvider
     public async Task<FileStream?> GetFileStream(string hash, string auth)
     {
         var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-        if (fi == null)
+        bool hasTransferTask = _currentTransfers.TryGetValue(hash, out var transferTask);
+        if (fi == null && !hasTransferTask)
         {
             if (IsMainServer) return null;
-            if (!_currentTransfers.ContainsKey(hash))
+            if (transferTask == null)
             {
                 _currentTransfers[hash] = Task.Run(async () =>
                 {
@@ -52,17 +53,14 @@ public class CachedFileProvider
                     }
 
                     var fileName = FilePathUtil.GetFilePath(_basePath, hash);
-                    var fileStream = File.Create(fileName);
-                    await using (fileStream.ConfigureAwait(false))
-                    {
-                        var bufferSize = response.Content.Headers.ContentLength > 1024 * 1024 ? 4096 : 1024;
-                        var buffer = new byte[bufferSize];
+                    using var fileStream = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+                    var bufferSize = response.Content.Headers.ContentLength > 1024 * 1024 ? 4096 : 1024;
+                    var buffer = new byte[bufferSize];
 
-                        var bytesRead = 0;
-                        while ((bytesRead = await (await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ReadAsync(buffer).ConfigureAwait(false)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
-                        }
+                    var bytesRead = 0;
+                    while ((bytesRead = await (await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ReadAsync(buffer).ConfigureAwait(false)) > 0)
+                    {
+                        await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
                     }
 
                     _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
@@ -70,11 +68,14 @@ public class CachedFileProvider
                 });
             }
 
-            await _currentTransfers[hash].ConfigureAwait(false);
+            transferTask = _currentTransfers[hash];
+        }
+
+        if (transferTask != null)
+        {
+            await transferTask.ConfigureAwait(false);
             _currentTransfers.Remove(hash, out _);
-
             fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-
             if (fi == null) return null;
         }
 
@@ -85,7 +86,7 @@ public class CachedFileProvider
         {
             try
             {
-                return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
             }
             catch (Exception ex)
             {
