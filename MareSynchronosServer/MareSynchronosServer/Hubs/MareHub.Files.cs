@@ -83,7 +83,7 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<List<UploadFileDto>> FilesSend(List<string> fileListHashes)
     {
-        var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal).Select(s => new string(s.Where(c => char.IsLetterOrDigit(c)))), StringComparer.Ordinal);
+        var userSentHashes = new HashSet<string>(fileListHashes.Distinct(StringComparer.Ordinal).Select(s => string.Concat(s.Where(c => char.IsLetterOrDigit(c)))), StringComparer.Ordinal);
         _logger.LogCallInfo(MareHubLogger.Args(userSentHashes.Count.ToString()));
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
