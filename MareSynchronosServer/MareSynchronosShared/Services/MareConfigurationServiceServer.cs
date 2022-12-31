@@ -32,6 +32,9 @@ public class MareConfigurationServiceServer<T> : IConfigurationService<T> where 
         {
             sb.AppendLine($"{prop.Name} (IsRemote: {prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()}) => {prop.GetValue(_config)}");
         }
+
+        sb.AppendLine(_config.ToString());
+
         return sb.ToString();
     }
 }

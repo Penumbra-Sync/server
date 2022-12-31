@@ -12,18 +12,19 @@ It is possible to build all required images at once by running `docker-build.bat
 
 ## 2. Configure ports + token
 You should set up 2 environment variables that hold server specific configuration and open up ports.  
-The default ports used through the provided configuration are `6000` for the main server and `6200` for the files downloads.  
+The default ports used through the provided configuration are `6000` for the main server and `6200` as well as `6201` for the files downloads.
 Both ports should be open to your computer through your router if you wish to test this with clients.
 
 Furthermore there are two environment variables `DEV_MARE_CDNURL` and `DEV_MARE_DISCORDTOKEN` which you are required to set.  
-`DEV_MARE_CDNURL` should point to `http://<yourip or dyndns>:6200/cache/` and `DEV_MARE_DISCORDTOKEN` is an oauth token from a bot you need to create through the Discord bot portal.  
+`DEV_MARE_CDNURL` should point to `http://<yourip or dyndns>:6200/cache/` and `DEV_MARE_DISCORDTOKEN` is an oauth token from a bot you need to create through the Discord bot portal. 
+You should also set `DEV_MARE_CDNURL2` to `http://<yourip or dyndns>:6201/cache/`
 It is enough to set them as User variables. The compose files refer to those environment variables to overwrite configuration settings for the Server and Services to set those respective values.  
 It is also possible to set those values in the configuration.json files themselves.  
 Without a valid Discord bot you will not be able to register accounts without fumbling around in the PostgreSQL database.
 
 ## 3. Run Mare Server
 The run folder contains two major Mare configurations which is `standalone` and `sharded`.  
-Both configurations default to port `6000` for the main server connection and `6200` for the files downloads. No HTTPS.  
+Both configurations default to port `6000` for the main server connection and `6200` for the files downloads. Sharded configuration additionally uses `6201` for downloads. No HTTPS.  
 All `appsettings.json` configurations provided are extensive at the point of writing, note the differences between the shard configurations and the main servers respectively.  
 They can be used as examples if you want to spin up your own servers otherwise.
 

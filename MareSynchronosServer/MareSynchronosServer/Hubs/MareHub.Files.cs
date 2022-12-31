@@ -6,6 +6,7 @@ using MareSynchronos.API;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
+using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
@@ -52,10 +53,14 @@ public partial class MareHub
 
         var cacheFile = await _dbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size }).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
+        var shardConfig = _configurationService.GetValueOrDefault(nameof(ServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>());
+
         foreach (var file in cacheFile)
         {
             var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
-            var downloadFile = allFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
+
+            var matchedShardConfig = shardConfig.Find(f => f.FileMatchRegex.Match(file.Hash).Success);
+            var baseUrl = matchedShardConfig?.CdnFullUrl ?? _mainCdnFullUrl;
 
             response.Add(new DownloadFileDto
             {
@@ -64,7 +69,7 @@ public partial class MareHub
                 IsForbidden = forbiddenFile != null,
                 Hash = file.Hash,
                 Size = file.Size,
-                Url = new Uri(_cdnFullUri, file.Hash.ToUpperInvariant()).ToString()
+                Url = new Uri(baseUrl, file.Hash.ToUpperInvariant()).ToString()
             });
         }
 

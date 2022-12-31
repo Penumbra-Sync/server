@@ -41,7 +41,17 @@
         "MaxJoinedGroupsByUser": 6,
         "MaxGroupUserCount": 100,
         "PurgeUnusedAccounts": false,
-        "PurgeUnusedAccountsPeriodInDays": 14
+        "PurgeUnusedAccountsPeriodInDays": 14,
+        "CdnShardConfiguration": [
+            {
+                "FileMatch": "^[01234567]",
+                "CdnFullUrl": ""
+            },
+            {
+                "FileMatch": "^[89ABCDEF]",
+                "CdnFullUrl": ""
+            }
+        ]
     },
     "AllowedHosts": "*",
     "Kestrel": {

@@ -4,11 +4,13 @@ using MareSynchronosShared.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using static MareSynchronosShared.Protos.ConfigurationService;
 
 namespace MareSynchronosShared.Services;
@@ -75,9 +77,17 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
         foreach (var prop in props)
         {
             var isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any();
-            var mi = GetType().GetMethod(nameof(GetValue)).MakeGenericMethod(prop.PropertyType);
-            var val = mi.Invoke(this, new[] { prop.Name });
-            var value = isRemote ? val : prop.GetValue(_config);
+            var getValueMethod = GetType().GetMethod(nameof(GetValue)).MakeGenericMethod(prop.PropertyType);
+            var value = isRemote ? getValueMethod.Invoke(this, new[] { prop.Name }) : prop.GetValue(_config);
+            if (typeof(IEnumerable).IsAssignableFrom(prop.PropertyType) && !typeof(string).IsAssignableFrom(prop.PropertyType))
+            {
+                var enumVal = (IEnumerable)value;
+                value = string.Empty;
+                foreach (var listVal in enumVal)
+                {
+                    value += listVal.ToString() + ", ";
+                }
+            }
             sb.AppendLine($"{prop.Name} (IsRemote: {isRemote}) => {value}");
         }
         return sb.ToString();

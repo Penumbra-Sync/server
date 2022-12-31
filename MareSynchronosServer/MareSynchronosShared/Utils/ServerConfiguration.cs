@@ -20,6 +20,8 @@ public class ServerConfiguration : MareConfigurationAuthBase
     public bool PurgeUnusedAccounts { get; set; } = false;
     [RemoteConfiguration]
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
+    [RemoteConfiguration]
+    public List<CdnShardConfiguration> CdnShardConfiguration { get; set; } = new();
 
     public override string ToString()
     {
@@ -27,6 +29,7 @@ public class ServerConfiguration : MareConfigurationAuthBase
         sb.AppendLine(base.ToString());
         sb.AppendLine($"{nameof(MainServerGrpcAddress)} => {MainServerGrpcAddress}");
         sb.AppendLine($"{nameof(CdnFullUrl)} => {CdnFullUrl}");
+        sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration.Select(c => c.ToString()))}");
         sb.AppendLine($"{nameof(StaticFileServiceAddress)} => {StaticFileServiceAddress}");
         sb.AppendLine($"{nameof(RedisConnectionString)} => {RedisConnectionString}");
         sb.AppendLine($"{nameof(MaxExistingGroupsByUser)} => {MaxExistingGroupsByUser}");

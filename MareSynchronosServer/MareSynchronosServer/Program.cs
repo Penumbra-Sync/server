@@ -30,6 +30,8 @@ public class Program
                 context.RemoveRange(unfinishedRegistrations);
                 context.RemoveRange(looseFiles);
                 context.SaveChanges();
+
+                logger.LogInformation(options.ToString());
             }
 
             var metrics = services.GetRequiredService<MareMetrics>();

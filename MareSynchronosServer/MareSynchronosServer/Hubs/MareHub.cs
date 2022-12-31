@@ -23,11 +23,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly IClientIdentificationService _clientIdentService;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
-    private readonly Uri _cdnFullUri;
+    private readonly Uri _mainCdnFullUrl;
     private readonly string _shardName;
     private readonly int _maxExistingGroupsByUser;
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
+    private IConfigurationService<ServerConfiguration> _configurationService;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
@@ -37,7 +38,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        _cdnFullUri = configuration.GetValue<Uri>(nameof(ServerConfiguration.CdnFullUrl));
+        _configurationService = configuration;
+        _mainCdnFullUrl = configuration.GetValue<Uri>(nameof(ServerConfiguration.CdnFullUrl));
         _shardName = configuration.GetValue<string>(nameof(ServerConfiguration.ShardName));
         _maxExistingGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxExistingGroupsByUser), 3);
         _maxJoinedGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxJoinedGroupsByUser), 6);
