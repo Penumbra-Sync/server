@@ -144,7 +144,7 @@ public partial class MareHub
             + Environment.NewLine 
             + string.Join(Environment.NewLine, invalidGamePaths.Select(p => "Invalid Game Path: " + p))
             + Environment.NewLine
-            + string.Join(Environment.NewLine, invalidGamePaths.Select(p => "Invalid FileSwap Path: " + p)));
+            + string.Join(Environment.NewLine, invalidFileSwapPaths.Select(p => "Invalid FileSwap Path: " + p)));
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
