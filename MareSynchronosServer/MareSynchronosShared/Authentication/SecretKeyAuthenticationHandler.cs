@@ -58,6 +58,7 @@ public class SecretKeyAuthenticationHandler : AuthenticationHandler<Authenticati
             var claims = new List<Claim>
             {
                 new(ClaimTypes.NameIdentifier, authResult.Uid),
+                new(ClaimTypes.Authentication, authHeader)
             };
 
             var identity = new ClaimsIdentity(claims, nameof(SecretKeyAuthenticationHandler));
