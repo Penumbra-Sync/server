@@ -28,7 +28,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxExistingGroupsByUser;
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
-    private IConfigurationService<ServerConfiguration> _configurationService;
+    private readonly IConfigurationService<ServerConfiguration> _configurationService;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,

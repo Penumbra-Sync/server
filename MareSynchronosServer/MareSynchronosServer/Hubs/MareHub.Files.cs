@@ -1,5 +1,6 @@
 ﻿using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Google.Protobuf;
 using Grpc.Core;
 using MareSynchronos.API;
@@ -53,13 +54,13 @@ public partial class MareHub
 
         var cacheFile = await _dbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size }).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
-        var shardConfig = _configurationService.GetValueOrDefault(nameof(ServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>());
+        var shardConfig = new List<CdnShardConfiguration>(_configurationService.GetValueOrDefault(nameof(ServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()));
 
         foreach (var file in cacheFile)
         {
             var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
 
-            var matchedShardConfig = shardConfig.OrderBy(g => Guid.NewGuid()).FirstOrDefault(f => f.FileMatchRegex.Match(file.Hash).Success);
+            var matchedShardConfig = shardConfig.OrderBy(g => Guid.NewGuid()).FirstOrDefault(f => new Regex(f.FileMatch).IsMatch(file.Hash));
             var baseUrl = matchedShardConfig?.CdnFullUrl ?? _mainCdnFullUrl;
 
             response.Add(new DownloadFileDto

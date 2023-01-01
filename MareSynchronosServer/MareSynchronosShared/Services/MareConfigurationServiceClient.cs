@@ -10,15 +10,12 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using static MareSynchronosShared.Protos.ConfigurationService;
 
 namespace MareSynchronosShared.Services;
 
 public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationService<T> where T : class, IMareConfiguration
 {
-    internal record RemoteCachedEntry(object Value, DateTime Inserted);
-
     private readonly T _config;
     private readonly ConcurrentDictionary<string, object> _cachedRemoteProperties = new(StringComparer.Ordinal);
     private readonly ILogger<MareConfigurationServiceClient<T>> _logger;
@@ -121,10 +118,10 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
                 var properties = _config.GetType().GetProperties();
                 foreach (var prop in properties)
                 {
-                    _logger.LogInformation("Checking Property " + prop.Name);
                     try
                     {
                         if (!prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()) continue;
+                        _logger.LogInformation("Checking Property " + prop.Name);
                         var mi = GetType().GetMethod(nameof(GetValueFromGrpc), BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(prop.PropertyType);
                         var defaultValue = prop.PropertyType.IsValueType ? Activator.CreateInstance(prop.PropertyType) : null;
                         var task = (Task)mi.Invoke(this, new[] { _configurationServiceClient, prop.Name, defaultValue });
@@ -136,6 +133,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
                         if (resultValue != defaultValue)
                         {
                             _cachedRemoteProperties[prop.Name] = resultValue;
+                            _logger.LogInformation(prop.Name + " is now " + resultValue.ToString());
                         }
                     }
                     catch (Exception ex)
@@ -147,16 +145,17 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
                 if (!_initialized)
                 {
                     _initialized = true;
-                    _logger.LogInformation("Finished initial getting properties from GRPC");
-                    _logger.LogInformation(ToString());
                 }
+
+                _logger.LogInformation("Saved properties from GRPC are now:");
+                _logger.LogInformation(ToString());
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failure getting or updating properties from GRPC, retrying in 30min");
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
         }
     }
 

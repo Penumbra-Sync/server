@@ -33,11 +33,11 @@ services:
     image: darkarchon/mare-synchronos-server:latest
     restart: on-failure
     environment:
-      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
+      MareSynchronos__CdnFullUrl: "http://darkarchon.internet-box.ch:9999"
       MareSynchronos__CdnShardConfiguration__0__CdnFullUrl: "${DEV_MARE_CDNURL}"
-      MareSynchronos__CdnShardConfiguration__0__FileMatch: "^[01234567]"
+      MareSynchronos__CdnShardConfiguration__0__FileMatch: "^[012345678]"
       MareSynchronos__CdnShardConfiguration__1__CdnFullUrl: "${DEV_MARE_CDNURL2}"
-      MareSynchronos__CdnShardConfiguration__1__FileMatch: "^[89ABCDEF]"
+      MareSynchronos__CdnShardConfiguration__1__FileMatch: "^[789ABCDEF]"
     volumes:
       - ../config/sharded/server-shard-main.json:/opt/MareSynchronosServer/appsettings.json
       - ../log/server-shard-main/:/opt/MareSynchronosServer/logs/:rw
