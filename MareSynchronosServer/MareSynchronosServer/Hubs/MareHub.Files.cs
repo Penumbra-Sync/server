@@ -59,8 +59,7 @@ public partial class MareHub
         {
             var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
 
-            shardConfig.Shuffle();
-            var matchedShardConfig = shardConfig.Find(f => f.FileMatchRegex.Match(file.Hash).Success);
+            var matchedShardConfig = shardConfig.OrderBy(g => Guid.NewGuid()).FirstOrDefault(f => f.FileMatchRegex.Match(file.Hash).Success);
             var baseUrl = matchedShardConfig?.CdnFullUrl ?? _mainCdnFullUrl;
 
             response.Add(new DownloadFileDto
