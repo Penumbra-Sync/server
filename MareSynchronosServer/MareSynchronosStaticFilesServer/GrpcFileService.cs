@@ -78,7 +78,6 @@ public class GrpcFileService : FileService.FileServiceBase
             try
             {
                 var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-                fi?.Delete();
                 var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash).ConfigureAwait(false);
                 if (file != null)
                 {
@@ -86,6 +85,8 @@ public class GrpcFileService : FileService.FileServiceBase
 
                     _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotal, fi == null ? 0 : 1);
                     _metricsClient.DecGauge(MetricsAPI.GaugeFilesTotalSize, fi?.Length ?? 0);
+
+                    fi?.Delete();
                 }
             }
             catch (Exception ex)
