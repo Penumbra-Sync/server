@@ -12,6 +12,7 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mare"]
       interval: 5s
+      start_period: 5s
       timeout: 5s
       retries: 5
 
@@ -22,7 +23,10 @@ services:
       - 6000:6000/tcp
     volumes:
       - ../config/sharded/haproxy-shards.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-
+    depends_on:
+      mare-server:
+        condition: service_healthy
+        
   redis:
     image: redis:latest
     command: [sh, -c, "rm -f /data/dump.rdb && redis-server --save \"\" --appendonly no --requirepass secretredispassword"]
@@ -45,6 +49,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:6000/health || exit 1"]
+      retries: 60
+      start_period: 10s
+      timeout: 1s
 
   mare-shard-1:
     image: darkarchon/mare-synchronos-server:latest
@@ -54,8 +63,8 @@ services:
       - ../log/server-shard-1/:/opt/MareSynchronosServer/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
 
   mare-shard-2:
     image: darkarchon/mare-synchronos-server:latest
@@ -65,8 +74,8 @@ services:
       - ../log/server-shard-2/:/opt/MareSynchronosServer/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
 
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
@@ -78,8 +87,8 @@ services:
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
-      - "postgres"
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
 
   mare-files:
     image: darkarchon/mare-synchronos-staticfilesserver:latest
@@ -90,8 +99,13 @@ services:
       - postgres_socket:/var/run/postgresql/:rw
       - ../data/files-shard-main/:/marecache/:rw
     depends_on:
-      - "postgres"
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
+    healthcheck:
+      test: curl --fail http://localhost:6200/health || exit 1
+      retries: 60
+      start_period: 10s
+      timeout: 1s
 
   mare-files-shard-1:
     image: darkarchon/mare-synchronos-staticfilesserver:latest
@@ -104,8 +118,8 @@ services:
     ports: 
       - 6200:6200/tcp
     depends_on:
-      - "postgres"
-      - "mare-files"
+      mare-files:
+        condition: service_healthy
 
   mare-files-shard-2:
     image: darkarchon/mare-synchronos-staticfilesserver:latest
@@ -118,8 +132,8 @@ services:
     ports: 
       - 6201:6200/tcp
     depends_on:
-      - "postgres"
-      - "mare-files"
+      mare-files:
+        condition: service_healthy
 
 volumes:
   cache:

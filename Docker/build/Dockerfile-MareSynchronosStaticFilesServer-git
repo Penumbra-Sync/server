@@ -22,6 +22,7 @@ RUN adduser \
 
 COPY --from=BUILD /MareSynchronosStaticFilesServer /opt/MareSynchronosStaticFilesServer
 RUN chown -R mare:mare /opt/MareSynchronosStaticFilesServer
+RUN apt-get update; apt-get install curl -y
 
 USER mare:mare
 WORKDIR /opt/MareSynchronosStaticFilesServer

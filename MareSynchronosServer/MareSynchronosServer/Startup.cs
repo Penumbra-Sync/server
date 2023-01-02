@@ -60,6 +60,8 @@ public class Startup
 
         // configure mare specific services
         ConfigureMareServices(services, mareConfig);
+
+        services.AddHealthChecks();
     }
 
     private static void ConfigureMareServices(IServiceCollection services, IConfigurationSection mareConfig)
@@ -303,6 +305,8 @@ public class Startup
                 endpoints.MapGrpcService<GrpcIdentityService>().AllowAnonymous();
                 endpoints.MapGrpcService<GrpcConfigurationService<ServerConfiguration>>().AllowAnonymous();
             }
+
+            endpoints.MapHealthChecks("/health").WithMetadata(new AllowAnonymousAttribute());
         });
     }
 }

@@ -136,6 +136,8 @@ public class Startup
         );
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
+
+        services.AddHealthChecks();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -161,6 +163,7 @@ public class Startup
                 e.MapGrpcService<GrpcFileService>();
             }
             e.MapControllers();
+            e.MapHealthChecks("/health").WithMetadata(new AllowAnonymousAttribute());
         });
     }
 }

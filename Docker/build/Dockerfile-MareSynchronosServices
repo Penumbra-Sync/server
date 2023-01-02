@@ -24,6 +24,7 @@ RUN adduser \
 
 COPY --from=BUILD /build /opt/MareSynchronosServices
 RUN chown -R mare:mare /opt/MareSynchronosServices
+RUN apt-get update; apt-get install curl -y
 
 USER mare:mare
 WORKDIR /opt/MareSynchronosServices
