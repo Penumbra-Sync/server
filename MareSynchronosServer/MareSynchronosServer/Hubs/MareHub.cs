@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Hubs;
 
+[Authorize(Policy = "Authenticated")]
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;
@@ -118,6 +119,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         return Task.FromResult(needsReconnect);
     }
 
+    [Authorize(Policy = "Authenticated")]
     public override async Task OnConnectedAsync()
     {
         _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress()));
@@ -125,6 +127,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
 
+    [Authorize(Policy = "Authenticated")]
     public override async Task OnDisconnectedAsync(Exception exception)
     {
         _mareMetrics.DecGauge(MetricsAPI.GaugeConnections);

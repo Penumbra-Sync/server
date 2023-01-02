@@ -1,5 +1,4 @@
-﻿using System.Security.Claims;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using Google.Protobuf;
 using Grpc.Core;
@@ -9,6 +8,7 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Hubs;
@@ -37,7 +37,7 @@ public partial class MareHub
         request.Hash.AddRange(ownFiles.Select(f => f.Hash));
         Metadata headers = new Metadata()
             {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
+                { "Authorization", Context.GetHttpContext().Request.Headers["Authorization"].ToString() }
             };
         _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
     }
@@ -213,7 +213,7 @@ public partial class MareHub
 
             Metadata headers = new Metadata()
             {
-                { "Authorization", Context.User!.Claims.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.Authentication, StringComparison.Ordinal))?.Value }
+                { "Authorization", Context.GetHttpContext().Request.Headers["Authorization"].ToString() }
             };
             var streamingCall = _fileServiceClient.UploadFile(headers);
             using var tempFileStream = new FileStream(tempFileName, FileMode.Open, FileAccess.Read);

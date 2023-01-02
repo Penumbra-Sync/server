@@ -6,7 +6,6 @@ using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace MareSynchronosShared.Authentication;
 
@@ -27,11 +26,11 @@ public class SecretKeyAuthenticatorService
         _serviceScopeFactory = serviceScopeFactory;
     }
 
-    internal async Task<SecretKeyAuthReply> AuthorizeAsync(string ip, string secretKey)
+    public async Task<SecretKeyAuthReply> AuthorizeAsync(string ip, string hashedSecretKey)
     {
         _metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
 
-        if (_cachedPositiveResponses.TryGetValue(secretKey, out var cachedPositiveResponse))
+        if (_cachedPositiveResponses.TryGetValue(hashedSecretKey, out var cachedPositiveResponse))
         {
             _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
             return cachedPositiveResponse;
@@ -58,8 +57,7 @@ public class SecretKeyAuthenticatorService
 
         using var scope = _serviceScopeFactory.CreateScope();
         using var context = scope.ServiceProvider.GetService<MareDbContext>();
-        var hashedHeader = StringUtils.Sha256String(secretKey);
-        var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedHeader).ConfigureAwait(false);
+        var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
 
         SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID);
 
@@ -67,11 +65,11 @@ public class SecretKeyAuthenticatorService
         {
             _metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
 
-            _cachedPositiveResponses[secretKey] = reply;
+            _cachedPositiveResponses[hashedSecretKey] = reply;
             _ = Task.Run(async () =>
             {
                 await Task.Delay(TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-                _cachedPositiveResponses.TryRemove(secretKey, out _);
+                _cachedPositiveResponses.TryRemove(hashedSecretKey, out _);
             });
 
         }

@@ -1,7 +1,6 @@
 using MareSynchronos.API;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Hubs;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +19,9 @@ using MareSynchronosShared.Services;
 using Prometheus;
 using Microsoft.Extensions.Options;
 using Grpc.Net.ClientFactory;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace MareSynchronosServer;
 
@@ -62,6 +64,7 @@ public class Startup
         ConfigureMareServices(services, mareConfig);
 
         services.AddHealthChecks();
+        services.AddControllers();
     }
 
     private static void ConfigureMareServices(IServiceCollection services, IConfigurationSection mareConfig)
@@ -121,17 +124,35 @@ public class Startup
     {
         services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
-        services.AddAuthentication(SecretKeyAuthenticationHandler.AuthScheme)
-           .AddScheme<AuthenticationSchemeOptions, SecretKeyAuthenticationHandler>(SecretKeyAuthenticationHandler.AuthScheme, options => { options.Validate(); });
+
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IConfigurationService<MareConfigurationAuthBase>>((o, s) =>
+            {
+                o.TokenValidationParameters = new()
+                {
+                    ValidateIssuer = false,
+                    ValidateLifetime = false,
+                    ValidateAudience = false,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt))))
+                };
+            });
+
+        services.AddAuthentication(o =>
+        {
+            o.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            o.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            o.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+        }).AddJwtBearer();
 
         services.AddAuthorization(options =>
         {
             options.DefaultPolicy = new AuthorizationPolicyBuilder()
-                .AddAuthenticationSchemes(SecretKeyAuthenticationHandler.AuthScheme)
+                .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser().Build();
             options.AddPolicy("Authenticated", policy =>
             {
-                policy.AddAuthenticationSchemes(SecretKeyAuthenticationHandler.AuthScheme);
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
             });
             options.AddPolicy("Identified", policy =>
@@ -306,7 +327,8 @@ public class Startup
                 endpoints.MapGrpcService<GrpcConfigurationService<ServerConfiguration>>().AllowAnonymous();
             }
 
-            endpoints.MapHealthChecks("/health").WithMetadata(new AllowAnonymousAttribute());
+            endpoints.MapHealthChecks("/health").AllowAnonymous();
+            endpoints.MapControllers().AllowAnonymous();
         });
     }
 }
