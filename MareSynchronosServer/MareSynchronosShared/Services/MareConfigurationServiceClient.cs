@@ -155,7 +155,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
                 _logger.LogError(ex, "Failure getting or updating properties from GRPC, retrying in 30min");
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(1), ct).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
         }
     }
 
