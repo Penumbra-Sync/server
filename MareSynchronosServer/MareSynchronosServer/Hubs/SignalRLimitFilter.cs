@@ -1,5 +1,4 @@
-﻿using System.Security.Claims;
-using AspNetCoreRateLimit;
+﻿using AspNetCoreRateLimit;
 using MareSynchronosShared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -37,7 +36,7 @@ public class SignalRLimitFilter : IHubFilter
             var counter = await _processor.ProcessRequestAsync(client, rule).ConfigureAwait(false);
             if (counter.Count > rule.Limit)
             {
-                var authUserId = invocationContext.Context.User.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
+                var authUserId = invocationContext.Context.User.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? "Unknown";
                 var retry = counter.Timestamp.RetryAfterFrom(rule);
                 logger.LogWarning("Method rate limit triggered from {ip}/{authUserId}: {method}", ip, authUserId, invocationContext.HubMethodName);
                 throw new HubException($"call limit {retry}");

@@ -6,11 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using Discord.WebSocket;
 using Prometheus;
 using MareSynchronosShared.Models;
-using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using static MareSynchronosShared.Protos.IdentificationService;
-using static System.Formats.Asn1.AsnWriter;
 
 namespace MareSynchronosServices.Discord;
 
@@ -46,7 +44,7 @@ public class MareModule : InteractionModuleBase
     public async Task Register([Summary("overwrite", "Overwrites your old account")] bool overwrite = false)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
-            Context.Client.CurrentUser.Id, nameof(Register),
+            Context.Interaction.User.Id, nameof(Register),
             string.Join(",", new[] { $"{nameof(overwrite)}:{overwrite}" }));
 
         await TryRespondAsync(async () =>
@@ -64,7 +62,7 @@ public class MareModule : InteractionModuleBase
     public async Task SetVanityUid([Summary("vanity_uid", "Desired Vanity UID")] string vanityUid)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
-            Context.Client.CurrentUser.Id, nameof(SetVanityUid),
+            Context.Interaction.User.Id, nameof(SetVanityUid),
             string.Join(",", new[] { $"{nameof(vanityUid)}:{vanityUid}" }));
 
         await TryRespondAsync(async () =>
@@ -83,7 +81,7 @@ public class MareModule : InteractionModuleBase
         [Summary("vanity_syncshell_id", "Desired Vanity Syncshell ID")] string vanityId)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
-            Context.Client.CurrentUser.Id, nameof(SetSyncshellVanityId),
+            Context.Interaction.User.Id, nameof(SetSyncshellVanityId),
             string.Join(",", new[] { $"{nameof(syncshellId)}:{syncshellId}", $"{nameof(vanityId)}:{vanityId}" }));
 
         await TryRespondAsync(async () =>
@@ -100,7 +98,7 @@ public class MareModule : InteractionModuleBase
     public async Task Verify()
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(Verify));
+            Context.Interaction.User.Id, nameof(Verify));
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
@@ -128,7 +126,7 @@ public class MareModule : InteractionModuleBase
     public async Task VerifyRelink()
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(VerifyRelink));
+            Context.Interaction.User.Id, nameof(VerifyRelink));
         await TryRespondAsync(async () =>
         {
             EmbedBuilder eb = new();
@@ -156,7 +154,7 @@ public class MareModule : InteractionModuleBase
     public async Task Recover()
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(Recover));
+            Context.Interaction.User.Id, nameof(Recover));
         await RespondWithModalAsync<LodestoneModal>("recover_modal").ConfigureAwait(false);
     }
 
@@ -166,7 +164,7 @@ public class MareModule : InteractionModuleBase
         [Summary("uid", "ADMIN ONLY: UID to check for")] string? uid = null)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(UserInfo));
+            Context.Interaction.User.Id, nameof(UserInfo));
 
         await TryRespondAsync(async () =>
         {
@@ -182,7 +180,7 @@ public class MareModule : InteractionModuleBase
     public async Task Relink()
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(Relink));
+            Context.Interaction.User.Id, nameof(Relink));
         await RespondWithModalAsync<LodestoneModal>("relink_modal").ConfigureAwait(false);
     }
 
@@ -190,7 +188,7 @@ public class MareModule : InteractionModuleBase
     public async Task UserAdd([Summary("desired_uid", "Desired UID")] string desiredUid)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
-            Context.Client.CurrentUser.Id, nameof(UserAdd),
+            Context.Interaction.User.Id, nameof(UserAdd),
             string.Join(",", new[] { $"{nameof(desiredUid)}:{desiredUid}" }));
 
         await TryRespondAsync(async () =>
@@ -205,7 +203,7 @@ public class MareModule : InteractionModuleBase
     public async Task RecoverModal(LodestoneModal modal)
     {
         _logger.LogInformation("Modal:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(RecoverModal));
+            Context.Interaction.User.Id, nameof(RecoverModal));
 
         await TryRespondAsync(async () =>
         {
@@ -218,7 +216,7 @@ public class MareModule : InteractionModuleBase
     public async Task RegisterModal(LodestoneModal modal)
     {
         _logger.LogInformation("Modal:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(RegisterModal));
+            Context.Interaction.User.Id, nameof(RegisterModal));
 
         await TryRespondAsync(async () =>
         {
@@ -231,7 +229,7 @@ public class MareModule : InteractionModuleBase
     public async Task RelinkModal(LodestoneModal modal)
     {
         _logger.LogInformation("Modal:{userId}:{Method}",
-            Context.Client.CurrentUser.Id, nameof(RelinkModal));
+            Context.Interaction.User.Id, nameof(RelinkModal));
 
         await TryRespondAsync(async () =>
         {

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using AspNetCoreRateLimit;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Protos;
 using Grpc.Net.Client.Configuration;
@@ -22,6 +21,7 @@ using Grpc.Net.ClientFactory;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using MareSynchronosServer.Authentication;
 
 namespace MareSynchronosServer;
 

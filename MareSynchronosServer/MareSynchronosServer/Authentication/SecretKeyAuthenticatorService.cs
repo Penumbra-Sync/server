@@ -4,10 +4,8 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
-namespace MareSynchronosShared.Authentication;
+namespace MareSynchronosServer.Authentication;
 
 public class SecretKeyAuthenticatorService
 {
@@ -16,7 +14,7 @@ public class SecretKeyAuthenticatorService
     private readonly IConfigurationService<MareConfigurationAuthBase> _configurationService;
     private readonly ILogger<SecretKeyAuthenticatorService> _logger;
     private readonly ConcurrentDictionary<string, SecretKeyAuthReply> _cachedPositiveResponses = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, SecretKeyFailedAuthorization?> _failedAuthorizations = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SecretKeyFailedAuthorization> _failedAuthorizations = new(StringComparer.Ordinal);
 
     public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IConfigurationService<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
     {

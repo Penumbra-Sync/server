@@ -1,10 +1,14 @@
 ﻿using MareSynchronos.API;
+using MareSynchronosServer.Authentication;
+using MareSynchronosServer.Hubs;
+using MareSynchronosServer.Services;
 using MareSynchronosShared;
-using MareSynchronosShared.Authentication;
+using MareSynchronosShared.Data;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -17,14 +21,49 @@ namespace MareSynchronosServer.Controllers;
 public class JwtController : Controller
 {
     private readonly IHttpContextAccessor _accessor;
+    private readonly MareDbContext _mareDbContext;
     private readonly SecretKeyAuthenticatorService _secretKeyAuthenticatorService;
     private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
+    private readonly IClientIdentificationService _clientIdentService;
 
-    public JwtController(IHttpContextAccessor accessor, SecretKeyAuthenticatorService secretKeyAuthenticatorService, IConfigurationService<MareConfigurationAuthBase> configuration)
+    public JwtController(IHttpContextAccessor accessor, MareDbContext mareDbContext,
+        SecretKeyAuthenticatorService secretKeyAuthenticatorService,
+        IConfigurationService<MareConfigurationAuthBase> configuration,
+        IClientIdentificationService clientIdentService)
     {
         _accessor = accessor;
+        _mareDbContext = mareDbContext;
         _secretKeyAuthenticatorService = secretKeyAuthenticatorService;
         _configuration = configuration;
+        _clientIdentService = clientIdentService;
+    }
+
+    [AllowAnonymous]
+    [HttpPost(MareAuth.AuthCreateIdent)]
+    public async Task<IActionResult> CreateToken(string auth, string charaIdent)
+    {
+        if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
+        if (string.IsNullOrEmpty(charaIdent)) return BadRequest("No CharaIdent");
+
+        var isBanned = await _mareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
+        if (isBanned) return Unauthorized("Banned");
+
+        var ip = _accessor.GetIpAddress();
+
+        var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
+
+        if (!authResult.Success) return Unauthorized("Unauthorized");
+
+        var existingIdent = _clientIdentService.GetCharacterIdentForUid(authResult.Uid);
+        if (!string.IsNullOrEmpty(existingIdent)) return Unauthorized("Logged in");
+
+        var token = CreateToken(new List<Claim>()
+        {
+            new Claim(MareClaimTypes.Uid, authResult.Uid),
+            new Claim(MareClaimTypes.CharaIdent, charaIdent)
+        });
+
+        return Content(token.RawData);
     }
 
     [AllowAnonymous]
@@ -41,7 +80,7 @@ public class JwtController : Controller
 
         var token = CreateToken(new List<Claim>()
         {
-            new Claim(ClaimTypes.NameIdentifier, authResult.Uid)
+            new Claim(MareClaimTypes.Uid, authResult.Uid)
         });
 
         return Content(token.RawData);
