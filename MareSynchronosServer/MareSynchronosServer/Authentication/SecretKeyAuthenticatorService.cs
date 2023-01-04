@@ -50,14 +50,14 @@ public class SecretKeyAuthenticatorService
                     _failedAuthorizations.Remove(ip, out _);
                 });
             }
-            return new(Success: false, Uid: null);
+            return new(Success: false, Uid: null, TempBan: true);
         }
 
         using var scope = _serviceScopeFactory.CreateScope();
         using var context = scope.ServiceProvider.GetService<MareDbContext>();
         var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
 
-        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID);
+        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, false);
 
         if (reply.Success)
         {
@@ -97,6 +97,6 @@ public class SecretKeyAuthenticatorService
             }
         }
 
-        return new(Success: false, Uid: null);
+        return new(Success: false, Uid: null, TempBan: false);
     }
 }

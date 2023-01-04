@@ -135,11 +135,15 @@ public partial class MareHub
             }
         }
 
-        if (hadInvalidData) throw new HubException("Invalid data provided, contact the appropriate mod creator to resolve those issues" 
-            + Environment.NewLine 
+        if (hadInvalidData)
+        {
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "One or more of your supplied mods were rejected from the server. Consult /xllog for more information.").ConfigureAwait(false);
+            throw new HubException("Invalid data provided, contact the appropriate mod creator to resolve those issues"
+            + Environment.NewLine
             + string.Join(Environment.NewLine, invalidGamePaths.Select(p => "Invalid Game Path: " + p))
             + Environment.NewLine
             + string.Join(Environment.NewLine, invalidFileSwapPaths.Select(p => "Invalid FileSwap Path: " + p)));
+        }
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
@@ -169,7 +173,11 @@ public partial class MareHub
             await _dbContext.ClientPairs.AsNoTracking()
                 .FirstOrDefaultAsync(p =>
                     p.User.UID == UserUID && p.OtherUserUID == uid).ConfigureAwait(false);
-        if (otherUser == null || existingEntry != null) return;
+        if (otherUser == null || existingEntry != null)
+        {
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, either already paired or UID does not exist").ConfigureAwait(false);
+            return;
+        }
 
         // grab self create new client pair and save
         var user = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
@@ -264,7 +272,7 @@ public partial class MareHub
 
             var otherCharaIdent = _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID);
 
-            if (selfCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
+            if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
             await Clients.User(UserUID).Client_UserChangePairedPlayer(otherCharaIdent, !isPaused).ConfigureAwait(false);
             await Clients.User(otherUserUid).Client_UserChangePairedPlayer(UserCharaIdent, !isPaused).ConfigureAwait(false);

@@ -9,6 +9,8 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using static MareSynchronosShared.Protos.IdentificationService;
+using Grpc.Net.ClientFactory;
+using MareSynchronosShared.Protos;
 
 namespace MareSynchronosServices.Discord;
 
@@ -28,16 +30,19 @@ public class MareModule : InteractionModuleBase
     private readonly DiscordBotServices _botServices;
     private readonly IdentificationServiceClient _identificationServiceClient;
     private readonly IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
+    private readonly GrpcClientFactory _grpcClientFactory;
     private Random random = new();
 
     public MareModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
-        IdentificationServiceClient identificationServiceClient, IConfigurationService<ServerConfiguration> mareClientConfigurationService)
+        IdentificationServiceClient identificationServiceClient, IConfigurationService<ServerConfiguration> mareClientConfigurationService,
+        GrpcClientFactory grpcClientFactory)
     {
         _logger = logger;
         _services = services;
         _botServices = botServices;
         _identificationServiceClient = identificationServiceClient;
         _mareClientConfigurationService = mareClientConfigurationService;
+        _grpcClientFactory = grpcClientFactory;
     }
 
     [SlashCommand("register", "Starts the registration process for the Mare Synchronos server of this Discord")]
@@ -197,6 +202,46 @@ public class MareModule : InteractionModuleBase
 
             await RespondAsync(embeds: new[] { embed }, ephemeral: true).ConfigureAwait(false);
         });
+    }
+
+    [SlashCommand("message", "ADMIN ONLY: sends a message to clients")]
+    public async Task SendMessageToClients([Summary("message", "Message to send")] string message,
+        [Summary("severity", "Severity of the message")] MareSynchronosShared.Protos.MessageType messageType = MareSynchronosShared.Protos.MessageType.Info,
+        [Summary("uid", "User ID to the person to send the message to")] string? uid = null)
+    {
+        _logger.LogInformation("SlashCommand:{userId}:{Method}:{message}:{type}:{uid}", Context.Interaction.User.Id, nameof(SendMessageToClients), message, messageType, uid);
+
+        using var scope = _services.CreateScope();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+        if (!(await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(a => a.DiscordId == Context.Interaction.User.Id))?.User?.IsAdmin ?? true)
+        {
+            await RespondAsync("No permission", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(uid) && !await db.Users.AnyAsync(u => u.UID == uid))
+        {
+            await RespondAsync("Specified UID does not exist", ephemeral: true).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            var client = _grpcClientFactory.CreateClient<ClientMessageService.ClientMessageServiceClient>("MessageClient");
+            await client.SendClientMessageAsync(new ClientMessage()
+            {
+                Message = message,
+                Type = messageType,
+                Uid = uid ?? string.Empty
+            });
+
+            await RespondAsync("Message sent", ephemeral: true).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await RespondAsync("Failed to send message: " + ex.ToString(), ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [ModalInteraction("recover_modal")]

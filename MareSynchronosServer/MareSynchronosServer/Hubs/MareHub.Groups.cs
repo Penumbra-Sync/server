@@ -160,6 +160,8 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<bool> GroupJoin(string gid, string password)
     {
+        gid = gid.Trim();
+
         _logger.LogCallInfo(MareHubLogger.Args(gid));
 
         var group = await _dbContext.Groups.Include(g => g.Owner).AsNoTracking().SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);

@@ -23,6 +23,22 @@ service ConfigurationService {
 	rpc GetConfigurationEntry (KeyMessage) returns (ValueMessage);
 }
 
+service ClientMessageService {
+	rpc SendClientMessage (ClientMessage) returns (Empty);
+}
+
+message ClientMessage {
+	MessageType type = 1;
+	string message = 2;
+	string uid = 3;
+}
+
+enum MessageType {
+	INFO = 0;
+	WARNING = 1;
+	ERROR = 2;
+}
+
 message KeyMessage {
 	string key = 1;
 	string default = 2;

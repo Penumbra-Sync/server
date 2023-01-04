@@ -58,5 +58,10 @@ namespace MareSynchronosServer.Hubs
         {
             throw new PlatformNotSupportedException("Calling clientside method on server not supported");
         }
+
+        public Task Client_ReceiveServerMessage(MessageSeverity messageSeverity, string message)
+        {
+            throw new PlatformNotSupportedException("Calling clientside method on server not supported");
+        }
     }
 }

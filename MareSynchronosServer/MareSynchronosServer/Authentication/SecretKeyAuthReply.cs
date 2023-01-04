@@ -1,3 +1,3 @@
 ﻿namespace MareSynchronosServer.Authentication;
 
-public record SecretKeyAuthReply(bool Success, string Uid);
+public record SecretKeyAuthReply(bool Success, string Uid, bool TempBan);

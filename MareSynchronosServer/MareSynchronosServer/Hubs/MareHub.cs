@@ -62,6 +62,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         dbUser.LastLoggedIn = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
+
         return new ConnectionDto()
         {
             ServerVersion = IMareHub.ApiVersion,
@@ -88,14 +90,16 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     }
 
     [Authorize(Policy = "Authenticated")]
-    public Task<bool> CheckClientHealth()
+    public async Task<bool> CheckClientHealth()
     {
         var needsReconnect = !_clientIdentService.IsOnCurrentServer(UserUID);
         if (needsReconnect)
         {
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, "Internal server state corruption detected, reconnecting you automatically to fix the issue.").ConfigureAwait(false);
             _logger.LogCallWarning(MareHubLogger.Args(needsReconnect));
         }
-        return Task.FromResult(needsReconnect);
+
+        return needsReconnect;
     }
 
     [Authorize(Policy = "Authenticated")]
