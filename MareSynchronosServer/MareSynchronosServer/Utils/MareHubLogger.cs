@@ -22,12 +22,12 @@ public class MareHubLogger
     public void LogCallInfo(object[] args = null, [CallerMemberName] string methodName = "")
     {
         string formattedArgs = args != null && args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
-        _logger.LogInformation("{uid}:{method}{args}", _hub.AuthenticatedUserId, methodName, formattedArgs);
+        _logger.LogInformation("{uid}:{method}{args}", _hub.UserUID, methodName, formattedArgs);
     }
 
     public void LogCallWarning(object[] args = null, [CallerMemberName] string methodName = "")
     {
         string formattedArgs = args != null && args.Length != 0 ? "|" + string.Join(":", args) : string.Empty;
-        _logger.LogWarning("{uid}:{method}{args}", _hub.AuthenticatedUserId, methodName, formattedArgs);
+        _logger.LogWarning("{uid}:{method}{args}", _hub.UserUID, methodName, formattedArgs);
     }
 }

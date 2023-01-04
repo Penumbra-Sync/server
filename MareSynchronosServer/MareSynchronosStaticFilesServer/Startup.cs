@@ -1,12 +1,10 @@
 using Grpc.Net.Client.Configuration;
 using Grpc.Net.ClientFactory;
-using MareSynchronosShared.Authentication;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
@@ -45,10 +43,6 @@ public class Startup
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
-            MetricsAPI.CounterAuthenticationCacheHits,
-            MetricsAPI.CounterAuthenticationFailures,
-            MetricsAPI.CounterAuthenticationRequests,
-            MetricsAPI.CounterAuthenticationSuccesses
         }, new List<string>
         {
             MetricsAPI.GaugeFilesTotalSize,
@@ -64,7 +58,6 @@ public class Startup
         services.AddHostedService(m => m.GetService<FileStatisticsService>());
         services.AddHostedService<FileCleanupService>();
 
-        services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddDbContextPool<MareDbContext>(options =>
         {
             options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>

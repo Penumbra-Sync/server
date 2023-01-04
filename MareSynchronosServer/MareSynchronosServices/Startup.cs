@@ -68,6 +68,18 @@ public class Startup
             };
         });
 
+        services.AddGrpcClient<ClientMessageService.ClientMessageServiceClient>("MessageClient", c =>
+        {
+            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
+        }).ConfigureChannel(c =>
+        {
+            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
+            c.HttpHandler = new SocketsHttpHandler()
+            {
+                EnableMultipleHttp2Connections = true
+            };
+        });
+
         services.Configure<ServicesConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));

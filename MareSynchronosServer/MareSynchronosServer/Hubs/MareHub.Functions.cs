@@ -1,7 +1,6 @@
 ﻿using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
-using System.Security.Claims;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -9,7 +8,7 @@ public partial class MareHub
 {
     private async Task<List<PausedEntry>> GetAllPairedClientsWithPauseState(string? uid = null)
     {
-        uid ??= AuthenticatedUserId;
+        uid ??= UserUID;
 
         var query = await (from userPair in _dbContext.ClientPairs
                            join otherUserPair in _dbContext.ClientPairs on userPair.OtherUserUID equals otherUserPair.UserUID
@@ -47,7 +46,7 @@ public partial class MareHub
 
     private async Task<List<string>> GetAllPairedUnpausedUsers(string? uid = null)
     {
-        uid ??= AuthenticatedUserId;
+        uid ??= UserUID;
         var ret = await GetAllPairedClientsWithPauseState(uid).ConfigureAwait(false);
         return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
     }
@@ -68,11 +67,12 @@ public partial class MareHub
         return usersToSendDataTo;
     }
 
-    public string AuthenticatedUserId => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
+    public string UserUID => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? throw new Exception("No UID in Claims");
+    public string UserCharaIdent => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))?.Value ?? throw new Exception("No Chara Ident in Claims");
 
     private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
     {
-        uid ??= AuthenticatedUserId;
+        uid ??= UserUID;
         var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
         if (userPair != null)
         {
@@ -106,7 +106,7 @@ public partial class MareHub
 
     private async Task<(bool IsValid, GroupPair ReferredPair)> TryValidateUserInGroup(string gid, string? uid = null)
     {
-        uid ??= AuthenticatedUserId;
+        uid ??= UserUID;
 
         var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser)
             .SingleOrDefaultAsync(g => g.GroupGID == gid && (g.GroupUserUID == uid || g.GroupUser.Alias == uid)).ConfigureAwait(false);
@@ -122,7 +122,7 @@ public partial class MareHub
 
         if (isOwnerResult.ReferredGroup == null) return (false, null);
 
-        var groupPairSelf = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == AuthenticatedUserId).ConfigureAwait(false);
+        var groupPairSelf = await _dbContext.GroupPairs.SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == UserUID).ConfigureAwait(false);
         if (groupPairSelf == null || !groupPairSelf.IsModerator) return (false, null);
 
         return (true, isOwnerResult.ReferredGroup);
@@ -133,6 +133,6 @@ public partial class MareHub
         var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == gid).ConfigureAwait(false);
         if (group == null) return (false, null);
 
-        return (string.Equals(group.OwnerUID, AuthenticatedUserId, StringComparison.Ordinal), group);
+        return (string.Equals(group.OwnerUID, UserUID, StringComparison.Ordinal), group);
     }
 }

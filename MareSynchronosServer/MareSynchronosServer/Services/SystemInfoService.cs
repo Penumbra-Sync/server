@@ -47,14 +47,14 @@ public class SystemInfoService : IHostedService, IDisposable
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
+        var onlineUsers = (int)_clientIdentService.GetOnlineUsers().Result;
+        SystemInfoDto = new SystemInfoDto()
+        {
+            OnlineUsers = onlineUsers,
+        };
+
         if (_config.IsMain)
         {
-            var onlineUsers = (int)_clientIdentService.GetOnlineUsers().Result;
-            SystemInfoDto = new SystemInfoDto()
-            {
-                OnlineUsers = onlineUsers,
-            };
-
             _logger.LogInformation("Sending System Info, Online Users: {onlineUsers}", onlineUsers);
 
             _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);

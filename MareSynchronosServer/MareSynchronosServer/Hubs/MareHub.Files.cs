@@ -21,8 +21,7 @@ public partial class MareHub
     public async Task FilesAbortUpload()
     {
         _logger.LogCallInfo();
-        var userId = AuthenticatedUserId;
-        var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == userId).ToList();
+        var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == UserUID).ToList();
         _dbContext.RemoveRange(notUploadedFiles);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
@@ -32,7 +31,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo();
 
-        var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == AuthenticatedUserId).ToListAsync().ConfigureAwait(false);
+        var ownFiles = await _dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == UserUID).ToListAsync().ConfigureAwait(false);
         var request = new DeleteFilesRequest();
         request.Hash.AddRange(ownFiles.Select(f => f.Hash));
         Metadata headers = new Metadata()
@@ -81,9 +80,8 @@ public partial class MareHub
     public async Task<bool> FilesIsUploadFinished()
     {
         _logger.LogCallInfo();
-        var userUid = AuthenticatedUserId;
         return await _dbContext.Files.AsNoTracking()
-            .AnyAsync(f => f.Uploader.UID == userUid && !f.Uploaded).ConfigureAwait(false);
+            .AnyAsync(f => f.Uploader.UID == UserUID && !f.Uploaded).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Identified")]
@@ -94,7 +92,7 @@ public partial class MareHub
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
-        var uploader = await _dbContext.Users.SingleAsync(u => u.UID == AuthenticatedUserId).ConfigureAwait(false);
+        var uploader = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         List<FileCache> fileCachesToUpload = new();
         foreach (var file in userSentHashes)
@@ -117,7 +115,6 @@ public partial class MareHub
 
             _logger.LogCallInfo(MareHubLogger.Args(file, "Missing"));
 
-            var userId = AuthenticatedUserId;
             fileCachesToUpload.Add(new FileCache()
             {
                 Hash = file,
@@ -143,7 +140,7 @@ public partial class MareHub
 
         await _uploadSemaphore.WaitAsync(Context.ConnectionAborted).ConfigureAwait(false);
 
-        var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == AuthenticatedUserId && !f.Uploaded);
+        var relatedFile = _dbContext.Files.SingleOrDefault(f => f.Hash == hash && f.Uploader.UID == UserUID && !f.Uploaded);
         if (relatedFile == null)
         {
             _uploadSemaphore.Release();
@@ -226,7 +223,7 @@ public partial class MareHub
                 {
                     FileData = ByteString.CopyFrom(data, 0, readBytes),
                     Hash = computedHashString,
-                    Uploader = AuthenticatedUserId
+                    Uploader = UserUID
                 }).ConfigureAwait(false);
             }
             await streamingCall.RequestStream.CompleteAsync().ConfigureAwait(false);

@@ -94,9 +94,10 @@ public class GrpcClientIdentificationService : GrpcBaseService, IClientIdentific
 
     public void MarkUserOffline(string uid)
     {
+        _metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
+
         if (OnlineClients.TryRemove(uid, out var uidWithIdent))
         {
-            _metrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, OnlineClients.Count);
             _identChangeQueue.Enqueue(new IdentChange()
             {
                 IsOnline = false,
@@ -172,6 +173,7 @@ public class GrpcClientIdentificationService : GrpcBaseService, IClientIdentific
             _logger.LogInformation("Starting Receive Online Client Data stream");
             await foreach (var cur in stream.ResponseStream.ReadAllAsync(cts).ConfigureAwait(false))
             {
+                OnlineClients.Remove(cur.UidWithIdent.Uid.Uid, out _);
                 if (cur.IsOnline)
                 {
                     RemoteCachedIdents[cur.UidWithIdent.Uid.Uid] = cur.UidWithIdent;
