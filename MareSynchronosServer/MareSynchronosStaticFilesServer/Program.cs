@@ -35,7 +35,7 @@ public class Program
                 webBuilder.UseStartup<Startup>();
                 webBuilder.ConfigureKestrel(opt =>
                 {
-                    opt.Limits.MaxConcurrentConnections = 5000;
+                    opt.Limits.MaxConcurrentConnections = 1000;
                 });
             });
 }
