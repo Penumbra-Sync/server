@@ -7,6 +7,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -35,6 +36,7 @@ public class Startup
 
         services.Configure<StaticFilesServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<KestrelServerOptions>(Configuration.GetSection("Kestrel"));
         services.AddSingleton(Configuration);
 
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
