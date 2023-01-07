@@ -20,6 +20,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
     private readonly IClientIdentificationService _clientIdentService;
+    private readonly FileDbService _fileDbService;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _mainCdnFullUrl;
@@ -32,7 +33,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IClientIdentificationService clientIdentService)
+        IClientIdentificationService clientIdentService, FileDbService fileDbService)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
@@ -45,6 +46,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
         _contextAccessor = contextAccessor;
         _clientIdentService = clientIdentService;
+        _fileDbService = fileDbService;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
