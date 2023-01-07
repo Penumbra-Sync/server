@@ -78,8 +78,6 @@ public class Startup
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
-        services.AddSingleton<FileDbService>();
-        services.AddHostedService(p => p.GetService<FileDbService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 

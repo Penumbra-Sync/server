@@ -65,7 +65,7 @@ public class IdentityHandler
 
     internal void EnqueueIdentChange(IdentChange identchange)
     {
-        _logger.LogDebug("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
+        _logger.LogInformation("Enqueued " + identchange.UidWithIdent.Uid.Uid + ":" + identchange.IsOnline + " from " + identchange.UidWithIdent.Ident.ServerId);
 
         foreach (var k in _identChanges.Keys)
         {

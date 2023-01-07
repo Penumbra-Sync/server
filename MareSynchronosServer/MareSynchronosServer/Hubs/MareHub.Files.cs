@@ -46,29 +46,30 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(hashes.Count.ToString()));
 
-        hashes = hashes.Distinct(StringComparer.Ordinal).ToList();
-        var allFiles = hashes.Select(_fileDbService.GetFileCache).Select(t => t.Result).Where(t => t != null).ToList();
-        var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
+        var allFiles = await _dbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
+        var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.
+            Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
+
+        var cacheFile = await _dbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size }).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
         var shardConfig = new List<CdnShardConfiguration>(_configurationService.GetValueOrDefault(nameof(ServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()));
 
-        foreach (var file in hashes)
+        foreach (var file in cacheFile)
         {
-            var cacheFile = allFiles.SingleOrDefault(f => string.Equals(f.Hash, file, StringComparison.Ordinal));
-            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file, StringComparison.OrdinalIgnoreCase));
+            var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
 
-            var matchedShardConfig = shardConfig.OrderBy(g => Guid.NewGuid()).FirstOrDefault(f => new Regex(f.FileMatch).IsMatch(file));
+            var matchedShardConfig = shardConfig.OrderBy(g => Guid.NewGuid()).FirstOrDefault(f => new Regex(f.FileMatch).IsMatch(file.Hash));
             var baseUrl = matchedShardConfig?.CdnFullUrl ?? _mainCdnFullUrl;
 
             response.Add(new DownloadFileDto
             {
-                FileExists = cacheFile.Size > 0,
+                FileExists = file.Size > 0,
                 ForbiddenBy = forbiddenFile?.ForbiddenBy ?? string.Empty,
                 IsForbidden = forbiddenFile != null,
-                Hash = cacheFile.Hash,
-                Size = cacheFile.Size,
-                Url = new Uri(baseUrl, cacheFile.Hash.ToUpperInvariant()).ToString()
+                Hash = file.Hash,
+                Size = file.Size,
+                Url = new Uri(baseUrl, file.Hash.ToUpperInvariant()).ToString()
             });
         }
 
@@ -90,7 +91,7 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(userSentHashes.Count.ToString()));
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
         var forbiddenFiles = await _dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
-        var existingFiles = fileListHashes.Select(_fileDbService.GetFileCache).Select(t => t.Result).Where(t => t != null).ToDictionary(k => k.Hash, k => k, StringComparer.Ordinal);
+        var existingFiles = await _dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
         var uploader = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         List<FileCache> fileCachesToUpload = new();
