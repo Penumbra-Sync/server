@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Services;
-using MareSynchronosServer.Hubs;
+using MareSynchronosShared.Utils;
 
 namespace MareSynchronosServer.RequirementHandlers;
 

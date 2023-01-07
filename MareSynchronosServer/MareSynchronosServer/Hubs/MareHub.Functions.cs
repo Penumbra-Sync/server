@@ -1,6 +1,7 @@
 ﻿using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
+using MareSynchronosShared.Utils;
 
 namespace MareSynchronosServer.Hubs;
 

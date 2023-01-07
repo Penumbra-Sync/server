@@ -1,4 +1,4 @@
-﻿using MareSynchronosServer.Hubs;
+﻿using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.SignalR;
 
 namespace MareSynchronosServer.Utils;

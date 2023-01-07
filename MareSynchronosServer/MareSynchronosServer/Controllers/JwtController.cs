@@ -1,6 +1,5 @@
 ﻿using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Hubs;
 using MareSynchronosServer.Services;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;

@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
+﻿using MareSynchronosShared.Utils;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -18,7 +18,7 @@ public class FilesController : Controller
     [HttpGet("{fileId}")]
     public async Task<IActionResult> GetFile(string fileId)
     {
-        var authedUser = HttpContext.User.Claims.FirstOrDefault(f => string.Equals(f.Type, ClaimTypes.NameIdentifier, StringComparison.Ordinal))?.Value ?? "Unknown";
+        var authedUser = HttpContext.User.Claims.FirstOrDefault(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? "Unknown";
         _logger.LogInformation($"GetFile:{authedUser}:{fileId}");
 
         var fs = await _cachedFileProvider.GetFileStream(fileId, Request.Headers["Authorization"]);

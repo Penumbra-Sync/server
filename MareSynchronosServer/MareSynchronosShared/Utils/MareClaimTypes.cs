@@ -1,4 +1,4 @@
-﻿namespace MareSynchronosServer.Hubs;
+﻿namespace MareSynchronosShared.Utils;
 
 public static class MareClaimTypes
 {
