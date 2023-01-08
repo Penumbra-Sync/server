@@ -36,40 +36,49 @@ public class SystemInfoService : IHostedService, IDisposable
     {
         _logger.LogInformation("System Info Service started");
 
-        _timer = new Timer(PushSystemInfo, null, TimeSpan.Zero, TimeSpan.FromSeconds(5));
+        var timeOut = _config.IsMain ? 5 : 15;
+
+        _timer = new Timer(PushSystemInfo, null, TimeSpan.Zero, TimeSpan.FromSeconds(timeOut));
 
         return Task.CompletedTask;
     }
 
     private void PushSystemInfo(object state)
     {
-        ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
-
-        _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
-        _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
-
-        var onlineUsers = (_redis.SearchKeysAsync("UID:*").GetAwaiter().GetResult()).Count();
-        SystemInfoDto = new SystemInfoDto()
+        try
         {
-            OnlineUsers = onlineUsers,
-        };
+            ThreadPool.GetAvailableThreads(out int workerThreads, out int ioThreads);
 
-        if (_config.IsMain)
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
+
+            var onlineUsers = (_redis.SearchKeysAsync("UID:*").GetAwaiter().GetResult()).Count();
+            SystemInfoDto = new SystemInfoDto()
+            {
+                OnlineUsers = onlineUsers,
+            };
+
+            if (_config.IsMain)
+            {
+                _logger.LogInformation("Sending System Info, Online Users: {onlineUsers}", onlineUsers);
+
+                _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);
+
+                using var scope = _services.CreateScope();
+                using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
+
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, onlineUsers);
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.AsNoTracking().Count());
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.AsNoTracking().Count());
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairs, db.GroupPairs.AsNoTracking().Count());
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairsPaused, db.GroupPairs.AsNoTracking().Count(p => p.IsPaused));
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, db.Users.AsNoTracking().Count());
+            }
+        }
+        catch (Exception ex)
         {
-            _logger.LogInformation("Sending System Info, Online Users: {onlineUsers}", onlineUsers);
-
-            _hubContext.Clients.All.Client_UpdateSystemInfo(SystemInfoDto);
-
-            using var scope = _services.CreateScope();
-            using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
-
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, onlineUsers);
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.AsNoTracking().Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.AsNoTracking().Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairs, db.GroupPairs.AsNoTracking().Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairsPaused, db.GroupPairs.AsNoTracking().Count(p => p.IsPaused));
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, db.Users.AsNoTracking().Count());
+            _logger.LogWarning(ex, "Failed to push system info");
         }
     }
 
