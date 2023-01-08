@@ -39,6 +39,9 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="6.25.1" />
     <PackageReference Include="prometheus-net.AspNetCore" Version="7.0.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.6.86" />
+    <PackageReference Include="StackExchange.Redis.Extensions.AspNetCore" Version="8.0.5" />
+    <PackageReference Include="StackExchange.Redis.Extensions.Core" Version="8.0.5" />
+    <PackageReference Include="StackExchange.Redis.Extensions.System.Text.Json" Version="8.0.5" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.25.1" />
   </ItemGroup>
 
@@ -49,6 +52,7 @@
 
   <ItemGroup>
     <Folder Include="Identity\" />
+    <Folder Include="Redis\" />
   </ItemGroup>
 
 </Project>

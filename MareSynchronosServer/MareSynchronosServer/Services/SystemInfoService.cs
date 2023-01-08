@@ -6,7 +6,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using StackExchange.Redis;
+using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.Services;
 
@@ -17,19 +17,19 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly IServiceProvider _services;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub, IMareHub> _hubContext;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IRedisDatabase _redis;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
     public SystemInfoService(MareMetrics mareMetrics, IConfigurationService<ServerConfiguration> configurationService, IServiceProvider services,
-        ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext, IConnectionMultiplexer connectionMultiplexer)
+        ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext, IRedisDatabase redisDb)
     {
         _mareMetrics = mareMetrics;
         _config = configurationService;
         _services = services;
         _logger = logger;
         _hubContext = hubContext;
-        _redis = connectionMultiplexer;
+        _redis = redisDb;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -48,8 +48,7 @@ public class SystemInfoService : IHostedService, IDisposable
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
-        var endpoint = _redis.GetEndPoints().First();
-        var onlineUsers = (_redis.GetServer(endpoint).Keys(pattern: "UID:*").Count());
+        var onlineUsers = (_redis.SearchKeysAsync("UID:*").GetAwaiter().GetResult()).Count();
         SystemInfoDto = new SystemInfoDto()
         {
             OnlineUsers = onlineUsers,

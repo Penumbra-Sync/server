@@ -64,7 +64,8 @@ public partial class MareHub
         _logger.LogCallInfo();
 
         var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(e => GetIdentFromUidFromRedis(e).Result).Where(t => !string.IsNullOrEmpty(t)).Distinct(StringComparer.Ordinal).ToList();
+        var idents = await GetIdentFromUidsFromRedis(usersToSendOnlineTo).ConfigureAwait(false);
+        return idents.Where(i => !string.IsNullOrEmpty(i.Value)).Select(k => k.Value).ToList();
     }
 
     [Authorize(Policy = "Identified")]
@@ -146,8 +147,9 @@ public partial class MareHub
         }
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
+        var idents = await GetIdentFromUidsFromRedis(allPairedUsers).ConfigureAwait(false);
 
-        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => GetIdentFromUidFromRedis(f).Result, StringComparer.Ordinal)
+        var allPairedUsersDict = idents
             .Where(f => visibleCharacterIds.Contains(f.Value, StringComparer.Ordinal));
 
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));

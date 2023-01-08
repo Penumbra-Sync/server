@@ -22,6 +22,9 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MareSynchronosServer.Authentication;
 using StackExchange.Redis;
+using StackExchange.Redis.Extensions.Core.Configuration;
+using System.Net;
+using StackExchange.Redis.Extensions.System.Text.Json;
 
 namespace MareSynchronosServer;
 
@@ -111,10 +114,36 @@ public class Startup
         }
 
         var options = ConfigurationOptions.Parse(redis);
-        options.ClientName = "Mare";
-        options.ChannelPrefix = "UserData";
-        ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
-        services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
+
+        var endpoint = options.EndPoints.First();
+        string address = "";
+        int port = 0;
+        if (endpoint is DnsEndPoint) { address = ((DnsEndPoint)endpoint).Host; port = ((DnsEndPoint)endpoint).Port; }
+        if (endpoint is IPEndPoint) { address = ((IPEndPoint)endpoint).Address.ToString(); port = ((IPEndPoint)endpoint).Port; }
+        var redisConfiguration = new RedisConfiguration()
+        {
+            AbortOnConnectFail = true,
+            KeyPrefix = "",
+            Hosts = new RedisHost[]
+            {
+                new RedisHost(){ Host = address, Port = port }
+            },
+            AllowAdmin = true,
+            ConnectTimeout = 3000,
+            Database = 0,
+            Ssl = false,
+            Password = options.Password,
+            ServerEnumerationStrategy = new ServerEnumerationStrategy()
+            {
+                Mode = ServerEnumerationStrategy.ModeOptions.All,
+                TargetRole = ServerEnumerationStrategy.TargetRoleOptions.Any,
+                UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw
+            },
+            MaxValueLength = 1024,
+            PoolSize = 50
+        };
+
+        services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
     }
 
     private void ConfigureIpRateLimiting(IServiceCollection services)

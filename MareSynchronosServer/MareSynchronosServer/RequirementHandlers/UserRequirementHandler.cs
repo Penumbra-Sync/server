@@ -4,6 +4,7 @@ using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosShared.Utils;
 using StackExchange.Redis;
+using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.RequirementHandlers;
 
@@ -11,13 +12,13 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 {
     private readonly MareDbContext _dbContext;
     private readonly ILogger<UserRequirementHandler> _logger;
-    private readonly IDatabase _redis;
+    private readonly IRedisDatabase _redis;
 
-    public UserRequirementHandler(MareDbContext dbContext, ILogger<UserRequirementHandler> logger, IConnectionMultiplexer connectionMultiplexer)
+    public UserRequirementHandler(MareDbContext dbContext, ILogger<UserRequirementHandler> logger, IRedisDatabase redisDb)
     {
         _dbContext = dbContext;
         _logger = logger;
-        _redis = connectionMultiplexer.GetDatabase();
+        _redis = redisDb;
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, UserRequirement requirement, HubInvocationContext resource)
@@ -28,7 +29,7 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 
         if ((requirement.Requirements & UserRequirements.Identified) is UserRequirements.Identified)
         {
-            var ident = await _redis.StringGetAsync("UID:" + uid).ConfigureAwait(false);
+            var ident = await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
             if (ident == RedisValue.EmptyString) context.Fail();
         }
 

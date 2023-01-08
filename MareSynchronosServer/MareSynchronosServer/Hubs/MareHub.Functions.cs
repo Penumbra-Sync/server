@@ -9,23 +9,30 @@ public partial class MareHub
 {
     private async Task UpdateUserOnRedis()
     {
-        await _redis.StringSetAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), flags: StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
-        await _redis.StringSetAsync("IDENT:" + UserCharaIdent, UserUID, TimeSpan.FromSeconds(60), flags: StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.AddAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), StackExchange.Redis.When.Always, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.AddAsync("IDENT:" + UserCharaIdent, UserUID, TimeSpan.FromSeconds(60), StackExchange.Redis.When.Always, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
     }
 
     private async Task RemoveUserFromRedis()
     {
-        await _redis.StringGetDeleteAsync("UID:" + UserUID).ConfigureAwait(false);
-        await _redis.StringGetDeleteAsync("IDENT:" + UserCharaIdent).ConfigureAwait(false);
+        await _redis.RemoveAsync("UID:" + UserUID, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.RemoveAsync("IDENT:" + UserCharaIdent, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
     }
 
     public async Task<string> GetIdentFromUidFromRedis(string uid)
     {
-        return await _redis.StringGetAsync("UID:" + uid).ConfigureAwait(false);
+        return await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
     }
+
+    public async Task<Dictionary<string, string>> GetIdentFromUidsFromRedis(IEnumerable<string> uids)
+    {
+        var result = await _redis.GetAllAsync<string>(uids.Select(u => "UID:" + u).ToArray()).ConfigureAwait(false);
+        return result.ToDictionary(k => k.Key.Replace("UID:", "", StringComparison.Ordinal), k => k.Value, StringComparer.Ordinal);
+    }
+
     public async Task<string> GetUidFromIdentFromRedis(string ident)
     {
-        return await _redis.StringGetAsync("IDENT:" + ident).ConfigureAwait(false);
+        return await _redis.GetAsync<string>("IDENT:" + ident).ConfigureAwait(false);
     }
 
     private async Task<List<PausedEntry>> GetAllPairedClientsWithPauseState(string? uid = null)

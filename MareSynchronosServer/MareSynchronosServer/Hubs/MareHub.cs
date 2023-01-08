@@ -9,7 +9,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using StackExchange.Redis;
+using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -28,12 +28,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
     private readonly IConfigurationService<ServerConfiguration> _configurationService;
-    private readonly IDatabase _redis;
+    private readonly IRedisDatabase _redis;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IConnectionMultiplexer connectionMultiplexer)
+        IRedisDatabase redisDb)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
@@ -45,7 +45,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _maxJoinedGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxJoinedGroupsByUser), 6);
         _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
         _contextAccessor = contextAccessor;
-        _redis = connectionMultiplexer.GetDatabase();
+        _redis = redisDb;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
