@@ -29,7 +29,8 @@
         "ShardName": "Services",
         "MetricsPort": 6150,
         "MainServerGrpcAddress": "http://mare-server:6005",
-        "DiscordBotToken": ""
+        "DiscordBotToken": "",
+        "RedisConnectionString": "redis,password=secretredispassword"
     },
     "AllowedHosts": "*",
     "Kestrel": {

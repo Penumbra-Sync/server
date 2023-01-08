@@ -9,6 +9,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -19,7 +20,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly FileService.FileServiceClient _fileServiceClient;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
-    private readonly IClientIdentificationService _clientIdentService;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
     private readonly Uri _mainCdnFullUrl;
@@ -28,11 +28,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
     private readonly IConfigurationService<ServerConfiguration> _configurationService;
+    private readonly IDatabase _redis;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IClientIdentificationService clientIdentService)
+        IConnectionMultiplexer connectionMultiplexer)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
@@ -44,7 +45,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _maxJoinedGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxJoinedGroupsByUser), 6);
         _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
         _contextAccessor = contextAccessor;
-        _clientIdentService = clientIdentService;
+        _redis = connectionMultiplexer.GetDatabase();
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
@@ -92,14 +93,9 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     [Authorize(Policy = "Authenticated")]
     public async Task<bool> CheckClientHealth()
     {
-        var needsReconnect = !_clientIdentService.IsOnCurrentServer(UserUID);
-        if (needsReconnect)
-        {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, "Internal server state corruption detected, reconnecting you automatically to fix the issue.").ConfigureAwait(false);
-            _logger.LogCallWarning(MareHubLogger.Args(needsReconnect));
-        }
+        await UpdateUserOnRedis().ConfigureAwait(false);
 
-        return needsReconnect;
+        return false;
     }
 
     [Authorize(Policy = "Authenticated")]
@@ -111,7 +107,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         {
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
 
-            _clientIdentService.MarkUserOnline(UserUID, UserCharaIdent);
+            await UpdateUserOnRedis().ConfigureAwait(false);
         }
         catch { }
 
@@ -127,7 +123,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         {
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
 
-            _clientIdentService.MarkUserOffline(UserUID);
+            await RemoveUserFromRedis().ConfigureAwait(false);
 
             await SendOfflineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
 

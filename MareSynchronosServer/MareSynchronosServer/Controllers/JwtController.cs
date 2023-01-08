@@ -1,6 +1,5 @@
 ﻿using MareSynchronos.API;
 using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Services;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Services;
@@ -9,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -20,21 +20,21 @@ namespace MareSynchronosServer.Controllers;
 public class JwtController : Controller
 {
     private readonly IHttpContextAccessor _accessor;
+    private readonly IDatabase _redis;
     private readonly MareDbContext _mareDbContext;
     private readonly SecretKeyAuthenticatorService _secretKeyAuthenticatorService;
     private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
-    private readonly IClientIdentificationService _clientIdentService;
 
     public JwtController(IHttpContextAccessor accessor, MareDbContext mareDbContext,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<MareConfigurationAuthBase> configuration,
-        IClientIdentificationService clientIdentService)
+        IConnectionMultiplexer connectionMultiplexer)
     {
         _accessor = accessor;
+        _redis = connectionMultiplexer.GetDatabase();
         _mareDbContext = mareDbContext;
         _secretKeyAuthenticatorService = secretKeyAuthenticatorService;
         _configuration = configuration;
-        _clientIdentService = clientIdentService;
     }
 
     [AllowAnonymous]
@@ -54,7 +54,7 @@ public class JwtController : Controller
         if (!authResult.Success && !authResult.TempBan) return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
         if (!authResult.Success && authResult.TempBan) return Unauthorized("You are temporarily banned. Try connecting again later.");
 
-        var existingIdent = _clientIdentService.GetCharacterIdentForUid(authResult.Uid);
+        var existingIdent = await _redis.StringGetAsync("UID:" + authResult.Uid);
         if (!string.IsNullOrEmpty(existingIdent)) return Unauthorized("Already logged in to this account.");
 
         var token = CreateToken(new List<Claim>()

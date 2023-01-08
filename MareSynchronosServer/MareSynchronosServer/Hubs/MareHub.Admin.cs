@@ -82,12 +82,12 @@ public partial class MareHub
     public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
     {
         var users = await _dbContext.Users.AsNoTracking().ToListAsync().ConfigureAwait(false);
-        return users.Where(c => !string.IsNullOrEmpty(_clientIdentService.GetCharacterIdentForUid(c.UID))).Select(b => new OnlineUserDto
+        return users.Select(user => new { user, GetIdentFromUidFromRedis(user.UID).Result }).Where(a => !string.IsNullOrEmpty(a.Result)).Select(b => new OnlineUserDto
         {
-            CharacterNameHash = _clientIdentService.GetCharacterIdentForUid(b.UID),
-            UID = b.UID,
-            IsModerator = b.IsModerator,
-            IsAdmin = b.IsAdmin
+            CharacterNameHash = b.Result,
+            UID = b.user.UID,
+            IsModerator = b.user.IsModerator,
+            IsAdmin = b.user.IsAdmin
         }).ToList();
     }
 

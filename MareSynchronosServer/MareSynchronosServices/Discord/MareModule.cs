@@ -8,9 +8,9 @@ using Prometheus;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
-using static MareSynchronosShared.Protos.IdentificationService;
 using Grpc.Net.ClientFactory;
 using MareSynchronosShared.Protos;
+using StackExchange.Redis;
 
 namespace MareSynchronosServices.Discord;
 
@@ -28,21 +28,21 @@ public class MareModule : InteractionModuleBase
     private readonly ILogger<MareModule> _logger;
     private readonly IServiceProvider _services;
     private readonly DiscordBotServices _botServices;
-    private readonly IdentificationServiceClient _identificationServiceClient;
     private readonly IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
     private readonly GrpcClientFactory _grpcClientFactory;
+    private readonly IConnectionMultiplexer _connectionMultiplexer;
     private Random random = new();
 
     public MareModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
-        IdentificationServiceClient identificationServiceClient, IConfigurationService<ServerConfiguration> mareClientConfigurationService,
-        GrpcClientFactory grpcClientFactory)
+        IConfigurationService<ServerConfiguration> mareClientConfigurationService,
+        GrpcClientFactory grpcClientFactory, IConnectionMultiplexer connectionMultiplexer)
     {
         _logger = logger;
         _services = services;
         _botServices = botServices;
-        _identificationServiceClient = identificationServiceClient;
         _mareClientConfigurationService = mareClientConfigurationService;
         _grpcClientFactory = grpcClientFactory;
+        _connectionMultiplexer = connectionMultiplexer;
     }
 
     [SlashCommand("register", "Starts the registration process for the Mare Synchronos server of this Discord")]
@@ -392,7 +392,7 @@ public class MareModule : InteractionModuleBase
         var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userToCheckForDiscordId).ConfigureAwait(false);
         var dbUser = lodestoneUser.User;
         var auth = await db.Auth.SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
-        var identity = await _identificationServiceClient.GetIdentForUidAsync(new MareSynchronosShared.Protos.UidMessage { Uid = dbUser.UID });
+        var identity = await _connectionMultiplexer.GetDatabase().StringGetAsync("UID:" + dbUser.UID).ConfigureAwait(false);
         var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
 
@@ -405,7 +405,7 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Vanity UID", dbUser.Alias);
         }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
-        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity.Ident));
+        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity));
         eb.AddField("Hashed Secret Key", auth.HashedKey);
         eb.AddField("Joined Syncshells", groupsJoined.Count);
         eb.AddField("Owned Syncshells", groups.Count);
@@ -419,9 +419,9 @@ public class MareModule : InteractionModuleBase
             eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
         }
 
-        if (isAdminCall && !string.IsNullOrEmpty(identity.Ident))
+        if (isAdminCall && !string.IsNullOrEmpty(identity))
         {
-            eb.AddField("Character Ident", identity.Ident);
+            eb.AddField("Character Ident", identity);
         }
 
         return eb;

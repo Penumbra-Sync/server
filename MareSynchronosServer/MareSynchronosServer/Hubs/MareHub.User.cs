@@ -64,7 +64,7 @@ public partial class MareHub
         _logger.LogCallInfo();
 
         var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
-        return usersToSendOnlineTo.Select(e => _clientIdentService.GetCharacterIdentForUid(e)).Where(t => !string.IsNullOrEmpty(t)).Distinct(StringComparer.Ordinal).ToList();
+        return usersToSendOnlineTo.Select(e => GetIdentFromUidFromRedis(e).Result).Where(t => !string.IsNullOrEmpty(t)).Distinct(StringComparer.Ordinal).ToList();
     }
 
     [Authorize(Policy = "Identified")]
@@ -147,7 +147,7 @@ public partial class MareHub
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
-        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => _clientIdentService.GetCharacterIdentForUid(f), StringComparer.Ordinal)
+        var allPairedUsersDict = allPairedUsers.ToDictionary(f => f, f => GetIdentFromUidFromRedis(f).Result, StringComparer.Ordinal)
             .Where(f => visibleCharacterIds.Contains(f.Value, StringComparer.Ordinal));
 
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
@@ -209,7 +209,7 @@ public partial class MareHub
         if (otherEntry == null) return;
 
         // check if other user is online
-        var otherIdent = _clientIdentService.GetCharacterIdentForUid(otherUser.UID);
+        var otherIdent = await GetIdentFromUidFromRedis(otherUser.UID).ConfigureAwait(false);
         if (otherIdent == null) return;
 
         // send push with update to other user if other user is online
@@ -224,7 +224,7 @@ public partial class MareHub
             }).ConfigureAwait(false);
 
         // get own ident and all pairs
-        var userIdent = _clientIdentService.GetCharacterIdentForUid(user.UID);
+        var userIdent = await GetIdentFromUidFromRedis(user.UID).ConfigureAwait(false);
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
@@ -270,7 +270,7 @@ public partial class MareHub
                 IsSynced = true
             }).ConfigureAwait(false);
 
-            var otherCharaIdent = _clientIdentService.GetCharacterIdentForUid(pair.OtherUserUID);
+            var otherCharaIdent = await GetIdentFromUidFromRedis(pair.OtherUserUID).ConfigureAwait(false);
 
             if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
@@ -310,7 +310,7 @@ public partial class MareHub
         if (oppositeClientPair == null) return;
 
         // check if other user is online, if no then there is no need to do anything further
-        var otherIdent = _clientIdentService.GetCharacterIdentForUid(otherUserUid);
+        var otherIdent = await GetIdentFromUidFromRedis(otherUserUid).ConfigureAwait(false);
         if (otherIdent == null) return;
 
         // get own ident and 

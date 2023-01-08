@@ -2,22 +2,22 @@
 using Microsoft.AspNetCore.SignalR;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
-using MareSynchronosServer.Services;
 using MareSynchronosShared.Utils;
+using StackExchange.Redis;
 
 namespace MareSynchronosServer.RequirementHandlers;
 
 public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubInvocationContext>
 {
-    private readonly IClientIdentificationService identClient;
-    private readonly MareDbContext dbContext;
-    private readonly ILogger<UserRequirementHandler> logger;
+    private readonly MareDbContext _dbContext;
+    private readonly ILogger<UserRequirementHandler> _logger;
+    private readonly IDatabase _redis;
 
-    public UserRequirementHandler(IClientIdentificationService identClient, MareDbContext dbContext, ILogger<UserRequirementHandler> logger)
+    public UserRequirementHandler(MareDbContext dbContext, ILogger<UserRequirementHandler> logger, IConnectionMultiplexer connectionMultiplexer)
     {
-        this.identClient = identClient;
-        this.dbContext = dbContext;
-        this.logger = logger;
+        _dbContext = dbContext;
+        _logger = logger;
+        _redis = connectionMultiplexer.GetDatabase();
     }
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, UserRequirement requirement, HubInvocationContext resource)
@@ -28,25 +28,22 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 
         if ((requirement.Requirements & UserRequirements.Identified) is UserRequirements.Identified)
         {
-            var ident = identClient.GetCharacterIdentForUid(uid);
-            if (ident == null) context.Fail();
-
-            var isOnCurrent = identClient.IsOnCurrentServer(uid);
-            if (!isOnCurrent) identClient.MarkUserOnline(uid, ident);
+            var ident = await _redis.StringGetAsync("UID:" + uid).ConfigureAwait(false);
+            if (ident == RedisValue.EmptyString) context.Fail();
         }
 
         if ((requirement.Requirements & UserRequirements.Administrator) is UserRequirements.Administrator)
         {
-            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
             if (user == null || !user.IsAdmin) context.Fail();
-            logger.LogInformation("Admin {uid} authenticated", uid);
+            _logger.LogInformation("Admin {uid} authenticated", uid);
         }
 
         if ((requirement.Requirements & UserRequirements.Moderator) is UserRequirements.Moderator)
         {
-            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
             if (user == null || !user.IsAdmin && !user.IsModerator) context.Fail();
-            logger.LogInformation("Admin/Moderator {uid} authenticated", uid);
+            _logger.LogInformation("Admin/Moderator {uid} authenticated", uid);
         }
 
         context.Succeed(requirement);

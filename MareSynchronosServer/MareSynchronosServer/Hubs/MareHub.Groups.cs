@@ -232,7 +232,7 @@ public partial class MareHub
             if (userPair.IsPausedExcludingGroup(gid) is PauseInfo.Unpaused) continue;
             if (userPair.IsPausedPerGroup is PauseInfo.Paused) continue;
 
-            var groupUserIdent = _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID);
+            var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
                 await Clients.User(UserUID).Client_UserChangePairedPlayer(groupUserIdent, true).ConfigureAwait(false);
@@ -403,7 +403,7 @@ public partial class MareHub
                 if (userPair.IsOtherPausedForSpecificGroup(gid) is PauseInfo.Paused) continue;
             }
 
-            var groupUserIdent = _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID);
+            var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
                 await Clients.User(UserUID).Client_UserChangePairedPlayer(groupUserIdent, !isPaused).ConfigureAwait(false);
@@ -437,7 +437,7 @@ public partial class MareHub
             UserUID = uid,
         }).ConfigureAwait(false);
 
-        var userIdent = _clientIdentService.GetCharacterIdentForUid(uid);
+        var userIdent = await GetIdentFromUidFromRedis(uid).ConfigureAwait(false);
         if (userIdent == null) return;
 
         await Clients.User(uid).Client_GroupChange(new GroupDto()
@@ -683,7 +683,7 @@ public partial class MareHub
                 UserUID = pair.GroupUserUID
             }).ConfigureAwait(false);
 
-            var pairIdent = _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID);
+            var pairIdent = await GetIdentFromUidFromRedis(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
             var allUserPairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);

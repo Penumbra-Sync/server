@@ -6,6 +6,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 namespace MareSynchronosServer.Services;
 
@@ -14,21 +15,21 @@ public class SystemInfoService : IHostedService, IDisposable
     private readonly MareMetrics _mareMetrics;
     private readonly IConfigurationService<ServerConfiguration> _config;
     private readonly IServiceProvider _services;
-    private readonly IClientIdentificationService _clientIdentService;
     private readonly ILogger<SystemInfoService> _logger;
     private readonly IHubContext<MareHub, IMareHub> _hubContext;
+    private readonly IConnectionMultiplexer _redis;
     private Timer _timer;
     public SystemInfoDto SystemInfoDto { get; private set; } = new();
 
     public SystemInfoService(MareMetrics mareMetrics, IConfigurationService<ServerConfiguration> configurationService, IServiceProvider services,
-        IClientIdentificationService clientIdentService, ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext)
+        ILogger<SystemInfoService> logger, IHubContext<MareHub, IMareHub> hubContext, IConnectionMultiplexer connectionMultiplexer)
     {
         _mareMetrics = mareMetrics;
         _config = configurationService;
         _services = services;
-        _clientIdentService = clientIdentService;
         _logger = logger;
         _hubContext = hubContext;
+        _redis = connectionMultiplexer;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -47,7 +48,8 @@ public class SystemInfoService : IHostedService, IDisposable
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableWorkerThreads, workerThreads);
         _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAvailableIOWorkerThreads, ioThreads);
 
-        var onlineUsers = (int)_clientIdentService.GetOnlineUsers().Result;
+        var endpoint = _redis.GetEndPoints().First();
+        var onlineUsers = (_redis.GetServer(endpoint).Keys(pattern: "UID:*").Count());
         SystemInfoDto = new SystemInfoDto()
         {
             OnlineUsers = onlineUsers,

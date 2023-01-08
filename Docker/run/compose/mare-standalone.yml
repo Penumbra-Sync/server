@@ -15,6 +15,12 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:latest
+    command: [sh, -c, "rm -f /data/dump.rdb && redis-server --save \"\" --appendonly no --requirepass secretredispassword"]
+    volumes:
+      - cache:/data
+
   mare-server:
     image: darkarchon/mare-synchronos-server:latest
     restart: on-failure

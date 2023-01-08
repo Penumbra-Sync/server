@@ -13,7 +13,6 @@ using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Utils;
-using MareSynchronosServer.Identity;
 using MareSynchronosShared.Services;
 using Prometheus;
 using Microsoft.Extensions.Options;
@@ -22,6 +21,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using MareSynchronosServer.Authentication;
+using StackExchange.Redis;
 
 namespace MareSynchronosServer;
 
@@ -109,6 +109,12 @@ public class Startup
                 options.Configuration.ChannelPrefix = "MareSynchronos";
             });
         }
+
+        var options = ConfigurationOptions.Parse(redis);
+        options.ClientName = "Mare";
+        options.ChannelPrefix = "UserData";
+        ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
+        services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
     }
 
     private void ConfigureIpRateLimiting(IServiceCollection services)
@@ -220,18 +226,6 @@ public class Startup
                 RetryPolicy = null
             };
 
-            services.AddGrpcClient<IdentificationService.IdentificationServiceClient>(c =>
-            {
-                c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.MainServerGrpcAddress)));
-            }).ConfigureChannel(c =>
-            {
-                c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-                c.HttpHandler = new SocketsHttpHandler()
-                {
-                    EnableMultipleHttp2Connections = true
-                };
-            });
-
             services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
             {
                 c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.MainServerGrpcAddress)));
@@ -244,8 +238,6 @@ public class Startup
                 };
             });
 
-            services.AddSingleton<IClientIdentificationService, GrpcClientIdentificationService>();
-            services.AddHostedService(p => p.GetService<IClientIdentificationService>());
             services.AddSingleton<IConfigurationService<ServerConfiguration>>(c => new MareConfigurationServiceClient<ServerConfiguration>(
                 c.GetService<ILogger<MareConfigurationServiceClient<ServerConfiguration>>>(),
                 c.GetService<IOptions<ServerConfiguration>>(),
@@ -261,8 +253,6 @@ public class Startup
         }
         else
         {
-            services.AddSingleton<IdentityHandler>();
-            services.AddSingleton<IClientIdentificationService, LocalClientIdentificationService>();
             services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceServer<ServerConfiguration>>();
             services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceServer<MareConfigurationAuthBase>>();
 
@@ -323,7 +313,6 @@ public class Startup
 
             if (config.IsMain)
             {
-                endpoints.MapGrpcService<GrpcIdentityService>().AllowAnonymous();
                 endpoints.MapGrpcService<GrpcConfigurationService<ServerConfiguration>>().AllowAnonymous();
                 endpoints.MapGrpcService<GrpcClientMessageService>().AllowAnonymous();
             }

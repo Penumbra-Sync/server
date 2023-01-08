@@ -6,7 +6,7 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
-using static MareSynchronosShared.Protos.IdentificationService;
+using StackExchange.Redis;
 
 namespace MareSynchronosServices.Discord;
 
@@ -16,19 +16,19 @@ internal class DiscordBot : IHostedService
     private readonly IServiceProvider _services;
     private readonly IConfigurationService<ServicesConfiguration> _configurationService;
     private readonly ILogger<DiscordBot> _logger;
-    private readonly IdentificationServiceClient _identificationServiceClient;
+    private readonly IConnectionMultiplexer _connectionMultiplexer;
     private readonly DiscordSocketClient _discordClient;
     private CancellationTokenSource? _updateStatusCts;
     private CancellationTokenSource? _vanityUpdateCts;
 
     public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration,
-        ILogger<DiscordBot> logger, IdentificationServiceClient identificationServiceClient)
+        ILogger<DiscordBot> logger, IConnectionMultiplexer connectionMultiplexer)
     {
         _botServices = botServices;
         _services = services;
         _configurationService = configuration;
         _logger = logger;
-        this._identificationServiceClient = identificationServiceClient;
+        _connectionMultiplexer = connectionMultiplexer;
         _discordClient = new(new DiscordSocketConfig()
         {
             DefaultRetryMode = RetryMode.AlwaysRetry
@@ -170,9 +170,11 @@ internal class DiscordBot : IHostedService
         _updateStatusCts = new();
         while (!_updateStatusCts.IsCancellationRequested)
         {
-            var onlineUsers = await _identificationServiceClient.GetOnlineUserCountAsync(new MareSynchronosShared.Protos.ServerMessage());
-            _logger.LogInformation("Users online: " + onlineUsers.Count);
-            await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers.Count + " Users")).ConfigureAwait(false);
+            var endPoint = _connectionMultiplexer.GetEndPoints().First();
+            var onlineUsers = await _connectionMultiplexer.GetServer(endPoint).KeysAsync(pattern: "UID:*").CountAsync();
+
+            _logger.LogInformation("Users online: " + onlineUsers);
+            await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
         }
     }

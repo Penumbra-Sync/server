@@ -9,16 +9,6 @@ service FileService {
 	rpc DeleteFiles (DeleteFilesRequest) returns (Empty);
 }
 
-service IdentificationService {
-	rpc GetOnlineUserCount (ServerMessage) returns (OnlineUserCountResponse);
-	rpc GetIdentForUid (UidMessage) returns (CharacterIdentMessage);
-	rpc ClearIdentsForServer (ServerMessage) returns (Empty);
-	rpc RecreateServerIdents (ServerIdentMessage) returns (Empty);
-	rpc GetAllIdents (ServerMessage) returns (UidWithIdentMessage);
-	rpc SendStreamIdentStatusChange (stream IdentChangeMessage) returns (Empty);
-	rpc ReceiveStreamIdentStatusChange (ServerMessage) returns (stream IdentChange);
-}
-
 service ConfigurationService {
 	rpc GetConfigurationEntry (KeyMessage) returns (ValueMessage);
 }

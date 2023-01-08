@@ -7,6 +7,27 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
+    private async Task UpdateUserOnRedis()
+    {
+        await _redis.StringSetAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), flags: StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.StringSetAsync("IDENT:" + UserCharaIdent, UserUID, TimeSpan.FromSeconds(60), flags: StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+    }
+
+    private async Task RemoveUserFromRedis()
+    {
+        await _redis.StringGetDeleteAsync("UID:" + UserUID).ConfigureAwait(false);
+        await _redis.StringGetDeleteAsync("IDENT:" + UserCharaIdent).ConfigureAwait(false);
+    }
+
+    public async Task<string> GetIdentFromUidFromRedis(string uid)
+    {
+        return await _redis.StringGetAsync("UID:" + uid).ConfigureAwait(false);
+    }
+    public async Task<string> GetUidFromIdentFromRedis(string ident)
+    {
+        return await _redis.StringGetAsync("IDENT:" + ident).ConfigureAwait(false);
+    }
+
     private async Task<List<PausedEntry>> GetAllPairedClientsWithPauseState(string? uid = null)
     {
         uid ??= UserUID;
@@ -81,7 +102,7 @@ public partial class MareHub
             if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) return;
         }
 
-        var groupUserIdent = _clientIdentService.GetCharacterIdentForUid(groupUserPair.GroupUserUID);
+        var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(groupUserIdent))
         {
             await Clients.User(uid).Client_UserChangePairedPlayer(groupUserIdent, false).ConfigureAwait(false);
@@ -93,7 +114,7 @@ public partial class MareHub
     {
         foreach (var pair in groupUsers)
         {
-            var pairIdent = _clientIdentService.GetCharacterIdentForUid(pair.GroupUserUID);
+            var pairIdent = await GetIdentFromUidFromRedis(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
             var pairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);

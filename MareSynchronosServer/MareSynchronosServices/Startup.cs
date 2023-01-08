@@ -10,6 +10,7 @@ using MareSynchronosShared.Services;
 using Grpc.Net.ClientFactory;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using StackExchange.Redis;
 
 namespace MareSynchronosServices;
 
@@ -44,17 +45,12 @@ public class Startup
             RetryPolicy = null
         };
 
-        services.AddGrpcClient<IdentificationService.IdentificationServiceClient>(c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true
-            };
-        });
+        var redis = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
+        var options = ConfigurationOptions.Parse(redis);
+        options.ClientName = "Mare";
+        options.ChannelPrefix = "UserData";
+        ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
+        services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
 
         services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
         {
