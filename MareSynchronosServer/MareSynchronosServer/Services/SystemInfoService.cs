@@ -64,6 +64,7 @@ public class SystemInfoService : IHostedService, IDisposable
             using var scope = _services.CreateScope();
             using var db = scope.ServiceProvider.GetService<MareDbContext>()!;
 
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, onlineUsers);
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.AsNoTracking().Count());
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.AsNoTracking().Count());
