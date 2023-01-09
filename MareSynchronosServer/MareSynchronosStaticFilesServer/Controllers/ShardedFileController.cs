@@ -1,10 +1,10 @@
 ﻿using MareSynchronosStaticFilesServer.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
 [Route("/cache")]
-[ServiceFilter(typeof(DownloadActionFilter))]
 public class ShardedFileController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
@@ -17,16 +17,21 @@ public class ShardedFileController : ControllerBase
     }
 
     [HttpGet("get")]
-    public async Task<IActionResult> GetFile()
+    public async Task<IActionResult> GetFile(Guid requestId)
     {
-        var guid = Guid.Parse(Request.Headers["RequestId"]);
-        if (!_requestQueue.IsActiveProcessing(guid, out var request)) return BadRequest();
+        _logger.LogInformation($"GetFile:{User}:{requestId}");
 
-        _logger.LogInformation($"GetFile:{User}:{guid}");
+        if (!_requestQueue.IsActiveProcessing(requestId, User, out var request)) return BadRequest();
+
+        _requestQueue.ActivateRequest(requestId);
 
         var fs = await _cachedFileProvider.GetFileStream(request.FileId, Authorization);
-        if (fs == null) return NotFound();
+        if (fs == null)
+        {
+            _requestQueue.FinishRequest(requestId);
+            return NotFound();
+        }
 
-        return File(fs, "application/octet-stream");
+        return new RequestFileStreamResult(() => _requestQueue.FinishRequest(requestId), fs, "application/octet-stream");
     }
 }

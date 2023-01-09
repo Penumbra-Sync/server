@@ -7,7 +7,7 @@
             "Default": "Warning",
             "Microsoft": "Warning",
             "Microsoft.Hosting.Lifetime": "Information",
-            "MareSynchronosStaticFilesServer": "Information",
+            "MareSynchronosStaticFilesServer": "Debug",
             "MareSynchronosShared": "Information",
             "System.IO": "Information"
         },
@@ -34,7 +34,9 @@
         "UnusedFileRetentionPeriodInDays": 14,
         "CacheDirectory": "/marecache/",
         "RemoteCacheSourceUri": "http://mare-files:6200/cache/",
-        "MainServerGrpcAddress": "http://mare-server:6005"
+        "MainServerGrpcAddress": "http://mare-server:6005",
+        "DownloadTimeoutSeconds": 30,
+        "DownloadQueueSize":  50
     },
     "AllowedHosts": "*",
     "Kestrel": {

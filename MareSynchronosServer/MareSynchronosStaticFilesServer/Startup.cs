@@ -134,7 +134,6 @@ public class Startup
         }
         else
         {
-            services.AddScoped<DownloadActionFilter>();
             services.AddSingleton<RequestQueueService>();
             services.AddHostedService(p => p.GetService<RequestQueueService>());
             services.AddMvcCore().UseSpecificControllers(typeof(ShardedFileController), typeof(RequestController));

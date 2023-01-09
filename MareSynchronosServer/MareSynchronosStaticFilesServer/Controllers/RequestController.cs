@@ -28,18 +28,20 @@ public class RequestController : ControllerBase
     }
 
     [HttpGet]
+    [Route("file")]
     public IActionResult RequestFile(string file)
     {
         Guid g = Guid.NewGuid();
+        _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
         _requestQueue.EnqueueUser(new(g, User, file));
-        return Ok(g);
+        return Ok(g.ToString());
     }
 
     [HttpGet]
     [Route("status")]
-    public IActionResult CheckQueue(Guid file)
+    public IActionResult CheckQueue(Guid requestId)
     {
-        if (_requestQueue.IsActiveProcessing(file, out _))
+        if (_requestQueue.IsActiveProcessing(requestId, User, out _))
         {
             return Ok();
         }

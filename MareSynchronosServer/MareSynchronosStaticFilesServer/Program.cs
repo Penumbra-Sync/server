@@ -1,6 +1,5 @@
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
-using Microsoft.Extensions.Options;
 
 namespace MareSynchronosStaticFilesServer;
 

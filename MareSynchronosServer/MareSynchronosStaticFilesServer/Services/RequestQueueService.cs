@@ -1,15 +1,8 @@
 ﻿using MareSynchronosShared.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
 
 namespace MareSynchronosStaticFilesServer.Services;
-
-public record UserQueueEntry(UserRequest UserRequest, DateTime ExpirationDate)
-{
-    public bool IsActive { get; set; } = false;
-}
-
-public record UserRequest(Guid RequestId, string User, string FileId);
-
 
 public class RequestQueueService : IHostedService
 {
@@ -17,10 +10,12 @@ public class RequestQueueService : IHostedService
     private readonly UserQueueEntry[] _userQueueRequests;
     private readonly ConcurrentQueue<UserRequest> _queue = new();
     private readonly ILogger<RequestQueueService> _logger;
+    private readonly int _queueExpirationSeconds;
 
     public RequestQueueService(IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
+        _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
         _logger = logger;
     }
 
@@ -30,19 +25,25 @@ public class RequestQueueService : IHostedService
         _queue.Enqueue(request);
     }
 
-    public bool IsActiveProcessing(Guid request, out UserRequest userRequest)
+    public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
     {
-        userRequest = _userQueueRequests.FirstOrDefault(f => f.UserRequest.RequestId == request)?.UserRequest ?? null;
-        return userRequest != null;
+        var userQueueRequest = _userQueueRequests.Where(u => u != null)
+            .FirstOrDefault(f => f.UserRequest.RequestId == request && string.Equals(f.UserRequest.User, user, StringComparison.Ordinal));
+        userRequest = userQueueRequest?.UserRequest ?? null;
+        return userQueueRequest != null && userRequest != null && userQueueRequest.ExpirationDate > DateTime.UtcNow;
     }
 
     public void FinishRequest(Guid request)
     {
-        _userQueueRequests.First(f => f.UserRequest.RequestId == request).IsActive = false;
+        var req = _userQueueRequests.First(f => f.UserRequest.RequestId == request);
+        var idx = Array.IndexOf(_userQueueRequests, req);
+        _logger.LogDebug("Finishing Request {guid}, clearing slot {idx}", request, idx);
+        _userQueueRequests[idx] = null;
     }
 
     public void ActivateRequest(Guid request)
     {
+        _logger.LogDebug("Activating request {guid}", request);
         _userQueueRequests.First(f => f.UserRequest.RequestId == request).IsActive = true;
     }
 
@@ -53,12 +54,14 @@ public class RequestQueueService : IHostedService
             if (!_queue.Any()) { await Task.Delay(100).ConfigureAwait(false); continue; }
             for (int i = 0; i < _userQueueRequests.Length; i++)
             {
-                if (_userQueueRequests[i] == null || (!_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow))
+                if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
+
+                if (_userQueueRequests[i] == null)
                 {
                     if (_queue.TryDequeue(out var request))
                     {
-                        _logger.LogInformation("Dequeueing {req} into {i}: {user} with {file}", i, request.RequestId, request.User, request.FileId);
-                        _userQueueRequests[i] = new(request, DateTime.Now.AddSeconds(5));
+                        _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", request.RequestId, i, request.User, request.FileId);
+                        _userQueueRequests[i] = new(request, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
                     }
                 }
 
