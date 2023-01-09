@@ -5,23 +5,40 @@ namespace MareSynchronosStaticFilesServer.Utils;
 public class RequestFileStreamResult : FileStreamResult
 {
     private readonly Action _onComplete;
+    private readonly CancellationTokenSource _releaseCts = new();
+    private bool _releasedSlot = false;
 
-    public RequestFileStreamResult(Action onComplete, Stream fileStream, string contentType) : base(fileStream, contentType)
+    public RequestFileStreamResult(Action onComplete, int secondsUntilRelease, Stream fileStream, string contentType) : base(fileStream, contentType)
     {
         _onComplete = onComplete;
+        // forcefully release slot
+        Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(secondsUntilRelease))
+                .ContinueWith(c =>
+                {
+                    if (!c.IsCanceled)
+                    {
+                        _releasedSlot = true;
+                        _onComplete.Invoke();
+                    }
+                }).ConfigureAwait(false);
+        });
     }
 
     public override void ExecuteResult(ActionContext context)
     {
         base.ExecuteResult(context);
 
-        _onComplete.Invoke();
+        if (!_releasedSlot)
+            _onComplete.Invoke();
     }
 
     public override async Task ExecuteResultAsync(ActionContext context)
     {
         await base.ExecuteResultAsync(context).ConfigureAwait(false);
 
-        _onComplete.Invoke();
+        if (!_releasedSlot)
+            _onComplete.Invoke();
     }
 }

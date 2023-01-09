@@ -32,6 +32,6 @@ public class ShardedFileController : ControllerBase
             return NotFound();
         }
 
-        return new RequestFileStreamResult(() => _requestQueue.FinishRequest(requestId), fs, "application/octet-stream");
+        return new RequestFileStreamResult(() => _requestQueue.FinishRequest(requestId), 15, fs, "application/octet-stream");
     }
 }
