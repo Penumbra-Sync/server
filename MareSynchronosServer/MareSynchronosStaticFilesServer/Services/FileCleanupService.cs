@@ -3,9 +3,10 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.EntityFrameworkCore;
 
-namespace MareSynchronosStaticFilesServer;
+namespace MareSynchronosStaticFilesServer.Services;
 
 public class FileCleanupService : IHostedService
 {
@@ -99,7 +100,7 @@ public class FileCleanupService : IHostedService
                 if (_isMainServer)
                 {
                     FileCache f = new() { Hash = oldestFile.Name.ToUpperInvariant() };
-                    dbContext.Entry(f).State = Microsoft.EntityFrameworkCore.EntityState.Deleted;
+                    dbContext.Entry(f).State = EntityState.Deleted;
                 }
             }
         }
@@ -113,8 +114,8 @@ public class FileCleanupService : IHostedService
     {
         try
         {
-            var unusedRetention = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
-            var forcedDeletionAfterHours = _configuration.GetValueOrDefault<int>(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
+            var unusedRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
+            var forcedDeletionAfterHours = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
 
             _logger.LogInformation("Cleaning up files older than {filesOlderThanDays} days", unusedRetention);
             if (forcedDeletionAfterHours > 0)

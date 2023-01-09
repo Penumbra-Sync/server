@@ -5,6 +5,8 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosStaticFilesServer.Controllers;
+using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -40,8 +42,6 @@ public class Startup
         services.AddSingleton(Configuration);
 
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
-
-        services.AddControllers();
 
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
@@ -123,6 +123,8 @@ public class Startup
 
         if (_isMain)
         {
+            services.AddMvcCore().UseSpecificControllers(typeof(FilesController));
+
             services.AddGrpc(o =>
             {
                 o.MaxReceiveMessageSize = null;
@@ -132,6 +134,11 @@ public class Startup
         }
         else
         {
+            services.AddScoped<DownloadActionFilter>();
+            services.AddSingleton<RequestQueueService>();
+            services.AddHostedService(p => p.GetService<RequestQueueService>());
+            services.AddMvcCore().UseSpecificControllers(typeof(ShardedFileController), typeof(RequestController));
+
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>>(p => new MareConfigurationServiceClient<StaticFilesServerConfiguration>(
                 p.GetRequiredService<ILogger<MareConfigurationServiceClient<StaticFilesServerConfiguration>>>(),
                 p.GetRequiredService<IOptions<StaticFilesServerConfiguration>>(),
@@ -151,6 +158,7 @@ public class Startup
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
 
         services.AddHealthChecks();
+        services.AddControllers();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

@@ -3,9 +3,10 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.EntityFrameworkCore;
 
-namespace MareSynchronosStaticFilesServer;
+namespace MareSynchronosStaticFilesServer.Services;
 
 public class GrpcFileService : FileService.FileServiceBase
 {

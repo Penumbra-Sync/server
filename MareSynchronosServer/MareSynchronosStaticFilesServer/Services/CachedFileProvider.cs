@@ -1,9 +1,10 @@
 ﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
-namespace MareSynchronosStaticFilesServer;
+namespace MareSynchronosStaticFilesServer.Services;
 
 public class CachedFileProvider
 {
@@ -58,7 +59,20 @@ public class CachedFileProvider
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
     }
 
-    public async Task<FileStream?> GetFileStream(string hash, string auth)
+    public void DownloadFileWhenRequired(string hash, string auth)
+    {
+        var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+        if (fi == null && IsMainServer) return;
+
+        if (fi == null && !_currentTransfers.ContainsKey(hash))
+        {
+            _currentTransfers[hash] = DownloadTask(hash, auth).ContinueWith(r => _currentTransfers.Remove(hash, out _));
+        }
+
+        _fileStatisticsService.LogFile(hash, fi.Length);
+    }
+
+    public async Task<FileStream> GetFileStream(string hash, string auth)
     {
         var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
         if (fi == null && IsMainServer) return null;
