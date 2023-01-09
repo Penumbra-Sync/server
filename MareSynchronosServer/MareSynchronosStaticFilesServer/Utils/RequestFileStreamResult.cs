@@ -1,28 +1,35 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using MareSynchronosShared.Metrics;
+using MareSynchronosStaticFilesServer.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer.Utils;
 
 public class RequestFileStreamResult : FileStreamResult
 {
-    private readonly Action _onComplete;
+    private readonly Guid _requestId;
+    private readonly RequestQueueService _requestQueueService;
+    private readonly MareMetrics _mareMetrics;
     private readonly CancellationTokenSource _releaseCts = new();
     private bool _releasedSlot = false;
 
-    public RequestFileStreamResult(Action onComplete, int secondsUntilRelease, Stream fileStream, string contentType) : base(fileStream, contentType)
+    public RequestFileStreamResult(Guid requestId, int secondsUntilRelease, RequestQueueService requestQueueService,
+        MareMetrics mareMetrics, Stream fileStream, string contentType) : base(fileStream, contentType)
     {
-        _onComplete = onComplete;
-        // forcefully release slot
+        _requestId = requestId;
+        _requestQueueService = requestQueueService;
+        _mareMetrics = mareMetrics;
+        _mareMetrics.IncGauge(MetricsAPI.GaugeCurrentDownloads);
+
+        // forcefully release slot after secondsUntilRelease
         Task.Run(async () =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(secondsUntilRelease), _releaseCts.Token)
-                .ContinueWith(c =>
-                {
-                    if (!c.IsCanceled)
-                    {
-                        _releasedSlot = true;
-                        _onComplete.Invoke();
-                    }
-                }).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(secondsUntilRelease), _releaseCts.Token).ConfigureAwait(false);
+                _requestQueueService.FinishRequest(_requestId);
+                _releasedSlot = true;
+            }
+            catch { }
         });
     }
 
@@ -33,7 +40,9 @@ public class RequestFileStreamResult : FileStreamResult
         _releaseCts.Cancel();
 
         if (!_releasedSlot)
-            _onComplete.Invoke();
+            _requestQueueService.FinishRequest(_requestId);
+
+        _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
     }
 
     public override async Task ExecuteResultAsync(ActionContext context)
@@ -43,6 +52,8 @@ public class RequestFileStreamResult : FileStreamResult
         _releaseCts.Cancel();
 
         if (!_releasedSlot)
-            _onComplete.Invoke();
+            _requestQueueService.FinishRequest(_requestId);
+
+        _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
     }
 }

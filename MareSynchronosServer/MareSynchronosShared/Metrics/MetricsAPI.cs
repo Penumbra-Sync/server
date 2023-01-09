@@ -26,4 +26,6 @@ public class MetricsAPI
     public const string GaugeFilesUniquePastHourSize = "mare_files_unique_past_hour_size";
     public const string GaugeFilesUniquePastDay = "mare_files_unique_past_day";
     public const string GaugeFilesUniquePastDaySize = "mare_files_unique_past_day_size";
+    public const string GaugeCurrentDownloads = "mare_current_downloads";
+    public const string GaugeDownloadQueue = "mare_download_queue";
 }

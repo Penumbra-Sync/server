@@ -1,4 +1,5 @@
-﻿using MareSynchronosShared.Services;
+﻿using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
 
@@ -9,25 +10,27 @@ public class RequestQueueService : IHostedService
     private CancellationTokenSource _queueCts = new();
     private readonly UserQueueEntry[] _userQueueRequests;
     private readonly ConcurrentQueue<UserRequest> _queue = new();
+    private readonly MareMetrics _metrics;
     private readonly ILogger<RequestQueueService> _logger;
     private readonly int _queueExpirationSeconds;
 
-    public RequestQueueService(IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
+    public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
+        _metrics = metrics;
         _logger = logger;
     }
 
     public void EnqueueUser(UserRequest request)
     {
-        _logger.LogInformation("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, request.FileId);
+        _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, request.FileId);
         _queue.Enqueue(request);
     }
 
     public bool StillEnqueued(Guid request, string user)
     {
-        return _queue.Any(c=>c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
+        return _queue.Any(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
     }
 
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
@@ -57,6 +60,7 @@ public class RequestQueueService : IHostedService
         while (!ct.IsCancellationRequested)
         {
             if (!_queue.Any()) { await Task.Delay(100).ConfigureAwait(false); continue; }
+
             for (int i = 0; i < _userQueueRequests.Length; i++)
             {
                 if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
@@ -72,6 +76,8 @@ public class RequestQueueService : IHostedService
 
                 if (!_queue.Any()) break;
             }
+
+            _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
 
             await Task.Delay(250).ConfigureAwait(false);
         }

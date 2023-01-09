@@ -7,6 +7,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Controllers;
 using MareSynchronosStaticFilesServer.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -52,10 +53,13 @@ public class Startup
             MetricsAPI.GaugeFilesUniquePastDay,
             MetricsAPI.GaugeFilesUniquePastDaySize,
             MetricsAPI.GaugeFilesUniquePastHour,
-            MetricsAPI.GaugeFilesUniquePastHourSize
+            MetricsAPI.GaugeFilesUniquePastHourSize,
+            MetricsAPI.GaugeCurrentDownloads,
+            MetricsAPI.GaugeDownloadQueue,
         }));
         services.AddSingleton<CachedFileProvider>();
         services.AddSingleton<FileStatisticsService>();
+        services.AddSingleton<RequestFileStreamResultFactory>();
 
         services.AddHostedService(m => m.GetService<FileStatisticsService>());
         services.AddHostedService<FileCleanupService>();

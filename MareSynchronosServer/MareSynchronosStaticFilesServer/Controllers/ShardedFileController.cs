@@ -7,11 +7,14 @@ namespace MareSynchronosStaticFilesServer.Controllers;
 [Route("/cache")]
 public class ShardedFileController : ControllerBase
 {
+    private readonly RequestFileStreamResultFactory _requestFileStreamResultFactory;
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
 
-    public ShardedFileController(ILogger<ShardedFileController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue) : base(logger)
+    public ShardedFileController(ILogger<ShardedFileController> logger, RequestFileStreamResultFactory requestFileStreamResultFactory,
+        CachedFileProvider cachedFileProvider, RequestQueueService requestQueue) : base(logger)
     {
+        _requestFileStreamResultFactory = requestFileStreamResultFactory;
         _cachedFileProvider = cachedFileProvider;
         _requestQueue = requestQueue;
     }
@@ -32,6 +35,6 @@ public class ShardedFileController : ControllerBase
             return NotFound();
         }
 
-        return new RequestFileStreamResult(() => _requestQueue.FinishRequest(requestId), 15, fs, "application/octet-stream");
+        return _requestFileStreamResultFactory.Create(requestId, fs);
     }
 }

@@ -36,7 +36,8 @@
         "RemoteCacheSourceUri": "http://mare-files:6200/cache/",
         "MainServerGrpcAddress": "http://mare-server:6005",
         "DownloadTimeoutSeconds": 30,
-        "DownloadQueueSize":  50
+        "DownloadQueueSize": 50,
+        "DownloadQueueReleaseSeconds": 15
     },
     "AllowedHosts": "*",
     "Kestrel": {
