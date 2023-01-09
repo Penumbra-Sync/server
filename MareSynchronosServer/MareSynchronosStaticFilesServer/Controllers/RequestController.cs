@@ -41,11 +41,10 @@ public class RequestController : ControllerBase
     [Route("status")]
     public IActionResult CheckQueue(Guid requestId)
     {
-        if (_requestQueue.IsActiveProcessing(requestId, User, out _))
-        {
-            return Ok();
-        }
+        if (_requestQueue.IsActiveProcessing(requestId, User, out _)) return Ok();
 
-        return Conflict();
+        if (_requestQueue.StillEnqueued(requestId, User)) return Conflict();
+
+        return BadRequest();
     }
 }

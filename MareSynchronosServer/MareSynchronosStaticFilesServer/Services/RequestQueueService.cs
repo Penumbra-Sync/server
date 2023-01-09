@@ -25,6 +25,11 @@ public class RequestQueueService : IHostedService
         _queue.Enqueue(request);
     }
 
+    public bool StillEnqueued(Guid request, string user)
+    {
+        return _queue.Any(c=>c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
+    }
+
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
     {
         var userQueueRequest = _userQueueRequests.Where(u => u != null)
