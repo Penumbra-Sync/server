@@ -14,7 +14,7 @@ public class RequestFileStreamResult : FileStreamResult
         // forcefully release slot
         Task.Run(async () =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(secondsUntilRelease))
+            await Task.Delay(TimeSpan.FromSeconds(secondsUntilRelease), _releaseCts.Token)
                 .ContinueWith(c =>
                 {
                     if (!c.IsCanceled)
@@ -30,6 +30,8 @@ public class RequestFileStreamResult : FileStreamResult
     {
         base.ExecuteResult(context);
 
+        _releaseCts.Cancel();
+
         if (!_releasedSlot)
             _onComplete.Invoke();
     }
@@ -37,6 +39,8 @@ public class RequestFileStreamResult : FileStreamResult
     public override async Task ExecuteResultAsync(ActionContext context)
     {
         await base.ExecuteResultAsync(context).ConfigureAwait(false);
+
+        _releaseCts.Cancel();
 
         if (!_releasedSlot)
             _onComplete.Invoke();
