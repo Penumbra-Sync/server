@@ -69,7 +69,7 @@ public partial class MareHub
                 IsForbidden = forbiddenFile != null,
                 Hash = file.Hash,
                 Size = file.Size,
-                Url = new Uri(baseUrl, file.Hash.ToUpperInvariant()).ToString()
+                Url = baseUrl.ToString()
             });
         }
 

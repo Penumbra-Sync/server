@@ -1,10 +1,11 @@
-﻿using MareSynchronosStaticFilesServer.Services;
+﻿using MareSynchronos.API;
+using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
-[Route("/cache")]
+[Route(MareFiles.Cache)]
 public class ShardedFileController : ControllerBase
 {
     private readonly RequestFileStreamResultFactory _requestFileStreamResultFactory;
@@ -19,7 +20,7 @@ public class ShardedFileController : ControllerBase
         _requestQueue = requestQueue;
     }
 
-    [HttpGet("get")]
+    [HttpGet(MareFiles.Cache_Get)]
     public async Task<IActionResult> GetFile(Guid requestId)
     {
         _logger.LogInformation($"GetFile:{User}:{requestId}");

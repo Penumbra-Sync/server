@@ -38,7 +38,7 @@ public class JwtController : Controller
     }
 
     [AllowAnonymous]
-    [HttpPost(MareAuth.AuthCreateIdent)]
+    [HttpPost(MareAuth.Auth_CreateIdent)]
     public async Task<IActionResult> CreateToken(string auth, string charaIdent)
     {
         if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
@@ -67,7 +67,7 @@ public class JwtController : Controller
     }
 
     [AllowAnonymous]
-    [HttpPost(MareAuth.AuthCreate)]
+    [HttpPost(MareAuth.Auth_Create)]
     public async Task<IActionResult> CreateToken(string auth)
     {
         if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");

@@ -1,9 +1,10 @@
-﻿using MareSynchronosStaticFilesServer.Services;
+﻿using MareSynchronos.API;
+using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
-[Route("/request")]
+[Route(MareFiles.Request)]
 public class RequestController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
@@ -16,8 +17,8 @@ public class RequestController : ControllerBase
     }
 
     [HttpPost]
-    [Route("enqueue")]
-    public IActionResult PreRequestFiles(List<string> files)
+    [Route(MareFiles.Request_Enqueue)]
+    public IActionResult PreRequestFiles([FromBody] List<string> files)
     {
         foreach (var file in files)
         {
@@ -28,7 +29,7 @@ public class RequestController : ControllerBase
     }
 
     [HttpGet]
-    [Route("file")]
+    [Route(MareFiles.Request_RequestFile)]
     public IActionResult RequestFile(string file)
     {
         Guid g = Guid.NewGuid();
@@ -38,7 +39,7 @@ public class RequestController : ControllerBase
     }
 
     [HttpGet]
-    [Route("status")]
+    [Route(MareFiles.Request_CheckQueue)]
     public IActionResult CheckQueue(Guid requestId)
     {
         if (_requestQueue.IsActiveProcessing(requestId, User, out _)) return Ok();
