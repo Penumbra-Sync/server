@@ -20,7 +20,7 @@ public class ShardedFileController : ControllerBase
         _requestQueue = requestQueue;
     }
 
-    [HttpGet(MareFiles.File_Get)]
+    [HttpGet(MareFiles.Files_Get)]
     public async Task<IActionResult> GetFile(Guid requestId)
     {
         _logger.LogInformation($"GetFile:{User}:{requestId}");
