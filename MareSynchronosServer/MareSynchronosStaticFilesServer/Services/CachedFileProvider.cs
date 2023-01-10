@@ -2,6 +2,8 @@
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Net.Http;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
@@ -13,6 +15,7 @@ public class CachedFileProvider
     private readonly Uri _remoteCacheSourceUri;
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
+    private readonly HttpClient _httpClient;
     private bool IsMainServer => _remoteCacheSourceUri == null;
 
     public CachedFileProvider(IConfigurationService<StaticFilesServerConfiguration> configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService, MareMetrics metrics)
@@ -22,6 +25,7 @@ public class CachedFileProvider
         _metrics = metrics;
         _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.RemoteCacheSourceUri), null);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
+        _httpClient = new HttpClient();
     }
 
     private async Task DownloadTask(string hash, string auth)
@@ -29,9 +33,10 @@ public class CachedFileProvider
         // download file from remote
         var downloadUrl = new Uri(_remoteCacheSourceUri, hash);
         _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.Add("Authorization", auth);
-        var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue(auth);
+        var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
 
         try
         {
