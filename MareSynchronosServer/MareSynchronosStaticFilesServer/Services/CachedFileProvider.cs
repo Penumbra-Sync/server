@@ -70,7 +70,11 @@ public class CachedFileProvider
 
         if (fi == null && !_currentTransfers.ContainsKey(hash))
         {
-            _currentTransfers[hash] = DownloadTask(hash, auth).ContinueWith(r => _currentTransfers.Remove(hash, out _));
+            _currentTransfers[hash] = Task.Run(async () =>
+            {
+                await DownloadTask(hash, auth).ConfigureAwait(false);
+                _currentTransfers.Remove(hash, out _);
+            });
         }
     }
 
