@@ -1,4 +1,5 @@
 ﻿using MareSynchronosShared.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -9,6 +10,8 @@ namespace MareSynchronosShared.Utils;
 public class ServerTokenGenerator
 {
     private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
+    private readonly ILogger<ServerTokenGenerator> _logger;
+
     private Dictionary<string, string> _tokenDictionary { get; set; } = new(StringComparer.Ordinal);
     public string Token
     {
@@ -24,9 +27,10 @@ public class ServerTokenGenerator
         }
     }
 
-    public ServerTokenGenerator(IConfigurationService<MareConfigurationAuthBase> configuration)
+    public ServerTokenGenerator(IConfigurationService<MareConfigurationAuthBase> configuration, ILogger<ServerTokenGenerator> logger)
     {
         _configuration = configuration;
+        _logger = logger;
     }
 
     private string GenerateToken()
@@ -39,7 +43,7 @@ public class ServerTokenGenerator
             Subject = new ClaimsIdentity(new List<Claim>()
             {
                 new Claim(MareClaimTypes.Uid, _configuration.GetValue<string>(nameof(MareConfigurationBase.ShardName))),
-                new Claim(MareClaimTypes.Internal, true.ToString())
+                new Claim(MareClaimTypes.Internal, "true")
             }),
             SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature)
         };
@@ -48,6 +52,8 @@ public class ServerTokenGenerator
         var rawData = handler.CreateJwtSecurityToken(token).RawData;
 
         _tokenDictionary[signingKey] = rawData;
+
+        _logger.LogInformation("Generated Token: {data}", rawData);
 
         return rawData;
     }
