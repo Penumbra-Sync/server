@@ -64,14 +64,22 @@ public class JwtController : Controller
                     Reason = "Autobanned CharacterIdent (" + authResult.Uid + ")"
                 });
 
-                var lodestone = await _mareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == authResult.Uid);
+                await _mareDbContext.SaveChangesAsync();
+            }
 
-                if (lodestone != null)
+            var lodestone = await _mareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == authResult.Uid);
+
+            if (lodestone != null)
+            {
+                if (!_mareDbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.HashedLodestoneId))
                 {
                     _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
                     {
                         DiscordIdOrLodestoneAuth = lodestone.HashedLodestoneId
                     });
+                }
+                if (!_mareDbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.DiscordId.ToString()))
+                {
                     _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
                     {
                         DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString()
