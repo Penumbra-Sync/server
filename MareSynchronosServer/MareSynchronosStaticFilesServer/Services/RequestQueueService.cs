@@ -76,7 +76,7 @@ public class RequestQueueService : IHostedService
 
     public void FinishRequest(Guid request)
     {
-        var req = _userQueueRequests.First(f => f.UserRequest.RequestId == request);
+        var req = _userQueueRequests.Where(f => f != null).First(f => f.UserRequest.RequestId == request);
         var idx = Array.IndexOf(_userQueueRequests, req);
         _logger.LogDebug("Finishing Request {guid}, clearing slot {idx}", request, idx);
         _userQueueRequests[idx] = null;
@@ -85,7 +85,7 @@ public class RequestQueueService : IHostedService
     public void ActivateRequest(Guid request)
     {
         _logger.LogDebug("Activating request {guid}", request);
-        _userQueueRequests.First(f => f.UserRequest.RequestId == request).IsActive = true;
+        _userQueueRequests.Where(f => f != null).First(f => f.UserRequest.RequestId == request).IsActive = true;
     }
 
     private async Task ProcessRequestQueue(CancellationToken ct)
