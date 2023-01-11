@@ -2,6 +2,7 @@
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
@@ -32,12 +33,12 @@ public class RequestController : ControllerBase
 
     [HttpGet]
     [Route(MareFiles.Request_RequestFile)]
-    public IActionResult RequestFile(string file)
+    public async Task<IActionResult> RequestFile(string file)
     {
         Guid g = Guid.NewGuid();
         _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
-        _requestQueue.EnqueueUser(new(g, User, file));
-        return Ok(g.ToString());
+        var queueStatus = await _requestQueue.EnqueueUser(new(g, User, file));
+        return Ok(JsonSerializer.Serialize(new QueueRequestDto(g, queueStatus)));
     }
 
     [HttpGet]
@@ -46,7 +47,7 @@ public class RequestController : ControllerBase
     {
         if (_requestQueue.IsActiveProcessing(requestId, User, out _)) return Ok();
 
-        if (_requestQueue.StillEnqueued(requestId, User)) return Conflict();
+        if (_requestQueue.StillEnqueued(requestId, User, out int position)) return Conflict(position);
 
         return BadRequest();
     }

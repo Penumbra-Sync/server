@@ -1,4 +1,5 @@
-﻿using MareSynchronosShared.Metrics;
+﻿using MareSynchronos.API;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
@@ -13,6 +14,8 @@ public class RequestQueueService : IHostedService
     private readonly MareMetrics _metrics;
     private readonly ILogger<RequestQueueService> _logger;
     private readonly int _queueExpirationSeconds;
+    private SemaphoreSlim _queueSemaphore = new(1);
+    private SemaphoreSlim _queueProcessingSemaphore = new(1);
 
     public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
     {
@@ -22,15 +25,45 @@ public class RequestQueueService : IHostedService
         _logger = logger;
     }
 
-    public void EnqueueUser(UserRequest request)
+    public async Task<QueueStatus> EnqueueUser(UserRequest request)
     {
         _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, request.FileId);
-        _queue.Enqueue(request);
+
+        if (_queueProcessingSemaphore.CurrentCount == 0)
+        {
+            _queue.Enqueue(request);
+            return QueueStatus.Waiting;
+        }
+
+        await _queueSemaphore.WaitAsync().ConfigureAwait(false);
+        QueueStatus status = QueueStatus.Waiting;
+        var idx = Array.FindIndex(_userQueueRequests, r => r == null);
+        if (idx == -1)
+        {
+            _queue.Enqueue(request);
+            status = QueueStatus.Waiting;
+        }
+        else
+        {
+            DequeueIntoSlot(request, idx);
+            status = QueueStatus.Ready;
+        }
+        _queueSemaphore.Release();
+
+        return status;
     }
 
-    public bool StillEnqueued(Guid request, string user)
+    public bool StillEnqueued(Guid request, string user, out int queuePosition)
     {
-        return _queue.Any(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
+        var result = _queue.FirstOrDefault(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
+        if (result != null)
+        {
+            queuePosition = Array.IndexOf(_queue.ToArray(), result);
+            return true;
+        }
+
+        queuePosition = -1;
+        return false;
     }
 
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
@@ -59,8 +92,8 @@ public class RequestQueueService : IHostedService
     {
         while (!ct.IsCancellationRequested)
         {
-            if (!_queue.Any()) { await Task.Delay(100).ConfigureAwait(false); continue; }
-
+            await _queueProcessingSemaphore.WaitAsync(ct).ConfigureAwait(false);
+            await _queueSemaphore.WaitAsync(ct).ConfigureAwait(false);
             for (int i = 0; i < _userQueueRequests.Length; i++)
             {
                 if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
@@ -69,13 +102,14 @@ public class RequestQueueService : IHostedService
                 {
                     if (_queue.TryDequeue(out var request))
                     {
-                        _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", request.RequestId, i, request.User, request.FileId);
-                        _userQueueRequests[i] = new(request, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
+                        DequeueIntoSlot(request, i);
                     }
                 }
 
                 if (!_queue.Any()) break;
             }
+            _queueProcessingSemaphore.Release();
+            _queueSemaphore.Release();
 
             _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
 
@@ -83,9 +117,15 @@ public class RequestQueueService : IHostedService
         }
     }
 
+    private void DequeueIntoSlot(UserRequest userRequest, int slot)
+    {
+        _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, userRequest.FileId);
+        _userQueueRequests[slot] = new(userRequest, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
+    }
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _ = ProcessRequestQueue(_queueCts.Token);
+        _ = Task.Run(() => ProcessRequestQueue(_queueCts.Token));
         return Task.CompletedTask;
     }
 

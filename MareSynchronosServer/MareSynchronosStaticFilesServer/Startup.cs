@@ -131,8 +131,6 @@ public class Startup
 
         if (_isMain)
         {
-            services.AddMvcCore().UseSpecificControllers(typeof(ServerFilesController));
-
             services.AddGrpc(o =>
             {
                 o.MaxReceiveMessageSize = null;
@@ -142,10 +140,6 @@ public class Startup
         }
         else
         {
-            services.AddSingleton<RequestQueueService>();
-            services.AddHostedService(p => p.GetService<RequestQueueService>());
-            services.AddMvcCore().UseSpecificControllers(typeof(CacheController), typeof(RequestController));
-
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>>(p => new MareConfigurationServiceClient<StaticFilesServerConfiguration>(
                 p.GetRequiredService<ILogger<MareConfigurationServiceClient<StaticFilesServerConfiguration>>>(),
                 p.GetRequiredService<IOptions<StaticFilesServerConfiguration>>(),
@@ -161,6 +155,10 @@ public class Startup
                 p.GetService<IOptions<MareConfigurationAuthBase>>(),
                 p.GetRequiredService<GrpcClientFactory>(), "MainServer")
         );
+
+        services.AddSingleton<RequestQueueService>();
+        services.AddHostedService(p => p.GetService<RequestQueueService>());
+        services.AddControllers();
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
 
