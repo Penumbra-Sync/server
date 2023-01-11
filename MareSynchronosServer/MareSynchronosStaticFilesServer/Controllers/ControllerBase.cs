@@ -1,5 +1,4 @@
-﻿using MareSynchronosShared.Services;
-using MareSynchronosShared.Utils;
+﻿using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
@@ -7,14 +6,14 @@ namespace MareSynchronosStaticFilesServer.Controllers;
 public class ControllerBase : Controller
 {
     protected ILogger _logger;
-    private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
+    private readonly ServerTokenGenerator _generator;
 
-    public ControllerBase(ILogger logger, IConfigurationService<StaticFilesServerConfiguration> configuration)
+    public ControllerBase(ILogger logger, ServerTokenGenerator generator)
     {
         _logger = logger;
-        _configuration = configuration;
+        _generator = generator;
     }
 
-    protected string User => HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
-    protected string Authorization => "Bearer " + _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.JwtServerToken));
+    protected string MareUser => HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
+    protected string Authorization => "Bearer " + _generator.Token;
 }

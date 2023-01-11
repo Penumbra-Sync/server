@@ -34,8 +34,7 @@
         "UnusedFileRetentionPeriodInDays": 14,
         "CacheDirectory": "/marecache/",
         "RemoteCacheSourceUri": "",
-        "MainServerGrpcAddress": "http://mare-server:6005",
-        "JwtServerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJTaGFyZCBNYWluIiwiaW50ZXJuYWwiOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.OCIS12Vl83UwuwvBhpvPGKmQgYiOSGebhnn9YFw0y5E",
+        "MainServerGrpcAddress": "http://mare-server:6005"
     },
     "AllowedHosts": "*",
     "Kestrel": {

@@ -78,6 +78,7 @@ public class Startup
         services.Configure<MareConfigurationBase>(mareConfig);
         services.Configure<MareConfigurationAuthBase>(mareConfig);
 
+        services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());

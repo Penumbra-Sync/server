@@ -5,7 +5,6 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
-using MareSynchronosStaticFilesServer.Controllers;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -156,6 +155,7 @@ public class Startup
                 p.GetRequiredService<GrpcClientFactory>(), "MainServer")
         );
 
+        services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<RequestQueueService>();
         services.AddHostedService(p => p.GetService<RequestQueueService>());
         services.AddControllers();

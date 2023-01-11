@@ -32,7 +32,6 @@
         "FailedAuthForTempBan": 5,
         "TempBanDurationInMinutes": 5,
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
-        "JwtServerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJTaGFyZCBNYWluIiwiaW50ZXJuYWwiOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.OCIS12Vl83UwuwvBhpvPGKmQgYiOSGebhnn9YFw0y5E",
         "WhitelistedIps": [
             ""
         ],

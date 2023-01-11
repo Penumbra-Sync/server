@@ -1,5 +1,5 @@
 ﻿using MareSynchronos.API;
-using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -13,7 +13,7 @@ public class RequestController : ControllerBase
     private readonly RequestQueueService _requestQueue;
 
     public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, 
-        IConfigurationService<StaticFilesServerConfiguration> configuration) : base(logger, configuration)
+        ServerTokenGenerator generator) : base(logger, generator)
     {
         _cachedFileProvider = cachedFileProvider;
         _requestQueue = requestQueue;
@@ -37,7 +37,7 @@ public class RequestController : ControllerBase
     {
         Guid g = Guid.NewGuid();
         _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
-        var queueStatus = await _requestQueue.EnqueueUser(new(g, User, file));
+        var queueStatus = await _requestQueue.EnqueueUser(new(g, MareUser, file));
         return Ok(JsonSerializer.Serialize(new QueueRequestDto(g, queueStatus)));
     }
 
@@ -45,9 +45,9 @@ public class RequestController : ControllerBase
     [Route(MareFiles.Request_CheckQueue)]
     public IActionResult CheckQueue(Guid requestId)
     {
-        if (_requestQueue.IsActiveProcessing(requestId, User, out _)) return Ok();
+        if (_requestQueue.IsActiveProcessing(requestId, MareUser, out _)) return Ok();
 
-        if (_requestQueue.StillEnqueued(requestId, User, out int position)) return Conflict(position);
+        if (_requestQueue.StillEnqueued(requestId, MareUser, out int position)) return Conflict(position);
 
         return BadRequest();
     }

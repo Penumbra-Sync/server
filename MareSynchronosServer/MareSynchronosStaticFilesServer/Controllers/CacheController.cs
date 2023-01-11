@@ -1,5 +1,5 @@
 ﻿using MareSynchronos.API;
-using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +14,7 @@ public class CacheController : ControllerBase
     private readonly RequestQueueService _requestQueue;
 
     public CacheController(ILogger<CacheController> logger, RequestFileStreamResultFactory requestFileStreamResultFactory,
-        CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, IConfigurationService<StaticFilesServerConfiguration> configuration) : base(logger, configuration)
+        CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, ServerTokenGenerator generator) : base(logger, generator)
     {
         _requestFileStreamResultFactory = requestFileStreamResultFactory;
         _cachedFileProvider = cachedFileProvider;
@@ -24,9 +24,9 @@ public class CacheController : ControllerBase
     [HttpGet(MareFiles.Cache_Get)]
     public async Task<IActionResult> GetFile(Guid requestId)
     {
-        _logger.LogDebug($"GetFile:{User}:{requestId}");
+        _logger.LogDebug($"GetFile:{MareUser}:{requestId}");
 
-        if (!_requestQueue.IsActiveProcessing(requestId, User, out var request)) return BadRequest();
+        if (!_requestQueue.IsActiveProcessing(requestId, MareUser, out var request)) return BadRequest();
 
         _requestQueue.ActivateRequest(requestId);
 

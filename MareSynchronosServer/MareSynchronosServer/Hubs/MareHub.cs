@@ -29,11 +29,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxGroupUserCount;
     private readonly IConfigurationService<ServerConfiguration> _configurationService;
     private readonly IRedisDatabase _redis;
+    private readonly ServerTokenGenerator _generator;
 
     public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IRedisDatabase redisDb)
+        IRedisDatabase redisDb, ServerTokenGenerator generator)
     {
         _mareMetrics = mareMetrics;
         _fileServiceClient = fileServiceClient;
@@ -46,6 +47,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
         _contextAccessor = contextAccessor;
         _redis = redisDb;
+        _generator = generator;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }

@@ -1,5 +1,5 @@
 ﻿using MareSynchronos.API;
-using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +11,7 @@ public class ServerFilesController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
 
-    public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider, IConfigurationService<StaticFilesServerConfiguration> configuration) : base(logger, configuration)
+    public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider, ServerTokenGenerator generator) : base(logger, generator)
     {
         _cachedFileProvider = cachedFileProvider;
     }
@@ -20,7 +20,7 @@ public class ServerFilesController : ControllerBase
     [Authorize(Policy = "Internal")]
     public async Task<IActionResult> GetFile(string fileId)
     {
-        _logger.LogInformation($"GetFile:{User}:{fileId}");
+        _logger.LogInformation($"GetFile:{MareUser}:{fileId}");
 
         var fs = _cachedFileProvider.GetLocalFileStream(fileId);
         if (fs == null) return NotFound();

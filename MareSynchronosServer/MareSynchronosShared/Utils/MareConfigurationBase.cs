@@ -10,7 +10,6 @@ public class MareConfigurationBase : IMareConfiguration
     public int DbContextPoolSize { get; set; } = 100;
     public string ShardName { get; set; } = string.Empty;
     public int MetricsPort { get; set; }
-    public string JwtServerToken { get; set; } = string.Empty;
 
     public T GetValue<T>(string key)
     {
@@ -42,7 +41,6 @@ public class MareConfigurationBase : IMareConfiguration
         sb.AppendLine(base.ToString());
         sb.AppendLine($"{nameof(ShardName)} => {ShardName}");
         sb.AppendLine($"{nameof(DbContextPoolSize)} => {DbContextPoolSize}");
-        sb.AppendLine($"{nameof(JwtServerToken)} => {JwtServerToken}");
         return sb.ToString();
     }
 }
