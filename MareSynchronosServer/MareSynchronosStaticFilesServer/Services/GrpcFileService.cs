@@ -4,10 +4,12 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
+[Authorize(Policy = "Internal")]
 public class GrpcFileService : FileService.FileServiceBase
 {
     private readonly string _basePath;
@@ -23,6 +25,7 @@ public class GrpcFileService : FileService.FileServiceBase
         _metricsClient = metricsClient;
     }
 
+    [Authorize(Policy = "Internal")]
     public override async Task<Empty> UploadFile(IAsyncStreamReader<UploadFileRequest> requestStream, ServerCallContext context)
     {
         _ = await requestStream.MoveNext().ConfigureAwait(false);
@@ -32,7 +35,6 @@ public class GrpcFileService : FileService.FileServiceBase
         var file = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == uploadMsg.Hash && f.UploaderUID == uploadMsg.Uploader).ConfigureAwait(false);
         try
         {
-
             if (file != null)
             {
                 await fileWriter.WriteAsync(uploadMsg.FileData.ToArray()).ConfigureAwait(false);
@@ -72,6 +74,7 @@ public class GrpcFileService : FileService.FileServiceBase
         return new Empty();
     }
 
+    [Authorize(Policy = "Internal")]
     public override async Task<Empty> DeleteFiles(DeleteFilesRequest request, ServerCallContext context)
     {
         foreach (var hash in request.Hash)

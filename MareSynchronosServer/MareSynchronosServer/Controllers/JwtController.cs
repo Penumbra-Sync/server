@@ -2,6 +2,7 @@
 using MareSynchronosServer.Authentication;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
@@ -52,35 +53,44 @@ public class JwtController : Controller
         var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
 
         if (!authResult.Success && !authResult.TempBan) return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
-        if (!authResult.Success && authResult.TempBan) return Unauthorized("You are temporarily banned. Try connecting again later.");
+        if (!authResult.Success && authResult.TempBan) return Unauthorized("You are temporarily banned. Try connecting again in 5 minutes.");
+        if (authResult.Permaban)
+        {
+            if (!_mareDbContext.BannedUsers.Any(c => c.CharacterIdentification == charaIdent))
+            {
+                _mareDbContext.BannedUsers.Add(new Banned()
+                {
+                    CharacterIdentification = charaIdent,
+                    Reason = "Autobanned CharacterIdent (" + authResult.Uid + ")"
+                });
+
+                var lodestone = await _mareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == authResult.Uid);
+
+                if (lodestone != null)
+                {
+                    _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
+                    {
+                        DiscordIdOrLodestoneAuth = lodestone.HashedLodestoneId
+                    });
+                    _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
+                    {
+                        DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString()
+                    });
+                }
+
+                await _mareDbContext.SaveChangesAsync();
+            }
+
+            return Unauthorized("You are permanently banned.");
+        }
 
         var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
-        if (!string.IsNullOrEmpty(existingIdent)) return Unauthorized("Already logged in to this account.");
+        if (!string.IsNullOrEmpty(existingIdent)) return Unauthorized("Already logged in to this account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
 
         var token = CreateToken(new List<Claim>()
         {
             new Claim(MareClaimTypes.Uid, authResult.Uid),
             new Claim(MareClaimTypes.CharaIdent, charaIdent)
-        });
-
-        return Content(token.RawData);
-    }
-
-    [AllowAnonymous]
-    [HttpPost(MareAuth.Auth_Create)]
-    public async Task<IActionResult> CreateToken(string auth)
-    {
-        if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
-
-        var ip = _accessor.GetIpAddress();
-
-        var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
-
-        if (!authResult.Success) return Unauthorized("Invalid Authkey");
-
-        var token = CreateToken(new List<Claim>()
-        {
-            new Claim(MareClaimTypes.Uid, authResult.Uid)
         });
 
         return Content(token.RawData);

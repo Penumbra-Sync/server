@@ -29,7 +29,8 @@
         "ShardName": "Shard 1",
         "MetricsPort": 6050,
         "MainServerGrpcAddress": "http://mare-server:6005",
-        "RedisConnectionString": "redis,password=secretredispassword"
+        "RedisConnectionString": "redis,password=secretredispassword",
+        "JwtServerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJTaGFyZCAxIiwiaW50ZXJuYWwiOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.M7RxLof3YyeXwhy-dfaiyzPG6vAXLTfDsv--s2R1tYU"
     },
     "AllowedHosts": "*",
     "Kestrel": {

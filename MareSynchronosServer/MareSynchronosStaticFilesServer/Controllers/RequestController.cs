@@ -1,4 +1,5 @@
 ﻿using MareSynchronos.API;
+using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +11,8 @@ public class RequestController : ControllerBase
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
 
-    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue) : base(logger)
+    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, 
+        IConfigurationService<StaticFilesServerConfiguration> configuration) : base(logger, configuration)
     {
         _cachedFileProvider = cachedFileProvider;
         _requestQueue = requestQueue;

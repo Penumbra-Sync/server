@@ -33,11 +33,12 @@
         "CacheSizeHardLimitInGiB": 5,
         "UnusedFileRetentionPeriodInDays": 14,
         "CacheDirectory": "/marecache/",
-        "RemoteCacheSourceUri": "http://mare-files:6200/cache/",
+        "RemoteCacheSourceUri": "http://mare-files:6200/",
         "MainServerGrpcAddress": "http://mare-server:6005",
         "DownloadTimeoutSeconds": 30,
         "DownloadQueueSize": 50,
-        "DownloadQueueReleaseSeconds": 15
+        "DownloadQueueReleaseSeconds": 15,
+        "JwtServerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJGaWxlcyBTaGFyZCAxIiwiaW50ZXJuYWwiOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.kfNZthJMf9vuWW064PV7U4OuI_rV_xmZnoWiTcW7vi8"
     },
     "AllowedHosts": "*",
     "Kestrel": {

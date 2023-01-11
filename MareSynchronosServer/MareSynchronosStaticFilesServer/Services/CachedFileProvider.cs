@@ -4,6 +4,7 @@ using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http;
+using MareSynchronos.API;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
@@ -31,7 +32,7 @@ public class CachedFileProvider
     private async Task DownloadTask(string hash, string auth)
     {
         // download file from remote
-        var downloadUrl = new Uri(_remoteCacheSourceUri, hash);
+        var downloadUrl = MareFiles.ServerFilesGetFullPath(_remoteCacheSourceUri, hash);
         _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
@@ -74,7 +75,17 @@ public class CachedFileProvider
         }
     }
 
-    public async Task<FileStream> GetFileStream(string hash, string auth)
+    public FileStream? GetLocalFileStream(string hash)
+    {
+        var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+        if (fi == null) return null;
+
+        _fileStatisticsService.LogFile(hash, fi.Length);
+
+        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
+    }
+
+    public async Task<FileStream?> GetAndDownloadFileStream(string hash, string auth)
     {
         DownloadFileWhenRequired(hash, auth);
 
@@ -83,11 +94,6 @@ public class CachedFileProvider
             await downloadTask.ConfigureAwait(false);
         }
 
-        var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-        if (fi == null) return null;
-
-        _fileStatisticsService.LogFile(hash, fi.Length);
-
-        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
+        return GetLocalFileStream(hash);
     }
 }

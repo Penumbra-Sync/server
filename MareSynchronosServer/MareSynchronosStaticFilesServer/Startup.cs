@@ -123,11 +123,15 @@ public class Startup
             o.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
         }).AddJwtBearer();
 
-        services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+            options.AddPolicy("Internal", new AuthorizationPolicyBuilder().RequireClaim(MareClaimTypes.Internal, "true").Build());
+        });
 
         if (_isMain)
         {
-            services.AddMvcCore().UseSpecificControllers(typeof(FilesController));
+            services.AddMvcCore().UseSpecificControllers(typeof(ServerFilesController));
 
             services.AddGrpc(o =>
             {
@@ -140,7 +144,7 @@ public class Startup
         {
             services.AddSingleton<RequestQueueService>();
             services.AddHostedService(p => p.GetService<RequestQueueService>());
-            services.AddMvcCore().UseSpecificControllers(typeof(ShardedFileController), typeof(RequestController));
+            services.AddMvcCore().UseSpecificControllers(typeof(CacheController), typeof(RequestController));
 
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>>(p => new MareConfigurationServiceClient<StaticFilesServerConfiguration>(
                 p.GetRequiredService<ILogger<MareConfigurationServiceClient<StaticFilesServerConfiguration>>>(),

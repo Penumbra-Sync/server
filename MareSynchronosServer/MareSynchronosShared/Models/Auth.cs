@@ -10,4 +10,5 @@ public class Auth
 
     public string UserUID { get; set; }
     public User User { get; set; }
+    public bool IsBanned { get; set; }
 }
