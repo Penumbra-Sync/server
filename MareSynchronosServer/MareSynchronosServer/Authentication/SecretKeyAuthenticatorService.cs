@@ -57,7 +57,7 @@ public class SecretKeyAuthenticatorService
         using var context = scope.ServiceProvider.GetService<MareDbContext>();
         var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
 
-        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, false, authReply.IsBanned);
+        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, false, authReply?.IsBanned ?? false);
 
         if (reply.Success)
         {
