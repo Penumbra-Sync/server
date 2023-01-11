@@ -36,7 +36,7 @@ public partial class MareHub
         request.Hash.AddRange(ownFiles.Select(f => f.Hash));
         Metadata headers = new Metadata()
             {
-                { "Authorization", Context.GetHttpContext().Request.Headers["Authorization"].ToString() }
+                { "Authorization", "Bearer " + _generator.Token }
             };
         _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
     }
@@ -69,7 +69,7 @@ public partial class MareHub
                 IsForbidden = forbiddenFile != null,
                 Hash = file.Hash,
                 Size = file.Size,
-                Url = new Uri(baseUrl, file.Hash.ToUpperInvariant()).ToString()
+                Url = baseUrl.ToString()
             });
         }
 
@@ -210,7 +210,7 @@ public partial class MareHub
 
             Metadata headers = new Metadata()
             {
-                { "Authorization", Context.GetHttpContext().Request.Headers["Authorization"].ToString() }
+                { "Authorization", "Bearer " + _generator.Token }
             };
             var streamingCall = _fileServiceClient.UploadFile(headers);
             using var tempFileStream = new FileStream(tempFileName, FileMode.Open, FileAccess.Read);

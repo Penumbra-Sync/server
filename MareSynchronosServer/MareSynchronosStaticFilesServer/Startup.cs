@@ -5,6 +5,8 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosStaticFilesServer.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -41,8 +43,6 @@ public class Startup
 
         var mareConfig = Configuration.GetRequiredSection("MareSynchronos");
 
-        services.AddControllers();
-
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string>
         {
         }, new List<string>
@@ -52,10 +52,13 @@ public class Startup
             MetricsAPI.GaugeFilesUniquePastDay,
             MetricsAPI.GaugeFilesUniquePastDaySize,
             MetricsAPI.GaugeFilesUniquePastHour,
-            MetricsAPI.GaugeFilesUniquePastHourSize
+            MetricsAPI.GaugeFilesUniquePastHourSize,
+            MetricsAPI.GaugeCurrentDownloads,
+            MetricsAPI.GaugeDownloadQueue,
         }));
         services.AddSingleton<CachedFileProvider>();
         services.AddSingleton<FileStatisticsService>();
+        services.AddSingleton<RequestFileStreamResultFactory>();
 
         services.AddHostedService(m => m.GetService<FileStatisticsService>());
         services.AddHostedService<FileCleanupService>();
@@ -119,7 +122,11 @@ public class Startup
             o.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
         }).AddJwtBearer();
 
-        services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+            options.AddPolicy("Internal", new AuthorizationPolicyBuilder().RequireClaim(MareClaimTypes.Internal, "true").Build());
+        });
 
         if (_isMain)
         {
@@ -148,9 +155,15 @@ public class Startup
                 p.GetRequiredService<GrpcClientFactory>(), "MainServer")
         );
 
+        services.AddSingleton<ServerTokenGenerator>();
+        services.AddSingleton<RequestQueueService>();
+        services.AddHostedService(p => p.GetService<RequestQueueService>());
+        services.AddControllers();
+
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
 
         services.AddHealthChecks();
+        services.AddControllers();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

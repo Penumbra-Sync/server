@@ -1,7 +1,7 @@
 ﻿using MareSynchronosShared.Metrics;
 using System.Collections.Concurrent;
 
-namespace MareSynchronosStaticFilesServer;
+namespace MareSynchronosStaticFilesServer.Services;
 
 public class FileStatisticsService : IHostedService
 {

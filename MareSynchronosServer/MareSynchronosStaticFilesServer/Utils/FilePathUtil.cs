@@ -1,8 +1,8 @@
-﻿namespace MareSynchronosStaticFilesServer;
+﻿namespace MareSynchronosStaticFilesServer.Utils;
 
 public static class FilePathUtil
 {
-    public static FileInfo? GetFileInfoForHash(string basePath, string hash)
+    public static FileInfo GetFileInfoForHash(string basePath, string hash)
     {
         FileInfo fi = new(Path.Combine(basePath, hash[0].ToString(), hash));
         if (!fi.Exists)

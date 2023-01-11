@@ -1,9 +1,11 @@
 ﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
-using Microsoft.Extensions.Options;
+using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using MareSynchronos.API;
 
-namespace MareSynchronosStaticFilesServer;
+namespace MareSynchronosStaticFilesServer.Services;
 
 public class CachedFileProvider
 {
@@ -13,6 +15,7 @@ public class CachedFileProvider
     private readonly Uri _remoteCacheSourceUri;
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
+    private readonly HttpClient _httpClient;
     private bool IsMainServer => _remoteCacheSourceUri == null;
 
     public CachedFileProvider(IConfigurationService<StaticFilesServerConfiguration> configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService, MareMetrics metrics)
@@ -22,16 +25,18 @@ public class CachedFileProvider
         _metrics = metrics;
         _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.RemoteCacheSourceUri), null);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
+        _httpClient = new HttpClient();
     }
 
     private async Task DownloadTask(string hash, string auth)
     {
         // download file from remote
-        var downloadUrl = new Uri(_remoteCacheSourceUri, hash);
+        var downloadUrl = MareFiles.ServerFilesGetFullPath(_remoteCacheSourceUri, hash);
         _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
-        using var client = new HttpClient();
-        client.DefaultRequestHeaders.Add("Authorization", auth);
-        var response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue(auth);
+        var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
 
         try
         {
@@ -58,26 +63,40 @@ public class CachedFileProvider
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
     }
 
-    public async Task<FileStream?> GetFileStream(string hash, string auth)
+    public void DownloadFileWhenRequired(string hash, string auth)
     {
         var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-        if (fi == null && IsMainServer) return null;
+        if (fi == null && IsMainServer) return;
 
         if (fi == null && !_currentTransfers.ContainsKey(hash))
         {
-            _currentTransfers[hash] = DownloadTask(hash, auth).ContinueWith(r => _currentTransfers.Remove(hash, out _));
+            _currentTransfers[hash] = Task.Run(async () =>
+            {
+                await DownloadTask(hash, auth).ConfigureAwait(false);
+                _currentTransfers.Remove(hash, out _);
+            });
         }
+    }
+
+    public FileStream? GetLocalFileStream(string hash)
+    {
+        var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
+        if (fi == null) return null;
+
+        _fileStatisticsService.LogFile(hash, fi.Length);
+
+        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
+    }
+
+    public async Task<FileStream?> GetAndDownloadFileStream(string hash, string auth)
+    {
+        DownloadFileWhenRequired(hash, auth);
 
         if (_currentTransfers.TryGetValue(hash, out var downloadTask))
         {
             await downloadTask.ConfigureAwait(false);
         }
 
-        fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
-        if (fi == null) return null;
-
-        _fileStatisticsService.LogFile(hash, fi.Length);
-
-        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
+        return GetLocalFileStream(hash);
     }
 }
