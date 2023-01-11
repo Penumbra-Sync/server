@@ -12,7 +12,7 @@ public class RequestController : ControllerBase
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
 
-    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, 
+    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue,
         ServerTokenGenerator generator) : base(logger, generator)
     {
         _cachedFileProvider = cachedFileProvider;
@@ -25,6 +25,7 @@ public class RequestController : ControllerBase
     {
         foreach (var file in files)
         {
+            _logger.LogDebug("Prerequested file: " + file);
             _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
         }
 

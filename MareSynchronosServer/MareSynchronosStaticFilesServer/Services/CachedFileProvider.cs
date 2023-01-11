@@ -35,7 +35,7 @@ public class CachedFileProvider
         _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue(auth);
+        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth);
         var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
 
         try

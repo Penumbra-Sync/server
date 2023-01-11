@@ -15,5 +15,5 @@ public class ControllerBase : Controller
     }
 
     protected string MareUser => HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
-    protected string Authorization => "Bearer " + _generator.Token;
+    protected string Authorization => _generator.Token;
 }
