@@ -119,6 +119,9 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
 
+        var dataId = await _redis.GetAsync<string>("DataId:" + UserUID).ConfigureAwait(false);
+        if (string.Equals(dataId, characterCache.Hash, StringComparison.Ordinal)) return;
+
         bool hadInvalidData = false;
         List<string> invalidGamePaths = new();
         List<string> invalidFileSwapPaths = new();
@@ -155,6 +158,10 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
 
         await Clients.Users(allPairedUsersDict.Select(f => f.Key)).Client_UserReceiveCharacterData(characterCache, UserCharaIdent).ConfigureAwait(false);
+
+        await _redis.RemoveAsync("Data:" + dataId, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.ReplaceAsync("DataId:" + UserUID, characterCache.Hash, flag: StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+        await _redis.SetAddAsync("Data:" + characterCache.Hash, characterCache, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, allPairedUsersDict.Count());
@@ -227,6 +234,7 @@ public partial class MareHub
 
         // get own ident and all pairs
         var userIdent = await GetIdentFromUidFromRedis(user.UID).ConfigureAwait(false);
+        var userData = await GetCharacterCacheForUid(user.UID).ConfigureAwait(false);
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
@@ -234,6 +242,8 @@ public partial class MareHub
         {
             await Clients.User(user.UID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
             await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
+            await Clients.User(user.UID).Client_UserReceiveCharacterData(await GetCharacterCacheForUid(otherUser.UID).ConfigureAwait(false), await GetIdentFromUidFromRedis(otherUser.UID).ConfigureAwait(false)).ConfigureAwait(false);
+            await Clients.User(otherUser.UID).Client_UserReceiveCharacterData(userData, userIdent).ConfigureAwait(false);
         }
     }
 

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Utils;
+using MareSynchronos.API;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -17,6 +18,14 @@ public partial class MareHub
     {
         await _redis.RemoveAsync("UID:" + UserUID, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
         await _redis.RemoveAsync("IDENT:" + UserCharaIdent, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+    }
+
+    private async Task<CharacterCacheDto?> GetCharacterCacheForUid(string? uid = null)
+    {
+        uid ??= UserUID;
+        var dataId = await _redis.GetAsync<string>("DataId:" + uid).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(dataId)) return null;
+        return await _redis.GetAsync<CharacterCacheDto>("Data:" + dataId).ConfigureAwait(false);
     }
 
     public async Task<string> GetIdentFromUidFromRedis(string uid)
