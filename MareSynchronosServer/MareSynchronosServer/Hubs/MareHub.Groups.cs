@@ -38,7 +38,7 @@ public partial class MareHub
             GID = gid,
             HashedPassword = hashedPw,
             InvitesEnabled = true,
-            OwnerUID = UserUID
+            OwnerUID = UserUID,
         };
 
         GroupPair initialPair = new()
@@ -46,7 +46,7 @@ public partial class MareHub
             GroupGID = newGroup.GID,
             GroupUserUID = UserUID,
             IsPaused = false,
-            IsPinned = true
+            IsPinned = true,
         };
 
         await _dbContext.Groups.AddAsync(newGroup).ConfigureAwait(false);
@@ -61,7 +61,7 @@ public partial class MareHub
             OwnedBy = string.IsNullOrEmpty(self.Alias) ? self.UID : self.Alias,
             IsDeleted = false,
             IsPaused = false,
-            InvitesEnabled = true
+            InvitesEnabled = true,
         }).ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -69,7 +69,7 @@ public partial class MareHub
         return new GroupCreatedDto()
         {
             GID = newGroup.GID,
-            Password = passwd
+            Password = passwd,
         };
     }
 
@@ -191,7 +191,7 @@ public partial class MareHub
         GroupPair newPair = new()
         {
             GroupGID = group.GID,
-            GroupUserUID = UserUID
+            GroupUserUID = UserUID,
         };
 
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);
@@ -206,7 +206,7 @@ public partial class MareHub
             IsDeleted = false,
             IsPaused = false,
             Alias = group.Alias,
-            InvitesEnabled = true
+            InvitesEnabled = true,
         }).ConfigureAwait(false);
 
         var self = _dbContext.Users.Single(u => u.UID == UserUID);
@@ -272,7 +272,7 @@ public partial class MareHub
             {
                 ExpirationDate = DateTime.UtcNow.AddDays(1),
                 GroupGID = group.GID,
-                Invite = hashedInvite
+                Invite = hashedInvite,
             });
         }
 
@@ -301,7 +301,7 @@ public partial class MareHub
         await Clients.User(UserUID).Client_GroupChange(new GroupDto()
         {
             GID = group.GID,
-            IsDeleted = true
+            IsDeleted = true,
         }).ConfigureAwait(false);
 
         bool ownerHasLeft = string.Equals(group.OwnerUID, UserUID, StringComparison.Ordinal);
@@ -325,7 +325,7 @@ public partial class MareHub
                     {
                         GID = group.GID,
                         OwnedBy = groupHasMigrated.Item2,
-                        Alias = null
+                        Alias = null,
                     }).ConfigureAwait(false);
                 }
                 else
@@ -335,7 +335,7 @@ public partial class MareHub
                     await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupChange(new GroupDto()
                     {
                         GID = group.GID,
-                        IsDeleted = true
+                        IsDeleted = true,
                     }).ConfigureAwait(false);
 
                     await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
@@ -388,7 +388,7 @@ public partial class MareHub
         await Clients.User(UserUID).Client_GroupChange(new GroupDto
         {
             GID = gid,
-            IsPaused = isPaused
+            IsPaused = isPaused,
         }).ConfigureAwait(false);
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
@@ -545,7 +545,7 @@ public partial class MareHub
         await Clients.User(uid).Client_GroupChange(new GroupDto()
         {
             GID = gid,
-            IsModerator = isGroupModerator
+            IsModerator = isGroupModerator,
         }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs.Where(p => !string.Equals(p.GroupUserUID, uid, StringComparison.Ordinal))
@@ -553,7 +553,7 @@ public partial class MareHub
             {
                 GroupGID = gid,
                 IsModerator = isGroupModerator,
-                UserUID = uid
+                UserUID = uid,
             }).ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(gid, uid, isGroupModerator, "Success"));
@@ -590,14 +590,14 @@ public partial class MareHub
             GID = gid,
             OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
             IsModerator = false,
-            Alias = null
+            Alias = null,
         }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs).Client_GroupChange(new GroupDto()
         {
             GID = gid,
             OwnedBy = string.IsNullOrEmpty(group.Owner.Alias) ? group.Owner.UID : group.Owner.Alias,
-            Alias = null
+            Alias = null,
         }).ConfigureAwait(false);
 
         await Clients.Users(groupPairs.Where(p => !string.Equals(p, uid, StringComparison.Ordinal))).Client_GroupUserChange(new GroupPairDto()
@@ -605,7 +605,7 @@ public partial class MareHub
             GroupGID = gid,
             UserUID = uid,
             IsPinned = true,
-            IsModerator = false
+            IsModerator = false,
         }).ConfigureAwait(false);
     }
 
@@ -647,7 +647,7 @@ public partial class MareHub
         {
             GroupGID = gid,
             UserUID = uid,
-            IsPinned = isPinned
+            IsPinned = isPinned,
         }).ConfigureAwait(false);
     }
 
@@ -680,7 +680,7 @@ public partial class MareHub
             {
                 GroupGID = pair.GroupGID,
                 IsRemoved = true,
-                UserUID = pair.GroupUserUID
+                UserUID = pair.GroupUserUID,
             }).ConfigureAwait(false);
 
             var pairIdent = await GetIdentFromUidFromRedis(pair.GroupUserUID).ConfigureAwait(false);

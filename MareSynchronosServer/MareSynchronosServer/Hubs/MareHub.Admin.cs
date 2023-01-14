@@ -64,7 +64,7 @@ public partial class MareHub
         return await _dbContext.BannedUsers.AsNoTracking().Select(b => new BannedUserDto()
         {
             CharacterHash = b.CharacterIdentification,
-            Reason = b.Reason
+            Reason = b.Reason,
         }).ToListAsync().ConfigureAwait(false);
     }
 
@@ -74,7 +74,7 @@ public partial class MareHub
         return await _dbContext.ForbiddenUploadEntries.AsNoTracking().Select(b => new ForbiddenFileDto()
         {
             Hash = b.Hash,
-            ForbiddenBy = b.ForbiddenBy
+            ForbiddenBy = b.ForbiddenBy,
         }).ToListAsync().ConfigureAwait(false);
     }
 
@@ -88,7 +88,7 @@ public partial class MareHub
             CharacterNameHash = b.Ident,
             UID = b.User.UID,
             IsModerator = b.User.IsModerator,
-            IsAdmin = b.User.IsAdmin
+            IsAdmin = b.User.IsAdmin,
         }).ToList();
     }
 
@@ -109,7 +109,7 @@ public partial class MareHub
             await _dbContext.BannedUsers.AddAsync(new Banned
             {
                 CharacterIdentification = dto.CharacterHash,
-                Reason = dto.Reason
+                Reason = dto.Reason,
             }).ConfigureAwait(false);
         }
 
@@ -139,7 +139,7 @@ public partial class MareHub
             await _dbContext.ForbiddenUploadEntries.AddAsync(new ForbiddenUploadEntry
             {
                 Hash = dto.Hash,
-                ForbiddenBy = dto.ForbiddenBy
+                ForbiddenBy = dto.ForbiddenBy,
             }).ConfigureAwait(false);
         }
 

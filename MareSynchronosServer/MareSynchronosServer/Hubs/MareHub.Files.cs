@@ -36,7 +36,7 @@ public partial class MareHub
         request.Hash.AddRange(ownFiles.Select(f => f.Hash));
         Metadata headers = new Metadata()
             {
-                { "Authorization", "Bearer " + _generator.Token }
+                { "Authorization", "Bearer " + _generator.Token },
             };
         _ = await _fileServiceClient.DeleteFilesAsync(request, headers).ConfigureAwait(false);
     }
@@ -69,7 +69,7 @@ public partial class MareHub
                 IsForbidden = forbiddenFile != null,
                 Hash = file.Hash,
                 Size = file.Size,
-                Url = baseUrl.ToString()
+                Url = baseUrl.ToString(),
             });
         }
 
@@ -106,7 +106,7 @@ public partial class MareHub
                 {
                     ForbiddenBy = forbiddenFiles[file].ForbiddenBy,
                     Hash = file,
-                    IsForbidden = true
+                    IsForbidden = true,
                 };
 
                 continue;
@@ -119,7 +119,7 @@ public partial class MareHub
             {
                 Hash = file,
                 Uploaded = false,
-                Uploader = uploader
+                Uploader = uploader,
             });
 
             notCoveredFiles[file] = new UploadFileDto()
@@ -210,7 +210,7 @@ public partial class MareHub
 
             Metadata headers = new Metadata()
             {
-                { "Authorization", "Bearer " + _generator.Token }
+                { "Authorization", "Bearer " + _generator.Token },
             };
             var streamingCall = _fileServiceClient.UploadFile(headers);
             using var tempFileStream = new FileStream(tempFileName, FileMode.Open, FileAccess.Read);
@@ -223,7 +223,7 @@ public partial class MareHub
                 {
                     FileData = ByteString.CopyFrom(data, 0, readBytes),
                     Hash = computedHashString,
-                    Uploader = UserUID
+                    Uploader = UserUID,
                 }).ConfigureAwait(false);
             }
             await streamingCall.RequestStream.CompleteAsync().ConfigureAwait(false);

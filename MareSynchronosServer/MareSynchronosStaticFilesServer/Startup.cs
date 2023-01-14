@@ -75,7 +75,7 @@ public class Startup
         var noRetryConfig = new MethodConfig
         {
             Names = { MethodName.Default },
-            RetryPolicy = null
+            RetryPolicy = null,
         };
 
         services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("FileServer", c =>
@@ -86,7 +86,7 @@ public class Startup
             c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
-                EnableMultipleHttp2Connections = true
+                EnableMultipleHttp2Connections = true,
             };
         });
 
@@ -98,7 +98,7 @@ public class Startup
             c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
             c.HttpHandler = new SocketsHttpHandler()
             {
-                EnableMultipleHttp2Connections = true
+                EnableMultipleHttp2Connections = true,
             };
         });
 
@@ -111,7 +111,7 @@ public class Startup
                     ValidateLifetime = false,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt))))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt)))),
                 };
             });
 

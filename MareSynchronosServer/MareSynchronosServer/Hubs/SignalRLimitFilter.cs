@@ -30,7 +30,7 @@ public class SignalRLimitFilter : IHubFilter
             ClientIp = ip,
             Path = invocationContext.HubMethodName,
             HttpVerb = "ws",
-            ClientId = invocationContext.Context.UserIdentifier
+            ClientId = invocationContext.Context.UserIdentifier,
         };
         foreach (var rule in await _processor.GetMatchingRulesAsync(client).ConfigureAwait(false))
         {

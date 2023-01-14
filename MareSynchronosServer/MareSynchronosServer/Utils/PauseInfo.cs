@@ -4,5 +4,5 @@ public enum PauseInfo
 {
     NoConnection,
     Paused,
-    Unpaused
+    Unpaused,
 }

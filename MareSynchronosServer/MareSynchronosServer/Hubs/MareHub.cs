@@ -78,8 +78,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 MaxGroupsCreatedByUser = _maxExistingGroupsByUser,
                 ShardName = _shardName,
                 MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
-                MaxGroupUserCount = _maxGroupUserCount
-            }
+                MaxGroupUserCount = _maxGroupUserCount,
+            },
         };
     }
 
@@ -88,7 +88,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     {
         return new ConnectionDto()
         {
-            ServerVersion = IMareHub.ApiVersion
+            ServerVersion = IMareHub.ApiVersion,
         };
     }
 

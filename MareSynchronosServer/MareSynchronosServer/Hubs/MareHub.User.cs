@@ -41,7 +41,7 @@ public partial class MareHub
             await Clients.User(pair.User.UID).Client_UserUpdateClientPairs(new ClientPairDto()
             {
                 OtherUID = UserUID,
-                IsRemoved = true
+                IsRemoved = true,
             }).ConfigureAwait(false);
         }
 
@@ -79,12 +79,12 @@ public partial class MareHub
                 on new
                 {
                     user = userToOther.UserUID,
-                    other = userToOther.OtherUserUID
+                    other = userToOther.OtherUserUID,
 
                 } equals new
                 {
                     user = otherToUser.OtherUserUID,
-                    other = otherToUser.UserUID
+                    other = otherToUser.UserUID,
                 } into leftJoin
             from otherEntry in leftJoin.DefaultIfEmpty()
             where
@@ -95,7 +95,7 @@ public partial class MareHub
                 userToOther.IsPaused,
                 OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
                 userToOther.OtherUserUID,
-                IsSynced = otherEntry != null
+                IsSynced = otherEntry != null,
             };
 
         return (await query.AsNoTracking().ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
@@ -104,7 +104,7 @@ public partial class MareHub
             IsPaused = f.IsPaused,
             OtherUID = f.OtherUserUID,
             IsSynced = f.IsSynced,
-            IsPausedFromOthers = f.OtherIsPaused
+            IsPausedFromOthers = f.OtherIsPaused,
         }).ToList();
     }
 
@@ -190,7 +190,7 @@ public partial class MareHub
         {
             IsPaused = false,
             OtherUser = otherUser,
-            User = user
+            User = user,
         };
         await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
@@ -204,7 +204,7 @@ public partial class MareHub
                 OtherUID = otherUser.UID,
                 IsPaused = false,
                 IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                IsSynced = otherEntry != null
+                IsSynced = otherEntry != null,
             }).ConfigureAwait(false);
 
         // if there's no opposite entry do nothing
@@ -222,7 +222,7 @@ public partial class MareHub
                 OtherUID = user.UID,
                 IsPaused = otherEntry.IsPaused,
                 IsPausedFromOthers = false,
-                IsSynced = true
+                IsSynced = true,
             }).ConfigureAwait(false);
 
         // get own ident and all pairs
@@ -260,7 +260,7 @@ public partial class MareHub
                 OtherUID = otherUserUid,
                 IsPaused = isPaused,
                 IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                IsSynced = otherEntry != null
+                IsSynced = otherEntry != null,
             }).ConfigureAwait(false);
         if (otherEntry != null)
         {
@@ -269,7 +269,7 @@ public partial class MareHub
                 OtherUID = UserUID,
                 IsPaused = otherEntry.IsPaused,
                 IsPausedFromOthers = isPaused,
-                IsSynced = true
+                IsSynced = true,
             }).ConfigureAwait(false);
 
             var otherCharaIdent = await GetIdentFromUidFromRedis(pair.OtherUserUID).ConfigureAwait(false);
@@ -304,7 +304,7 @@ public partial class MareHub
             .Client_UserUpdateClientPairs(new ClientPairDto()
             {
                 OtherUID = otherUserUid,
-                IsRemoved = true
+                IsRemoved = true,
             }).ConfigureAwait(false);
 
         // check if opposite entry exists
@@ -321,7 +321,7 @@ public partial class MareHub
             {
                 OtherUID = UserUID,
                 IsPausedFromOthers = false,
-                IsSynced = false
+                IsSynced = false,
             }).ConfigureAwait(false);
 
         // if the other user had paused the user the state will be offline for either, do nothing

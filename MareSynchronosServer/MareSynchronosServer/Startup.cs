@@ -49,7 +49,7 @@ public class Startup
         ConfigureMetrics(services);
 
         // configure file service grpc connection
-        ConfigureFileServiceGrpcClient(services, mareConfig);
+        ConfigureFileServiceGrpcClient(services);
 
         // configure database
         ConfigureDatabase(services, mareConfig);
@@ -105,29 +105,29 @@ public class Startup
         });
 
         // configure redis for SignalR
-        var redis = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
-        if (!string.IsNullOrEmpty(redis))
+        var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
+        if (!string.IsNullOrEmpty(redisConnection))
         {
-            signalRServiceBuilder.AddStackExchangeRedis(redis, options =>
+            signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options =>
             {
                 options.Configuration.ChannelPrefix = "MareSynchronos";
             });
         }
 
-        var options = ConfigurationOptions.Parse(redis);
+        var options = ConfigurationOptions.Parse(redisConnection);
 
-        var endpoint = options.EndPoints.First();
+        var endpoint = options.EndPoints[0];
         string address = "";
         int port = 0;
-        if (endpoint is DnsEndPoint) { address = ((DnsEndPoint)endpoint).Host; port = ((DnsEndPoint)endpoint).Port; }
-        if (endpoint is IPEndPoint) { address = ((IPEndPoint)endpoint).Address.ToString(); port = ((IPEndPoint)endpoint).Port; }
+        if (endpoint is DnsEndPoint dnsEndPoint) { address = dnsEndPoint.Host; port = dnsEndPoint.Port; }
+        if (endpoint is IPEndPoint ipEndPoint) { address = ipEndPoint.Address.ToString(); port = ipEndPoint.Port; }
         var redisConfiguration = new RedisConfiguration()
         {
             AbortOnConnectFail = true,
             KeyPrefix = "",
             Hosts = new RedisHost[]
             {
-                new RedisHost(){ Host = address, Port = port }
+                new RedisHost(){ Host = address, Port = port },
             },
             AllowAdmin = true,
             ConnectTimeout = 3000,
@@ -138,10 +138,10 @@ public class Startup
             {
                 Mode = ServerEnumerationStrategy.ModeOptions.All,
                 TargetRole = ServerEnumerationStrategy.TargetRoleOptions.Any,
-                UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw
+                UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw,
             },
             MaxValueLength = 1024,
-            PoolSize = 50
+            PoolSize = 50,
         };
 
         services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
@@ -162,15 +162,15 @@ public class Startup
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<IConfigurationService<MareConfigurationAuthBase>>((o, s) =>
+            .Configure<IConfigurationService<MareConfigurationAuthBase>>((options, config) =>
             {
-                o.TokenValidationParameters = new()
+                options.TokenValidationParameters = new()
                 {
                     ValidateIssuer = false,
                     ValidateLifetime = false,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt))))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(config.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt)))),
                 };
             });
 
@@ -242,7 +242,7 @@ public class Startup
             MetricsAPI.GaugeGroups,
             MetricsAPI.GaugeGroupPairs,
             MetricsAPI.GaugeGroupPairsPaused,
-            MetricsAPI.GaugeUsersRegistered
+            MetricsAPI.GaugeUsersRegistered,
         }));
     }
 
@@ -253,7 +253,7 @@ public class Startup
             var noRetryConfig = new MethodConfig
             {
                 Names = { MethodName.Default },
-                RetryPolicy = null
+                RetryPolicy = null,
             };
 
             services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
@@ -264,7 +264,7 @@ public class Startup
                 c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
                 c.HttpHandler = new SocketsHttpHandler()
                 {
-                    EnableMultipleHttp2Connections = true
+                    EnableMultipleHttp2Connections = true,
                 };
             });
 
@@ -290,7 +290,7 @@ public class Startup
         }
     }
 
-    private static void ConfigureFileServiceGrpcClient(IServiceCollection services, IConfigurationSection mareConfig)
+    private static void ConfigureFileServiceGrpcClient(IServiceCollection services)
     {
         var defaultMethodConfig = new MethodConfig
         {
@@ -301,8 +301,8 @@ public class Startup
                 InitialBackoff = TimeSpan.FromSeconds(1),
                 MaxBackoff = TimeSpan.FromSeconds(5),
                 BackoffMultiplier = 1.5,
-                RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable }
-            }
+                RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable },
+            },
         };
         services.AddGrpcClient<FileService.FileServiceClient>((serviceProvider, c) =>
         {
@@ -325,6 +325,7 @@ public class Startup
         app.UseRouting();
 
         app.UseWebSockets();
+        app.UseHttpMetrics();
 
         var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4980));
         metricServer.Start();

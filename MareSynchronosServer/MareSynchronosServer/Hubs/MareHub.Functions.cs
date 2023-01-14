@@ -47,7 +47,7 @@ public partial class MareHub
                                UID = Convert.ToString(userPair.OtherUserUID),
                                GID = "DIRECT",
                                PauseStateSelf = userPair.IsPaused,
-                               PauseStateOther = otherUserPair.IsPaused
+                               PauseStateOther = otherUserPair.IsPaused,
                            })
                             .Union(
                                 (from userGroupPair in _dbContext.GroupPairs
@@ -69,7 +69,7 @@ public partial class MareHub
             {
                 UID = key,
                 PauseStates = g.Select(p => new PauseState() { GID = string.Equals(p.GID, "DIRECT", StringComparison.Ordinal) ? null : p.GID, IsSelfPaused = p.PauseStateSelf, IsOtherPaused = p.PauseStateOther })
-                .ToList()
+                .ToList(),
             }, StringComparer.Ordinal).ToList();
     }
 

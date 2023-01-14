@@ -43,9 +43,9 @@ public class ServerTokenGenerator
             Subject = new ClaimsIdentity(new List<Claim>()
             {
                 new Claim(MareClaimTypes.Uid, _configuration.GetValue<string>(nameof(MareConfigurationBase.ShardName))),
-                new Claim(MareClaimTypes.Internal, "true")
+                new Claim(MareClaimTypes.Internal, "true"),
             }),
-            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature)
+            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature),
         };
 
         var handler = new JwtSecurityTokenHandler();

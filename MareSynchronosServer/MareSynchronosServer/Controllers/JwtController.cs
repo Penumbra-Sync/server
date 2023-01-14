@@ -61,7 +61,7 @@ public class JwtController : Controller
                 _mareDbContext.BannedUsers.Add(new Banned()
                 {
                     CharacterIdentification = charaIdent,
-                    Reason = "Autobanned CharacterIdent (" + authResult.Uid + ")"
+                    Reason = "Autobanned CharacterIdent (" + authResult.Uid + ")",
                 });
 
                 await _mareDbContext.SaveChangesAsync();
@@ -75,14 +75,14 @@ public class JwtController : Controller
                 {
                     _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
                     {
-                        DiscordIdOrLodestoneAuth = lodestone.HashedLodestoneId
+                        DiscordIdOrLodestoneAuth = lodestone.HashedLodestoneId,
                     });
                 }
                 if (!_mareDbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.DiscordId.ToString()))
                 {
                     _mareDbContext.BannedRegistrations.Add(new BannedRegistrations()
                     {
-                        DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString()
+                        DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString(),
                     });
                 }
 
@@ -98,7 +98,7 @@ public class JwtController : Controller
         var token = CreateToken(new List<Claim>()
         {
             new Claim(MareClaimTypes.Uid, authResult.Uid),
-            new Claim(MareClaimTypes.CharaIdent, charaIdent)
+            new Claim(MareClaimTypes.CharaIdent, charaIdent),
         });
 
         return Content(token.RawData);
@@ -111,7 +111,7 @@ public class JwtController : Controller
         var token = new SecurityTokenDescriptor()
         {
             Subject = new ClaimsIdentity(authClaims),
-            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature)
+            SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature),
         };
 
         var handler = new JwtSecurityTokenHandler();
