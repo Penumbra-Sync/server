@@ -77,9 +77,10 @@ public class RequestQueueService : IHostedService
                 if (idx >= 0)
                 {
                     _userQueueRequests[idx] = null;
-                    return;
                 }
             }
+
+            return;
         }
         _queueRemoval[requestId] = user;
     }
