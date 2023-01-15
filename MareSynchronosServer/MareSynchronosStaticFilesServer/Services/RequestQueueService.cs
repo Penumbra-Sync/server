@@ -148,6 +148,7 @@ public class RequestQueueService : IHostedService
         _queueTimer = new System.Timers.Timer(250);
         _queueTimer.Elapsed += ProcessQueue;
         _queueTimer.AutoReset = true;
+        _queueTimer.Start();
         return Task.CompletedTask;
     }
 
