@@ -35,25 +35,43 @@ public class RequestFileStreamResult : FileStreamResult
 
     public override void ExecuteResult(ActionContext context)
     {
-        base.ExecuteResult(context);
+        try
+        {
+            base.ExecuteResult(context);
+        }
+        catch
+        {
+            throw;
+        }
+        finally
+        {
+            _releaseCts.Cancel();
 
-        _releaseCts.Cancel();
+            if (!_releasedSlot)
+                _requestQueueService.FinishRequest(_requestId);
 
-        if (!_releasedSlot)
-            _requestQueueService.FinishRequest(_requestId);
-
-        _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+            _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+        }
     }
 
     public override async Task ExecuteResultAsync(ActionContext context)
     {
-        await base.ExecuteResultAsync(context).ConfigureAwait(false);
+        try
+        {
+            await base.ExecuteResultAsync(context).ConfigureAwait(false);
+        }
+        catch
+        {
+            throw;
+        }
+        finally
+        {
+            _releaseCts.Cancel();
 
-        _releaseCts.Cancel();
+            if (!_releasedSlot)
+                _requestQueueService.FinishRequest(_requestId);
 
-        if (!_releasedSlot)
-            _requestQueueService.FinishRequest(_requestId);
-
-        _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+            _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+        }
     }
 }

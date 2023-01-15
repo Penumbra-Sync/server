@@ -66,10 +66,22 @@ public class RequestQueueService : IHostedService
         throw new Exception("Error during EnqueueUser");
     }
 
-    public void RemoveFromQueue(Guid guid, string user)
+    public void RemoveFromQueue(Guid requestId, string user)
     {
-        if (!_queue.Any(f => f.RequestId == guid && string.Equals(f.User, user, StringComparison.Ordinal))) return;
-        _queueRemoval[guid] = user;
+        if (!_queue.Any(f => f.RequestId == requestId && string.Equals(f.User, user, StringComparison.Ordinal)))
+        {
+            var activeSlot = _userQueueRequests.FirstOrDefault(r => r != null && string.Equals(r.UserRequest.User, user, StringComparison.Ordinal) && r.UserRequest.RequestId == requestId);
+            if (activeSlot != null)
+            {
+                var idx = Array.IndexOf(_userQueueRequests, activeSlot);
+                if (idx >= 0)
+                {
+                    _userQueueRequests[idx] = null;
+                    return;
+                }
+            }
+        }
+        _queueRemoval[requestId] = user;
     }
 
     public bool StillEnqueued(Guid request, string user)
@@ -125,6 +137,7 @@ public class RequestQueueService : IHostedService
                         {
                             if (_queueRemoval.TryGetValue(request.RequestId, out string user) && string.Equals(user, request.User, StringComparison.Ordinal))
                             {
+                                _logger.LogDebug("Request cancelled: {requestId} by {user}", request.RequestId, user);
                                 _queueRemoval.Remove(request.RequestId, out _);
                                 continue;
                             }
