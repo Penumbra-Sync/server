@@ -11,7 +11,7 @@ public class RequestController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
-    private static SemaphoreSlim _parallelRequestSemaphore = new(500);
+    private static SemaphoreSlim _parallelRequestSemaphore = new(250);
 
     public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue,
         ServerTokenGenerator generator) : base(logger, generator)
