@@ -1,7 +1,6 @@
-﻿using MareSynchronosShared.Utils;
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 
-namespace MareSynchronosServer.Utils;
+namespace MareSynchronosShared.Utils;
 
 public class IdBasedUserIdProvider : IUserIdProvider
 {

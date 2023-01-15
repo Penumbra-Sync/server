@@ -1,5 +1,6 @@
 using Grpc.Net.Client.Configuration;
 using Grpc.Net.ClientFactory;
+using MareSynchronos.API;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Protos;
@@ -10,10 +11,12 @@ using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Prometheus;
+using StackExchange.Redis;
 using System.Text;
 
 namespace MareSynchronosStaticFilesServer;
@@ -162,6 +165,19 @@ public class Startup
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
 
+        services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
+        var signalRServiceBuilder = services.AddSignalR(hubOptions =>
+        {
+            hubOptions.MaximumReceiveMessageSize = long.MaxValue;
+            hubOptions.EnableDetailedErrors = true;
+            hubOptions.MaximumParallelInvocationsPerClient = 10;
+            hubOptions.StreamBufferCapacity = 200;
+        });
+
+        // configure redis for SignalR
+        var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
+        signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options => { });
+
         services.AddHealthChecks();
         services.AddControllers();
     }
@@ -188,6 +204,7 @@ public class Startup
             {
                 e.MapGrpcService<GrpcFileService>();
             }
+            e.MapHub<MareSynchronosServer.Hubs.MareHub>("/dummyhub");
             e.MapControllers();
             e.MapHealthChecks("/health").WithMetadata(new AllowAnonymousAttribute());
         });

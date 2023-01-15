@@ -10,7 +10,6 @@ using MareSynchronosShared.Protos;
 using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Metrics;
 using MareSynchronosServer.Services;
-using MareSynchronosServer.Utils;
 using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
@@ -80,7 +79,6 @@ public class Startup
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
-        services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
@@ -94,6 +92,8 @@ public class Startup
 
     private static void ConfigureSignalR(IServiceCollection services, IConfigurationSection mareConfig)
     {
+        services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
+
         var signalRServiceBuilder = services.AddSignalR(hubOptions =>
         {
             hubOptions.MaximumReceiveMessageSize = long.MaxValue;
@@ -106,13 +106,7 @@ public class Startup
 
         // configure redis for SignalR
         var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
-        if (!string.IsNullOrEmpty(redisConnection))
-        {
-            signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options =>
-            {
-                options.Configuration.ChannelPrefix = "MareSynchronos";
-            });
-        }
+        signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options => { });
 
         var options = ConfigurationOptions.Parse(redisConnection);
 

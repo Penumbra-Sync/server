@@ -34,7 +34,8 @@
         "UnusedFileRetentionPeriodInDays": 14,
         "CacheDirectory": "/marecache/",
         "RemoteCacheSourceUri": "",
-        "MainServerGrpcAddress": "http://mare-server:6005"
+        "MainServerGrpcAddress": "http://mare-server:6005",
+        "RedisConnectionString": "redis,password=secretredispassword"
     },
     "AllowedHosts": "*",
     "Kestrel": {

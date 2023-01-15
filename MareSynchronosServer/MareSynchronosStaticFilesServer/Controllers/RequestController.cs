@@ -2,7 +2,6 @@
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
@@ -18,6 +17,23 @@ public class RequestController : ControllerBase
     {
         _cachedFileProvider = cachedFileProvider;
         _requestQueue = requestQueue;
+    }
+
+    [HttpGet]
+    [Route(MareFiles.Request_Cancel)]
+    public async Task<IActionResult> CancelQueueRequest(Guid requestId)
+    {
+        try
+        {
+            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
+            _requestQueue.RemoveFromQueue(requestId, MareUser);
+            return Ok();
+        }
+        catch (OperationCanceledException) { return BadRequest(); }
+        finally
+        {
+            _parallelRequestSemaphore.Release();
+        }
     }
 
     [HttpPost]
@@ -51,34 +67,8 @@ public class RequestController : ControllerBase
             await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
             Guid g = Guid.NewGuid();
             _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
-            var queueStatus = await _requestQueue.EnqueueUser(new(g, MareUser, file));
-            return Ok(JsonSerializer.Serialize(new QueueRequestDto(g, queueStatus)));
-        }
-        catch (OperationCanceledException) { return BadRequest(); }
-        finally
-        {
-            _parallelRequestSemaphore.Release();
-        }
-    }
-
-    [HttpGet]
-    [Route(MareFiles.Request_CheckQueue)]
-    public async Task<IActionResult> CheckQueueAsync(Guid requestId)
-    {
-        try
-        {
-            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
-            if (_requestQueue.IsActiveProcessing(requestId, MareUser, out _))
-            {
-                return Ok();
-            }
-
-            if (_requestQueue.StillEnqueued(requestId, MareUser))
-            {
-                return Conflict();
-            }
-
-            return BadRequest();
+            await _requestQueue.EnqueueUser(new(g, MareUser, file));
+            return Ok(g);
         }
         catch (OperationCanceledException) { return BadRequest(); }
         finally
