@@ -11,7 +11,7 @@ public class RequestController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
-    private static SemaphoreSlim _parallelRequestSemaphore = new(250);
+    private static SemaphoreSlim _parallelRequestSemaphore = new(500);
 
     public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue,
         ServerTokenGenerator generator) : base(logger, generator)
@@ -73,9 +73,9 @@ public class RequestController : ControllerBase
                 return Ok();
             }
 
-            if (_requestQueue.StillEnqueued(requestId, MareUser, out int position))
+            if (_requestQueue.StillEnqueued(requestId, MareUser))
             {
-                return Conflict(position);
+                return Conflict();
             }
 
             return BadRequest();

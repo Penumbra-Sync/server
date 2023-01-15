@@ -66,17 +66,9 @@ public class RequestQueueService : IHostedService
         throw new Exception("Error during EnqueueUser");
     }
 
-    public bool StillEnqueued(Guid request, string user, out int queuePosition)
+    public bool StillEnqueued(Guid request, string user)
     {
-        var result = _queue.FirstOrDefault(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
-        if (result != null)
-        {
-            queuePosition = Array.IndexOf(_queue.ToArray(), result);
-            return true;
-        }
-
-        queuePosition = -1;
-        return false;
+        return _queue.FirstOrDefault(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal)) != null;
     }
 
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
@@ -109,8 +101,14 @@ public class RequestQueueService : IHostedService
 
         try
         {
-            for (int i = 0; i < _userQueueRequests.Length; i++)
+            Parallel.For(0, _userQueueRequests.Length, new ParallelOptions()
             {
+                MaxDegreeOfParallelism = 10
+            },
+            (i) =>
+            {
+                if (!_queue.Any()) return;
+
                 if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
 
                 if (_userQueueRequests[i] == null)
@@ -120,9 +118,7 @@ public class RequestQueueService : IHostedService
                         DequeueIntoSlot(request, i);
                     }
                 }
-
-                if (!_queue.Any()) break;
-            }
+            });
 
         }
         catch (Exception ex)
