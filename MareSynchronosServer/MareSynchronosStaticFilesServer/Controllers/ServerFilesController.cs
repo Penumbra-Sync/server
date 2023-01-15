@@ -18,7 +18,7 @@ public class ServerFilesController : ControllerBase
 
     [HttpGet(MareFiles.ServerFiles_Get + "/{fileId}")]
     [Authorize(Policy = "Internal")]
-    public async Task<IActionResult> GetFile(string fileId)
+    public IActionResult GetFile(string fileId)
     {
         _logger.LogInformation($"GetFile:{MareUser}:{fileId}");
 

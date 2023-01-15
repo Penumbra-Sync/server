@@ -63,5 +63,10 @@ namespace MareSynchronosServer.Hubs
         {
             throw new PlatformNotSupportedException("Calling clientside method on server not supported");
         }
+
+        public Task Client_DownloadReady(Guid requestId)
+        {
+            throw new PlatformNotSupportedException("Calling clientside method on server not supported");
+        }
     }
 }

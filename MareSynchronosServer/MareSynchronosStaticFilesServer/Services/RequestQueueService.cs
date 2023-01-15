@@ -2,6 +2,7 @@
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using System.Timers;
 
@@ -13,46 +14,45 @@ public class RequestQueueService : IHostedService
     private readonly ConcurrentQueue<UserRequest> _queue = new();
     private readonly MareMetrics _metrics;
     private readonly ILogger<RequestQueueService> _logger;
+    private readonly IHubContext<MareSynchronosServer.Hubs.MareHub> _hubContext;
     private readonly int _queueExpirationSeconds;
-    private SemaphoreSlim _queueSemaphore = new(1);
-    private SemaphoreSlim _queueProcessingSemaphore = new(1);
+    private readonly SemaphoreSlim _queueSemaphore = new(1);
+    private readonly SemaphoreSlim _queueProcessingSemaphore = new(1);
     private System.Timers.Timer _queueTimer;
+    private readonly ConcurrentDictionary<Guid, string> _queueRemoval = new();
 
-    public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
+    public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger, IHubContext<MareSynchronosServer.Hubs.MareHub> hubContext)
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
         _metrics = metrics;
         _logger = logger;
+        _hubContext = hubContext;
     }
 
-    public async Task<QueueStatus> EnqueueUser(UserRequest request)
+    public async Task EnqueueUser(UserRequest request)
     {
         _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, request.FileId);
 
         if (_queueProcessingSemaphore.CurrentCount == 0)
         {
             _queue.Enqueue(request);
-            return QueueStatus.Waiting;
         }
 
         try
         {
             await _queueSemaphore.WaitAsync().ConfigureAwait(false);
-            QueueStatus status = QueueStatus.Waiting;
             var idx = Array.FindIndex(_userQueueRequests, r => r == null);
             if (idx == -1)
             {
                 _queue.Enqueue(request);
-                status = QueueStatus.Waiting;
             }
             else
             {
-                DequeueIntoSlot(request, idx);
-                status = QueueStatus.Ready;
+                await DequeueIntoSlotAsync(request, idx).ConfigureAwait(false);
             }
 
-            return status;
+            return;
         }
         catch (Exception ex)
         {
@@ -66,22 +66,39 @@ public class RequestQueueService : IHostedService
         throw new Exception("Error during EnqueueUser");
     }
 
+    public void RemoveFromQueue(Guid requestId, string user)
+    {
+        if (!_queue.Any(f => f.RequestId == requestId && string.Equals(f.User, user, StringComparison.Ordinal)))
+        {
+            var activeSlot = _userQueueRequests.FirstOrDefault(r => r != null && string.Equals(r.UserRequest.User, user, StringComparison.Ordinal) && r.UserRequest.RequestId == requestId);
+            if (activeSlot != null)
+            {
+                var idx = Array.IndexOf(_userQueueRequests, activeSlot);
+                if (idx >= 0)
+                {
+                    _userQueueRequests[idx] = null;
+                    return;
+                }
+            }
+        }
+        _queueRemoval[requestId] = user;
+    }
+
     public bool StillEnqueued(Guid request, string user)
     {
-        return _queue.FirstOrDefault(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal)) != null;
+        return _queue.Any(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
     }
 
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
     {
-        var userQueueRequest = _userQueueRequests.Where(u => u != null)
-            .FirstOrDefault(f => f.UserRequest.RequestId == request && string.Equals(f.UserRequest.User, user, StringComparison.Ordinal));
+        var userQueueRequest = _userQueueRequests.FirstOrDefault(u => u != null && u.UserRequest.RequestId == request && string.Equals(u.UserRequest.User, user, StringComparison.Ordinal));
         userRequest = userQueueRequest?.UserRequest ?? null;
         return userQueueRequest != null && userRequest != null && userQueueRequest.ExpirationDate > DateTime.UtcNow;
     }
 
     public void FinishRequest(Guid request)
     {
-        var req = _userQueueRequests.Where(f => f != null).First(f => f.UserRequest.RequestId == request);
+        var req = _userQueueRequests.First(f => f != null && f.UserRequest.RequestId == request);
         var idx = Array.IndexOf(_userQueueRequests, req);
         _logger.LogDebug("Finishing Request {guid}, clearing slot {idx}", request, idx);
         _userQueueRequests[idx] = null;
@@ -90,7 +107,7 @@ public class RequestQueueService : IHostedService
     public void ActivateRequest(Guid request)
     {
         _logger.LogDebug("Activating request {guid}", request);
-        _userQueueRequests.Where(f => f != null).First(f => f.UserRequest.RequestId == request).IsActive = true;
+        _userQueueRequests.First(f => f != null && f.UserRequest.RequestId == request).IsActive = true;
     }
 
     private async void ProcessQueue(object src, ElapsedEventArgs e)
@@ -103,9 +120,9 @@ public class RequestQueueService : IHostedService
         {
             Parallel.For(0, _userQueueRequests.Length, new ParallelOptions()
             {
-                MaxDegreeOfParallelism = 10
+                MaxDegreeOfParallelism = 10,
             },
-            (i) =>
+            async (i) =>
             {
                 if (!_queue.Any()) return;
 
@@ -113,9 +130,25 @@ public class RequestQueueService : IHostedService
 
                 if (_userQueueRequests[i] == null)
                 {
-                    if (_queue.TryDequeue(out var request))
+                    bool enqueued = false;
+                    while (!enqueued)
                     {
-                        DequeueIntoSlot(request, i);
+                        if (_queue.TryDequeue(out var request))
+                        {
+                            if (_queueRemoval.TryGetValue(request.RequestId, out string user) && string.Equals(user, request.User, StringComparison.Ordinal))
+                            {
+                                _logger.LogDebug("Request cancelled: {requestId} by {user}", request.RequestId, user);
+                                _queueRemoval.Remove(request.RequestId, out _);
+                                continue;
+                            }
+
+                            await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
+                            enqueued = true;
+                        }
+                        else
+                        {
+                            enqueued = true;
+                        }
                     }
                 }
             });
@@ -133,10 +166,11 @@ public class RequestQueueService : IHostedService
         _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
     }
 
-    private void DequeueIntoSlot(UserRequest userRequest, int slot)
+    private async Task DequeueIntoSlotAsync(UserRequest userRequest, int slot)
     {
         _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, userRequest.FileId);
         _userQueueRequests[slot] = new(userRequest, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
+        await _hubContext.Clients.User(userRequest.User).SendAsync(nameof(IMareHub.Client_DownloadReady), userRequest.RequestId).ConfigureAwait(false);
     }
 
     public Task StartAsync(CancellationToken cancellationToken)

@@ -84,15 +84,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     }
 
     [Authorize(Policy = "Authenticated")]
-    public async Task<ConnectionDto> Heartbeat(string characterIdentification)
-    {
-        return new ConnectionDto()
-        {
-            ServerVersion = IMareHub.ApiVersion,
-        };
-    }
-
-    [Authorize(Policy = "Authenticated")]
     public async Task<bool> CheckClientHealth()
     {
         await UpdateUserOnRedis().ConfigureAwait(false);

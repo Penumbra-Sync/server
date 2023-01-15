@@ -37,7 +37,8 @@
         "MainServerGrpcAddress": "http://mare-server:6005",
         "DownloadTimeoutSeconds": 30,
         "DownloadQueueSize": 50,
-        "DownloadQueueReleaseSeconds": 15
+        "DownloadQueueReleaseSeconds": 15,
+        "RedisConnectionString": "redis,password=secretredispassword"
     },
     "AllowedHosts": "*",
     "Kestrel": {
