@@ -16,7 +16,6 @@ public class RequestQueueService : IHostedService
     private readonly int _queueExpirationSeconds;
     private SemaphoreSlim _queueSemaphore = new(1);
     private SemaphoreSlim _queueProcessingSemaphore = new(1);
-    private bool _isProcessingQueue = false;
     private System.Timers.Timer _queueTimer;
 
     public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger)
@@ -104,13 +103,12 @@ public class RequestQueueService : IHostedService
 
     private async void ProcessQueue(object src, ElapsedEventArgs e)
     {
-        if (_isProcessingQueue) return;
+        if (_queueProcessingSemaphore.CurrentCount == 0) return;
 
-        _isProcessingQueue = true;
+        await _queueProcessingSemaphore.WaitAsync().ConfigureAwait(false);
+
         try
         {
-            await _queueProcessingSemaphore.WaitAsync().ConfigureAwait(false);
-            await _queueSemaphore.WaitAsync().ConfigureAwait(false);
             for (int i = 0; i < _userQueueRequests.Length; i++)
             {
                 if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
@@ -134,11 +132,9 @@ public class RequestQueueService : IHostedService
         finally
         {
             _queueProcessingSemaphore.Release();
-            _queueSemaphore.Release();
         }
 
         _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
-        _isProcessingQueue = false;
     }
 
     private void DequeueIntoSlot(UserRequest userRequest, int slot)
