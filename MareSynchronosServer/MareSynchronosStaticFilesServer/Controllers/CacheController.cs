@@ -14,7 +14,7 @@ public class CacheController : ControllerBase
     private readonly RequestQueueService _requestQueue;
 
     public CacheController(ILogger<CacheController> logger, RequestFileStreamResultFactory requestFileStreamResultFactory,
-        CachedFileProvider cachedFileProvider, RequestQueueService requestQueue, ServerTokenGenerator generator) : base(logger, generator)
+        CachedFileProvider cachedFileProvider, RequestQueueService requestQueue) : base(logger)
     {
         _requestFileStreamResultFactory = requestFileStreamResultFactory;
         _cachedFileProvider = cachedFileProvider;
@@ -30,7 +30,7 @@ public class CacheController : ControllerBase
 
         _requestQueue.ActivateRequest(requestId);
 
-        var fs = await _cachedFileProvider.GetAndDownloadFileStream(request.FileId, Authorization);
+        var fs = await _cachedFileProvider.GetAndDownloadFileStream(request.FileId);
         if (fs == null)
         {
             _requestQueue.FinishRequest(requestId);

@@ -5,6 +5,7 @@ namespace MareSynchronosShared.Utils;
 public class ServerConfiguration : MareConfigurationAuthBase
 {
     public string RedisConnectionString { get; set; } = string.Empty;
+    public int RedisPool { get; set; } = 50;
 
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
@@ -32,6 +33,7 @@ public class ServerConfiguration : MareConfigurationAuthBase
         sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration.Select(c => c.ToString()))}");
         sb.AppendLine($"{nameof(StaticFileServiceAddress)} => {StaticFileServiceAddress}");
         sb.AppendLine($"{nameof(RedisConnectionString)} => {RedisConnectionString}");
+        sb.AppendLine($"{nameof(RedisPool)} => {RedisPool}");
         sb.AppendLine($"{nameof(MaxExistingGroupsByUser)} => {MaxExistingGroupsByUser}");
         sb.AppendLine($"{nameof(MaxJoinedGroupsByUser)} => {MaxJoinedGroupsByUser}");
         sb.AppendLine($"{nameof(MaxGroupUserCount)} => {MaxGroupUserCount}");

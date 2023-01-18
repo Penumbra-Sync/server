@@ -124,7 +124,7 @@ public class Startup
                 new RedisHost(){ Host = address, Port = port },
             },
             AllowAdmin = true,
-            ConnectTimeout = 3000,
+            ConnectTimeout = options.ConnectTimeout,
             Database = 0,
             Ssl = false,
             Password = options.Password,
@@ -135,7 +135,8 @@ public class Startup
                 UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw,
             },
             MaxValueLength = 1024,
-            PoolSize = 50,
+            PoolSize = mareConfig.GetValue(nameof(ServerConfiguration.RedisPool), 50),
+            SyncTimeout = options.SyncTimeout,
         };
 
         services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
