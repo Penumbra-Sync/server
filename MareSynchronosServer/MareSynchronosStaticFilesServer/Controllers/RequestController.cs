@@ -78,14 +78,14 @@ public class RequestController : ControllerBase
 
     [HttpGet]
     [Route(MareFiles.Request_Check)]
-    public async Task<IActionResult> CheckQueueAsync(Guid requestId)
+    public async Task<IActionResult> CheckQueueAsync(Guid requestId, string file)
     {
         try
         {
             await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
-            if (_requestQueue.StillEnqueued(requestId, MareUser))
-                return Ok();
-            return BadRequest();
+            if (!_requestQueue.StillEnqueued(requestId, MareUser))
+                await _requestQueue.EnqueueUser(new(requestId, MareUser, file));
+            return Ok();
         }
         catch (OperationCanceledException) { return BadRequest(); }
         finally
