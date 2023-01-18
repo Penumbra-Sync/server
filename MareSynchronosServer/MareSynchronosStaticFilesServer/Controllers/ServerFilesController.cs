@@ -11,7 +11,7 @@ public class ServerFilesController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
 
-    public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider, ServerTokenGenerator generator) : base(logger, generator)
+    public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider) : base(logger)
     {
         _cachedFileProvider = cachedFileProvider;
     }

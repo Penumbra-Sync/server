@@ -10,10 +10,9 @@ public class RequestController : ControllerBase
 {
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly RequestQueueService _requestQueue;
-    private static SemaphoreSlim _parallelRequestSemaphore = new(500);
+    private static readonly SemaphoreSlim _parallelRequestSemaphore = new(500);
 
-    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue,
-        ServerTokenGenerator generator) : base(logger, generator)
+    public RequestController(ILogger<RequestController> logger, CachedFileProvider cachedFileProvider, RequestQueueService requestQueue) : base(logger)
     {
         _cachedFileProvider = cachedFileProvider;
         _requestQueue = requestQueue;
@@ -46,7 +45,7 @@ public class RequestController : ControllerBase
             foreach (var file in files)
             {
                 _logger.LogDebug("Prerequested file: " + file);
-                _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
+                _cachedFileProvider.DownloadFileWhenRequired(file);
             }
 
             return Ok();
@@ -66,9 +65,27 @@ public class RequestController : ControllerBase
         {
             await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
             Guid g = Guid.NewGuid();
-            _cachedFileProvider.DownloadFileWhenRequired(file, Authorization);
+            _cachedFileProvider.DownloadFileWhenRequired(file);
             await _requestQueue.EnqueueUser(new(g, MareUser, file));
             return Ok(g);
+        }
+        catch (OperationCanceledException) { return BadRequest(); }
+        finally
+        {
+            _parallelRequestSemaphore.Release();
+        }
+    }
+
+    [HttpGet]
+    [Route(MareFiles.Request_Check)]
+    public async Task<IActionResult> CheckQueueAsync(Guid requestId)
+    {
+        try
+        {
+            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
+            if (_requestQueue.StillEnqueued(requestId, MareUser))
+                return Ok();
+            return BadRequest();
         }
         catch (OperationCanceledException) { return BadRequest(); }
         finally
