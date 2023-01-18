@@ -59,6 +59,8 @@ public class FileCleanupService : IHostedService
 
             if (_isMainServer)
             {
+                CleanUpStuckUploads(dbContext);
+
                 await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             }
 
@@ -70,6 +72,12 @@ public class FileCleanupService : IHostedService
             _logger.LogInformation("File Cleanup Complete, next run at {date}", now.Add(span));
             await Task.Delay(span, ct).ConfigureAwait(false);
         }
+    }
+
+    private void CleanUpStuckUploads(MareDbContext dbContext)
+    {
+        var stuckUploads = dbContext.Files.Where(f => !f.Uploaded && f.UploadDate < DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10)));
+        dbContext.Files.RemoveRange(stuckUploads);
     }
 
     private void CleanUpFilesBeyondSizeLimit(MareDbContext dbContext, CancellationToken ct)

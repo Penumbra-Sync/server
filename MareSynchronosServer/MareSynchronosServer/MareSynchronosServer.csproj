@@ -50,9 +50,4 @@
     <ProjectReference Include="..\MareSynchronosShared\MareSynchronosShared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Identity\" />
-    <Folder Include="Redis\" />
-  </ItemGroup>
-
 </Project>

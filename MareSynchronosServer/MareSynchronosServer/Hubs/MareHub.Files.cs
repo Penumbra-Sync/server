@@ -95,36 +95,40 @@ public partial class MareHub
         var uploader = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         List<FileCache> fileCachesToUpload = new();
-        foreach (var file in userSentHashes)
+        foreach (var hash in userSentHashes)
         {
             // Skip empty file hashes, duplicate file hashes, forbidden file hashes and existing file hashes
-            if (string.IsNullOrEmpty(file)) { continue; }
-            if (notCoveredFiles.ContainsKey(file)) { continue; }
-            if (forbiddenFiles.ContainsKey(file))
+            if (string.IsNullOrEmpty(hash)) { continue; }
+            if (notCoveredFiles.ContainsKey(hash)) { continue; }
+            if (forbiddenFiles.ContainsKey(hash))
             {
-                notCoveredFiles[file] = new UploadFileDto()
+                notCoveredFiles[hash] = new UploadFileDto()
                 {
-                    ForbiddenBy = forbiddenFiles[file].ForbiddenBy,
-                    Hash = file,
+                    ForbiddenBy = forbiddenFiles[hash].ForbiddenBy,
+                    Hash = hash,
                     IsForbidden = true,
                 };
 
                 continue;
             }
-            if (existingFiles.ContainsKey(file)) { continue; }
+            if (existingFiles.TryGetValue(hash, out var file) && file.Uploaded) { continue; }
 
-            _logger.LogCallInfo(MareHubLogger.Args(file, "Missing"));
+            _logger.LogCallInfo(MareHubLogger.Args(hash, "Missing"));
 
-            fileCachesToUpload.Add(new FileCache()
+            if (file == null)
             {
-                Hash = file,
-                Uploaded = false,
-                Uploader = uploader,
-            });
+                fileCachesToUpload.Add(new FileCache()
+                {
+                    Hash = hash,
+                    Uploaded = false,
+                    Uploader = uploader,
+                    UploadDate = DateTime.UtcNow,
+                });
+            }
 
-            notCoveredFiles[file] = new UploadFileDto()
+            notCoveredFiles[hash] = new UploadFileDto()
             {
-                Hash = file,
+                Hash = hash,
             };
         }
         //Save bulk

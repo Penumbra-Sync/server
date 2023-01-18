@@ -11,6 +11,7 @@ public class FileCache
     public string UploaderUID { get; set; }
     public User Uploader { get; set; }
     public bool Uploaded { get; set; }
+    public DateTime UploadDate { get; set; }
     [Timestamp]
     public byte[] Timestamp { get; set; }
     public long Size { get; set; }
