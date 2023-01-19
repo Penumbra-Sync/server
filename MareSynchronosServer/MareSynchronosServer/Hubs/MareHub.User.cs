@@ -133,6 +133,9 @@ public partial class MareHub
             {
                 _logger.LogCallWarning(MareHubLogger.Args("Invalid Data", "GamePaths", validGamePaths, string.Join(",", invalidPaths), "Hash", validHash, replacement.Hash, "FileSwap", validFileSwapPath, replacement.FileSwapPath));
                 hadInvalidData = true;
+                if (!validFileSwapPath) invalidFileSwapPaths.Add(replacement.FileSwapPath);
+                if (!validGamePaths) invalidGamePaths.AddRange(replacement.GamePaths);
+                if (!validHash) invalidFileSwapPaths.Add(replacement.Hash);
             }
         }
 
