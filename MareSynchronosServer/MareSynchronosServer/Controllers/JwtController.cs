@@ -45,12 +45,22 @@ public class JwtController : Controller
         if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
         if (string.IsNullOrEmpty(charaIdent)) return BadRequest("No CharaIdent");
 
-        var isBanned = await _mareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
-        if (isBanned) return Unauthorized("Your character is banned from using the service.");
-
         var ip = _accessor.GetIpAddress();
 
         var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
+
+        var isBanned = await _mareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
+        if (isBanned)
+        {
+            var authToBan = _mareDbContext.Auth.SingleOrDefault(a => a.UserUID == authResult.Uid);
+            if (authToBan != null)
+            {
+                authToBan.IsBanned = true;
+                await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            return Unauthorized("Your character is banned from using the service.");
+        }
 
         if (!authResult.Success && !authResult.TempBan) return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
         if (!authResult.Success && authResult.TempBan) return Unauthorized("You are temporarily banned. Try connecting again in 5 minutes.");
