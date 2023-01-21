@@ -82,15 +82,10 @@ public class RequestController : ControllerBase
     {
         try
         {
-            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
             if (!_requestQueue.StillEnqueued(requestId, MareUser))
                 await _requestQueue.EnqueueUser(new(requestId, MareUser, file));
             return Ok();
         }
         catch (OperationCanceledException) { return BadRequest(); }
-        finally
-        {
-            _parallelRequestSemaphore.Release();
-        }
     }
 }
