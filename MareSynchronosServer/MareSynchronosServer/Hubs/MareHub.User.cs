@@ -114,6 +114,8 @@ public partial class MareHub
     [GeneratedRegex(@"^([a-z0-9_ '+&,\.\-\{\}]+\/)+([a-z0-9_ '+&,\.\-\{\}]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
     private static partial Regex GamePathRegex();
 
+    private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
+
     [Authorize(Policy = "Identified")]
     public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
@@ -124,8 +126,9 @@ public partial class MareHub
         List<string> invalidFileSwapPaths = new();
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
-            var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToArray();
-            replacement.GamePaths = replacement.GamePaths.Where(p => GamePathRegex().IsMatch(p)).ToArray();
+            var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToList();
+            invalidPaths.AddRange(replacement.GamePaths.Where(p => !AllowedExtensionsForGamePaths.Any(e => p.EndsWith(p, StringComparison.OrdinalIgnoreCase))));
+            replacement.GamePaths = replacement.GamePaths.Where(p => !invalidPaths.Contains(p, StringComparer.OrdinalIgnoreCase)).ToArray();
             bool validGamePaths = replacement.GamePaths.Any();
             bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
             bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
