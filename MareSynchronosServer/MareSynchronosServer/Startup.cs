@@ -1,4 +1,3 @@
-using MareSynchronos.API;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Hubs;
 using Microsoft.AspNetCore.Http.Connections;
@@ -24,6 +23,7 @@ using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Configuration;
 using System.Net;
 using StackExchange.Redis.Extensions.System.Text.Json;
+using MareSynchronos.API.Routes;
 
 namespace MareSynchronosServer;
 

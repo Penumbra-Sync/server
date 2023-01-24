@@ -1,4 +1,5 @@
 ﻿using MareSynchronos.API;
+using MareSynchronos.API.Routes;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared;

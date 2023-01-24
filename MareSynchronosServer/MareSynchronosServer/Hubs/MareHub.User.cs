@@ -1,5 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using MareSynchronos.API;
+using MareSynchronos.API.Dto.Group;
+using MareSynchronos.API.Routes;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -47,7 +49,7 @@ public partial class MareHub
 
         foreach (var pair in groupPairs)
         {
-            await GroupLeave(pair.GroupGID).ConfigureAwait(false);
+            await GroupLeave(new GroupDto(new GroupData(pair.GroupGID))).ConfigureAwait(false);
         }
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
@@ -59,13 +61,13 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task<List<string>> UserGetOnlineCharacters()
+    public async Task<List<CharacterDto>> UserGetOnlineCharacters()
     {
         _logger.LogCallInfo();
 
         var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
         var idents = await GetIdentFromUidsFromRedis(usersToSendOnlineTo).ConfigureAwait(false);
-        return idents.Where(i => !string.IsNullOrEmpty(i.Value)).Select(k => k.Value).ToList();
+        return idents.Where(i => !string.IsNullOrEmpty(i.Value)).Select(k => new CharacterDto(k.Key, k.Value, true)).ToList();
     }
 
     [Authorize(Policy = "Identified")]

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Utils;
+using MareSynchronos.API.Dto.Group;
 
 namespace MareSynchronosServer.Hubs;
 
