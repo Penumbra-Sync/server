@@ -80,18 +80,18 @@ public partial class MareHub
         return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
     }
 
-    private async Task<List<string>> SendOnlineToAllPairedUsers(string arg)
+    private async Task<List<string>> SendOnlineToAllPairedUsers(string charaIdent)
     {
         var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(arg, true).ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(new(UserUID, charaIdent, true)).ConfigureAwait(false);
 
         return usersToSendDataTo;
     }
 
-    private async Task<List<string>> SendOfflineToAllPairedUsers(string arg)
+    private async Task<List<string>> SendOfflineToAllPairedUsers(string charaIdent)
     {
         var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(arg, false).ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserChangePairedPlayer(new(UserUID, charaIdent, false)).ConfigureAwait(false);
 
         return usersToSendDataTo;
     }
@@ -112,8 +112,8 @@ public partial class MareHub
         var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(groupUserIdent))
         {
-            await Clients.User(uid).Client_UserChangePairedPlayer(groupUserIdent, false).ConfigureAwait(false);
-            await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(userIdent, false).ConfigureAwait(false);
+            await Clients.User(uid).Client_UserChangePairedPlayer(new(groupUserPair.GroupUserUID, groupUserIdent, false)).ConfigureAwait(false);
+            await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(new(uid, userIdent, false)).ConfigureAwait(false);
         }
     }
 

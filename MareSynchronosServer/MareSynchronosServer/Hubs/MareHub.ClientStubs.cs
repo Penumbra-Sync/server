@@ -14,12 +14,12 @@ namespace MareSynchronosServer.Hubs
             throw new PlatformNotSupportedException("Calling clientside method on server not supported");
         }
 
-        public Task Client_UserReceiveCharacterData(CharacterCacheDto clientPairDto, string characterIdent)
+        public Task Client_UserReceiveCharacterData(CharacterCacheDto clientPairDto, string uid)
         {
             throw new PlatformNotSupportedException("Calling clientside method on server not supported");
         }
 
-        public Task Client_UserChangePairedPlayer(string characterIdent, bool isOnline)
+        public Task Client_UserChangePairedPlayer(CharacterDto dto)
         {
             throw new PlatformNotSupportedException("Calling clientside method on server not supported");
         }

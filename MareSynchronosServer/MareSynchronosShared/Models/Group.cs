@@ -13,4 +13,6 @@ public class Group
     public string Alias { get; set; }
     public bool InvitesEnabled { get; set; }
     public string HashedPassword { get; set; }
+    public bool DisableSounds { get; set; }
+    public bool DisableAnimations { get; set; }
 }

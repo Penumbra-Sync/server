@@ -5,6 +5,7 @@ using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System;
 using System.Security.Cryptography;
 
 namespace MareSynchronosServer.Hubs;
@@ -99,6 +100,7 @@ public partial class MareHub
         var (inGroup, _) = await TryValidateUserInGroup(gid).ConfigureAwait(false);
         if (!inGroup) return new List<GroupPairDto>();
 
+        var group = await _dbContext.Groups.SingleAsync(g => g.GID == gid).ConfigureAwait(false);
         var allPairs = await _dbContext.GroupPairs.Include(g => g.GroupUser).Where(g => g.GroupGID == gid && g.GroupUserUID != UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
         return allPairs.Select(p => new GroupPairDto()
         {
@@ -109,6 +111,8 @@ public partial class MareHub
             UserAlias = p.GroupUser.Alias,
             IsPinned = p.IsPinned,
             IsModerator = p.IsModerator,
+            DisableAnimations = group.DisableAnimations || p.DisableAnimations,
+            DisableSounds = group.DisableSounds || p.DisableSounds
         }).ToList();
     }
 
@@ -207,6 +211,8 @@ public partial class MareHub
             IsPaused = false,
             Alias = group.Alias,
             InvitesEnabled = true,
+            DisableAnimations = group.DisableAnimations,
+            DisableSounds = group.DisableSounds
         }).ConfigureAwait(false);
 
         var self = _dbContext.Users.Single(u => u.UID == UserUID);
@@ -221,6 +227,8 @@ public partial class MareHub
             UserAlias = self.Alias,
             IsPinned = false,
             IsModerator = false,
+            DisableAnimations = group.DisableAnimations || newPair.DisableAnimations,
+            DisableSounds = group.DisableSounds || newPair.DisableSounds,
         }).ConfigureAwait(false);
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
@@ -235,8 +243,8 @@ public partial class MareHub
             var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(UserUID).Client_UserChangePairedPlayer(groupUserIdent, true).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(UserCharaIdent, true).ConfigureAwait(false);
+                await Clients.User(UserUID).Client_UserChangePairedPlayer(new(groupUserPair.GroupUserUID, groupUserIdent, true)).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, true)).ConfigureAwait(false);
             }
         }
 
@@ -365,6 +373,63 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
+    public async Task GroupChangePermissionState(string gid, GroupPermissionDto dto)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(gid, dto));
+
+        var (hasRights, group) = await TryValidateGroupModeratorOrOwner(gid).ConfigureAwait(false);
+        if (!hasRights) return;
+
+        group.DisableAnimations = dto.DisableAnimations ?? group.DisableAnimations;
+        group.DisableSounds = dto.DisableSounds ?? group.DisableSounds;
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid).AsNoTracking().ToListAsync().ConfigureAwait(false);
+
+        await Clients.Users(groupPairs.Select(c => c.GroupUserUID)).Client_GroupChange(new GroupDto()
+        {
+            GID = gid,
+            DisableAnimations = group.DisableAnimations,
+            DisableSounds = group.DisableSounds,
+        }).ConfigureAwait(false);
+    }
+
+    [Authorize(Policy = "Identified")]
+    public async Task GroupIndividualChangePermissionState(string gid, GroupPermissionDto dto)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args((gid, dto)));
+
+        var (exists, groupPair) = await TryValidateUserInGroup(gid).ConfigureAwait(false);
+        if (!exists) return;
+
+        groupPair.DisableAnimations = dto.DisableAnimations ?? groupPair.DisableAnimations;
+        groupPair.DisableSounds = dto.DisableSounds ?? groupPair.DisableSounds;
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        var group = await _dbContext.Groups.AsNoTracking().SingleAsync(g => g.GID == gid).ConfigureAwait(false);
+
+        if (dto.DisableAnimations != group.DisableAnimations || dto.DisableSounds != group.DisableSounds)
+        {
+            var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == gid && p.GroupUserUID != UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
+
+            await Clients.User(UserUID).Client_GroupChange(new GroupDto()
+            {
+                GID = gid,
+                DisableAnimations = group.DisableAnimations || groupPair.DisableAnimations,
+                DisableSounds = group.DisableSounds || groupPair.DisableSounds,
+            }).ConfigureAwait(false);
+
+            await Clients.Users(groupPairs.Select(c => c.GroupUserUID)).Client_GroupUserChange(new GroupPairDto()
+            {
+                UserUID = UserUID,
+                DisableAnimations = group.DisableAnimations || groupPair.DisableAnimations,
+                DisableSounds = group.DisableSounds || groupPair.DisableSounds,
+            }).ConfigureAwait(false);
+        }
+    }
+
+    [Authorize(Policy = "Identified")]
     public async Task GroupChangePauseState(string gid, bool isPaused)
     {
         _logger.LogCallInfo(MareHubLogger.Args(gid, isPaused));
@@ -406,8 +471,8 @@ public partial class MareHub
             var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(UserUID).Client_UserChangePairedPlayer(groupUserIdent, !isPaused).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(UserCharaIdent, !isPaused).ConfigureAwait(false);
+                await Clients.User(UserUID).Client_UserChangePairedPlayer(new(groupUserPair.GroupUserUID, groupUserIdent, !isPaused)).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, !isPaused)).ConfigureAwait(false);
             }
         }
     }

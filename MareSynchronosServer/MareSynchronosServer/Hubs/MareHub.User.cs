@@ -160,7 +160,7 @@ public partial class MareHub
 
         _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
 
-        await Clients.Users(allPairedUsersDict.Select(f => f.Key)).Client_UserReceiveCharacterData(characterCache, UserCharaIdent).ConfigureAwait(false);
+        await Clients.Users(allPairedUsersDict.Select(f => f.Key)).Client_UserReceiveCharacterData(characterCache, UserUID).ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, allPairedUsersDict.Count());
@@ -245,8 +245,8 @@ public partial class MareHub
         // if the other user has paused the main user and there was no previous group connection don't send anything
         if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, otherUser.UID, StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
         {
-            await Clients.User(user.UID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
-            await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
+            await Clients.User(user.UID).Client_UserChangePairedPlayer(new CharacterDto(otherUser.UID, otherIdent, true)).ConfigureAwait(false);
+            await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(new CharacterDto(UserUID, userIdent, true)).ConfigureAwait(false);
         }
     }
 
@@ -289,8 +289,8 @@ public partial class MareHub
 
             if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(otherCharaIdent, !isPaused).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(UserCharaIdent, !isPaused).ConfigureAwait(false);
+            await Clients.User(UserUID).Client_UserChangePairedPlayer(new CharacterDto(otherUserUid, otherCharaIdent, !isPaused)).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new CharacterDto(UserUID, UserCharaIdent, !isPaused)).ConfigureAwait(false);
         }
     }
 
@@ -351,15 +351,15 @@ public partial class MareHub
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
         if (!callerHadPaused && !otherHadPaused && isPausedInGroup)
         {
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(otherIdent, false).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(UserCharaIdent, false).ConfigureAwait(false);
+            await Clients.User(UserUID).Client_UserChangePairedPlayer(new(otherUserUid, otherIdent, false)).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, false)).ConfigureAwait(false);
         }
 
         // if the caller had paused other but not the other has paused the caller and they are in an unpaused group together, change state to online
         if (callerHadPaused && !otherHadPaused && !isPausedInGroup)
         {
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(UserCharaIdent, true).ConfigureAwait(false);
+            await Clients.User(UserUID).Client_UserChangePairedPlayer(new(otherUserUid, otherIdent, true)).ConfigureAwait(false);
+            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, true)).ConfigureAwait(false);
         }
     }
 
