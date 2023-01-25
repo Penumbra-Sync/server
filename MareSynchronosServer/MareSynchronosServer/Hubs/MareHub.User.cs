@@ -1,7 +1,9 @@
 ﻿using System.Text.RegularExpressions;
-using MareSynchronos.API;
+using MareSynchronos.API.Data;
+using MareSynchronos.API.Data.Enum;
+using MareSynchronos.API.Data.Extensions;
 using MareSynchronos.API.Dto.Group;
-using MareSynchronos.API.Routes;
+using MareSynchronos.API.Dto.User;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -40,11 +42,7 @@ public partial class MareHub
             .Where(u => u.OtherUser.UID == UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
         foreach (var pair in otherPairData)
         {
-            await Clients.User(pair.User.UID).Client_UserUpdateClientPairs(new ClientPairDto()
-            {
-                OtherUID = UserUID,
-                IsRemoved = true,
-            }).ConfigureAwait(false);
+            await Clients.User(pair.UserUID).Client_UserRemoveClientPair(new(userEntry.ToUserData())).ConfigureAwait(false);
         }
 
         foreach (var pair in groupPairs)
@@ -61,17 +59,18 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task<List<CharacterDto>> UserGetOnlineCharacters()
+    public async Task<List<OnlineUserIdentDto>> UserGetOnlinePairs()
     {
         _logger.LogCallInfo();
 
-        var usersToSendOnlineTo = await SendOnlineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
-        var idents = await GetIdentFromUidsFromRedis(usersToSendOnlineTo).ConfigureAwait(false);
-        return idents.Where(i => !string.IsNullOrEmpty(i.Value)).Select(k => new CharacterDto(k.Key, k.Value, true)).ToList();
+        var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
+        var pairs = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
+
+        return pairs.Select(p => new OnlineUserIdentDto(new UserData(p.Key), p.Value)).ToList();
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task<List<ClientPairDto>> UserGetPairedClients()
+    public async Task<List<UserPairDto>> UserGetPairedClients()
     {
         _logger.LogCallInfo();
 
@@ -100,13 +99,16 @@ public partial class MareHub
                 IsSynced = otherEntry != null,
             };
 
-        return (await query.AsNoTracking().ToListAsync().ConfigureAwait(false)).Select(f => new ClientPairDto()
+        var results = await query.AsNoTracking().ToListAsync().ConfigureAwait(false);
+
+        return results.Select(c =>
         {
-            VanityUID = f.Alias,
-            IsPaused = f.IsPaused,
-            OtherUID = f.OtherUserUID,
-            IsSynced = f.IsSynced,
-            IsPausedFromOthers = f.OtherIsPaused,
+            var ownPerm = UserPermissions.Paired;
+            ownPerm.SetPaused(c.IsPaused);
+            var otherPerm = UserPermissions.NoneSet;
+            otherPerm.SetPaired(c.IsSynced);
+            otherPerm.SetPaused(c.IsPaused);
+            return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
         }).ToList();
     }
 
@@ -119,14 +121,14 @@ public partial class MareHub
     private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
 
     [Authorize(Policy = "Identified")]
-    public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
+    public async Task UserPushData(UserCharaDataMessageDto dto)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count));
+        _logger.LogCallInfo(MareHubLogger.Args(dto.CharaData.FileReplacements.Count));
 
         bool hadInvalidData = false;
         List<string> invalidGamePaths = new();
         List<string> invalidFileSwapPaths = new();
-        foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
+        foreach (var replacement in dto.CharaData.FileReplacements.SelectMany(p => p.Value))
         {
             var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToList();
             invalidPaths.AddRange(replacement.GamePaths.Where(p => !AllowedExtensionsForGamePaths.Any(e => p.EndsWith(e, StringComparison.OrdinalIgnoreCase))));
@@ -155,33 +157,32 @@ public partial class MareHub
         }
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        var idents = await GetIdentFromUidsFromRedis(allPairedUsers).ConfigureAwait(false);
+        var idents = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
 
-        var allPairedUsersDict = idents
-            .Where(f => visibleCharacterIds.Contains(f.Value, StringComparer.Ordinal));
+        var recipients = allPairedUsers.Where(f => dto.Recipients.Select(r => r.UID).Contains(f, StringComparer.Ordinal)).ToList();
 
-        _logger.LogCallInfo(MareHubLogger.Args(visibleCharacterIds.Count, allPairedUsersDict.Count()));
+        _logger.LogCallInfo(MareHubLogger.Args(idents.Count, recipients.Count()));
 
-        await Clients.Users(allPairedUsersDict.Select(f => f.Key)).Client_UserReceiveCharacterData(characterCache, UserUID).ConfigureAwait(false);
+        await Clients.Users(recipients).Client_UserReceiveCharacterData(new OnlineUserCharaDataDto(new UserData(UserUID), dto.CharaData)).ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
-        _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, allPairedUsersDict.Count());
+        _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipients.Count());
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task UserAddPair(string uid)
+    public async Task UserAddPair(UserDto dto)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(uid));
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
 
         // don't allow adding yourself or nothing
-        uid = uid.Trim();
-        if (string.Equals(uid, UserUID, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(uid)) return;
+        var uid = dto.User.UID.Trim();
+        if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(dto.User.UID)) return;
 
         // grab other user, check if it exists and if a pair already exists
         var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
         if (otherUser == null)
         {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, UID does not exist").ConfigureAwait(false);
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {dto.User.UID}, UID does not exist").ConfigureAwait(false);
             return;
         }
 
@@ -192,14 +193,14 @@ public partial class MareHub
 
         if (existingEntry != null)
         {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, already paired").ConfigureAwait(false);
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {dto.User.UID}, already paired").ConfigureAwait(false);
             return;
         }
 
         // grab self create new client pair and save
         var user = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(uid, "Success"));
+        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
         ClientPair wl = new ClientPair()
         {
@@ -212,139 +213,104 @@ public partial class MareHub
 
         // get the opposite entry of the client pair
         var otherEntry = OppositeEntry(otherUser.UID);
-        await Clients.User(user.UID).Client_UserUpdateClientPairs(
-            new ClientPairDto()
-            {
-                VanityUID = otherUser.Alias,
-                OtherUID = otherUser.UID,
-                IsPaused = false,
-                IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                IsSynced = otherEntry != null,
-            }).ConfigureAwait(false);
+        var otherIdent = await GetUserIdent(otherUser.UID).ConfigureAwait(false);
 
-        // if there's no opposite entry do nothing
-        if (otherEntry == null) return;
+        var ownPerm = UserPermissions.Paired;
+        var otherPerm = UserPermissions.NoneSet;
+        otherPerm.SetPaired(otherEntry != null);
+        otherPerm.SetPaused(otherEntry?.IsPaused ?? false);
+        var userPairResponse = new UserPairDto(otherUser.ToUserData(), ownPerm, otherPerm);
+        await Clients.User(user.UID).Client_UserAddClientPair(userPairResponse).ConfigureAwait(false);
 
         // check if other user is online
-        var otherIdent = await GetIdentFromUidFromRedis(otherUser.UID).ConfigureAwait(false);
         if (otherIdent == null) return;
 
         // send push with update to other user if other user is online
-        await Clients.User(otherUser.UID).Client_UserUpdateClientPairs(
-            new ClientPairDto()
-            {
-                VanityUID = user.Alias,
-                OtherUID = user.UID,
-                IsPaused = otherEntry.IsPaused,
-                IsPausedFromOthers = false,
-                IsSynced = true,
-            }).ConfigureAwait(false);
-
-        // get own ident and all pairs
-        var userIdent = await GetIdentFromUidFromRedis(user.UID).ConfigureAwait(false);
-        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
-
-        // if the other user has paused the main user and there was no previous group connection don't send anything
-        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, otherUser.UID, StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
-        {
-            await Clients.User(user.UID).Client_UserChangePairedPlayer(new CharacterDto(otherUser.UID, otherIdent, true)).ConfigureAwait(false);
-            await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(new CharacterDto(UserUID, userIdent, true)).ConfigureAwait(false);
-        }
+        await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), otherPerm, ownPerm)).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task UserChangePairPauseStatus(string otherUserUid, bool isPaused)
+    public async Task UserSetPairPermissions(UserPermissionsDto dto)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused));
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
 
-        if (string.Equals(otherUserUid, UserUID, StringComparison.Ordinal)) return;
-        ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
+        if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal)) return;
+        ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (pair == null) return;
 
-        pair.IsPaused = isPaused;
+        pair.IsPaused = dto.Permissions.IsPaused();
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, isPaused, "Success"));
+        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
-        var otherEntry = OppositeEntry(otherUserUid);
+        var otherEntry = OppositeEntry(dto.User.UID);
 
-        await Clients.User(UserUID).Client_UserUpdateClientPairs(
-            new ClientPairDto()
-            {
-                OtherUID = otherUserUid,
-                IsPaused = isPaused,
-                IsPausedFromOthers = otherEntry?.IsPaused ?? false,
-                IsSynced = otherEntry != null,
-            }).ConfigureAwait(false);
+        await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(dto).ConfigureAwait(false);
+
         if (otherEntry != null)
         {
-            await Clients.User(otherUserUid).Client_UserUpdateClientPairs(new ClientPairDto()
-            {
-                OtherUID = UserUID,
-                IsPaused = otherEntry.IsPaused,
-                IsPausedFromOthers = isPaused,
-                IsSynced = true,
-            }).ConfigureAwait(false);
+            await Clients.User(dto.User.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID), dto.Permissions)).ConfigureAwait(false);
 
-            var otherCharaIdent = await GetIdentFromUidFromRedis(pair.OtherUserUID).ConfigureAwait(false);
+            var otherCharaIdent = await GetUserIdent(pair.OtherUserUID).ConfigureAwait(false);
 
             if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
 
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(new CharacterDto(otherUserUid, otherCharaIdent, !isPaused)).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new CharacterDto(UserUID, UserCharaIdent, !isPaused)).ConfigureAwait(false);
+            if (dto.Permissions.IsPaused())
+            {
+                await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
+                await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
+            }
+            else
+            {
+                await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherCharaIdent)).ConfigureAwait(false);
+                await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
+            }
         }
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task UserRemovePair(string otherUserUid)
+    public async Task UserRemovePair(UserDto dto)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid));
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
 
-        if (string.Equals(otherUserUid, UserUID, StringComparison.Ordinal)) return;
+        if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal)) return;
 
         // check if client pair even exists
         ClientPair callerPair =
-            await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == otherUserUid).ConfigureAwait(false);
-        bool callerHadPaused = callerPair.IsPaused;
+            await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (callerPair == null) return;
+
+        bool callerHadPaused = callerPair.IsPaused;
 
         // delete from database, send update info to users pair list
         _dbContext.ClientPairs.Remove(callerPair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(otherUserUid, "Success"));
+        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
-        await Clients.User(UserUID)
-            .Client_UserUpdateClientPairs(new ClientPairDto()
-            {
-                OtherUID = otherUserUid,
-                IsRemoved = true,
-            }).ConfigureAwait(false);
+        await Clients.User(UserUID).Client_UserRemoveClientPair(dto).ConfigureAwait(false);
 
         // check if opposite entry exists
-        var oppositeClientPair = OppositeEntry(otherUserUid);
+        var oppositeClientPair = OppositeEntry(dto.User.UID);
         if (oppositeClientPair == null) return;
 
         // check if other user is online, if no then there is no need to do anything further
-        var otherIdent = await GetIdentFromUidFromRedis(otherUserUid).ConfigureAwait(false);
+        var otherIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
         if (otherIdent == null) return;
 
         // get own ident and 
-        await Clients.User(otherUserUid).Client_UserUpdateClientPairs(
-            new ClientPairDto()
-            {
-                OtherUID = UserUID,
-                IsPausedFromOthers = false,
-                IsSynced = false,
-            }).ConfigureAwait(false);
+        await Clients.User(dto.User.UID)
+            .Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID),
+                UserPermissions.NoneSet)).ConfigureAwait(false);
+
 
         // if the other user had paused the user the state will be offline for either, do nothing
         bool otherHadPaused = oppositeClientPair.IsPaused;
         if (!callerHadPaused && otherHadPaused) return;
 
         var allUsers = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
-        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, otherUserUid, StringComparison.Ordinal));
+        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, dto.User.UID, StringComparison.Ordinal));
         var isPausedInGroup = pauseEntry == null || pauseEntry.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection;
 
         // if neither user had paused each other and both are in unpaused groups, state will be online for both, do nothing
@@ -353,15 +319,15 @@ public partial class MareHub
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
         if (!callerHadPaused && !otherHadPaused && isPausedInGroup)
         {
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(new(otherUserUid, otherIdent, false)).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, false)).ConfigureAwait(false);
+            await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
+            await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
         }
 
         // if the caller had paused other but not the other has paused the caller and they are in an unpaused group together, change state to online
         if (callerHadPaused && !otherHadPaused && !isPausedInGroup)
         {
-            await Clients.User(UserUID).Client_UserChangePairedPlayer(new(otherUserUid, otherIdent, true)).ConfigureAwait(false);
-            await Clients.User(otherUserUid).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, true)).ConfigureAwait(false);
+            await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherIdent)).ConfigureAwait(false);
+            await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
         }
     }
 

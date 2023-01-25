@@ -1,5 +1,8 @@
 ﻿using MareSynchronos.API;
-using MareSynchronos.API.Routes;
+using MareSynchronos.API.Data;
+using MareSynchronos.API.Data.Enum;
+using MareSynchronos.API.Dto;
+using MareSynchronos.API.SignalR;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared;
@@ -68,13 +71,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
 
-        return new ConnectionDto()
+        return new ConnectionDto(new UserData(dbUser.UID, dbUser.Alias))
         {
             ServerVersion = IMareHub.ApiVersion,
-            UID = string.IsNullOrEmpty(dbUser.Alias) ? dbUser.UID : dbUser.Alias,
             IsAdmin = dbUser.IsAdmin,
             IsModerator = dbUser.IsModerator,
-            ServerInfo = new ServerInfoDto()
+            ServerInfo = new ServerInfo()
             {
                 MaxGroupsCreatedByUser = _maxExistingGroupsByUser,
                 ShardName = _shardName,
@@ -119,7 +121,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
             await RemoveUserFromRedis().ConfigureAwait(false);
 
-            await SendOfflineToAllPairedUsers(UserCharaIdent).ConfigureAwait(false);
+            await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 
             _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);

@@ -1,5 +1,6 @@
-﻿using MareSynchronos.API.Dto.Group;
-using MareSynchronos.API.Dto.User;
+﻿using MareSynchronos.API.Data;
+using MareSynchronos.API.Data.Enum;
+using MareSynchronos.API.Data.Extensions;
 using MareSynchronosShared.Models;
 
 namespace MareSynchronosServer.Utils
@@ -11,6 +12,11 @@ namespace MareSynchronosServer.Utils
             return new GroupData(group.GID, group.Alias);
         }
 
+        public static UserData ToUserData(this GroupPair pair)
+        {
+            return new UserData(pair.GroupUser.UID, pair.GroupUser.Alias);
+        }
+
         public static UserData ToUserData(this User user)
         {
             return new UserData(user.UID, user.Alias);
@@ -18,27 +24,27 @@ namespace MareSynchronosServer.Utils
 
         public static GroupPermissions GetGroupPermissions(this Group group)
         {
-            GroupPermissions permissions = GroupPermissions.NoneSet;
-            permissions ^= group.DisableAnimations ? GroupPermissions.DisableAnimations : GroupPermissions.NoneSet;
-            permissions ^= group.DisableSounds ? GroupPermissions.DisableSounds : GroupPermissions.NoneSet;
-            permissions ^= group.InvitesEnabled ? GroupPermissions.NoneSet : GroupPermissions.DisableInvites;
+            var permissions = GroupPermissions.NoneSet;
+            permissions.SetDisableAnimations(group.DisableAnimations);
+            permissions.SetDisableSounds(group.DisableSounds);
+            permissions.SetDisableInvites(!group.InvitesEnabled);
             return permissions;
         }
 
         public static GroupUserPermissions GetGroupPairPermissions(this GroupPair groupPair)
         {
-            GroupUserPermissions permissions = GroupUserPermissions.NoneSet;
-            permissions ^= groupPair.DisableAnimations ? GroupUserPermissions.DisableAnimations : GroupUserPermissions.NoneSet;
-            permissions ^= groupPair.DisableSounds ? GroupUserPermissions.DisableSounds : GroupUserPermissions.NoneSet;
-            permissions ^= groupPair.IsPaused ? GroupUserPermissions.Paused : GroupUserPermissions.NoneSet;
+            var permissions = GroupUserPermissions.NoneSet;
+            permissions.SetDisableAnimations(groupPair.DisableAnimations);
+            permissions.SetDisableSounds(groupPair.DisableSounds);
+            permissions.SetPaused(groupPair.IsPaused);
             return permissions;
         }
 
         public static GroupUserInfo GetGroupPairUserInfo(this GroupPair groupPair)
         {
-            GroupUserInfo groupUserInfo = GroupUserInfo.None;
-            groupUserInfo ^= groupPair.IsPinned ? GroupUserInfo.IsPinned : GroupUserInfo.None;
-            groupUserInfo ^= groupPair.IsModerator ? GroupUserInfo.IsModerator : GroupUserInfo.None;
+            var groupUserInfo = GroupUserInfo.None;
+            groupUserInfo.SetPinned(groupPair.IsPinned);
+            groupUserInfo.SetModerator(groupPair.IsModerator);
             return groupUserInfo;
         }
     }

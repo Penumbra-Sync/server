@@ -1,4 +1,5 @@
-﻿using MareSynchronos.API;
+﻿using MareSynchronos.API.Data;
+using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
@@ -6,7 +7,6 @@ using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using System;
 using System.Security.Cryptography;
 
 namespace MareSynchronosServer.Hubs;
@@ -121,10 +121,11 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == dto.Group.GID).ToList();
+        var groupPairs = _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == dto.Group.GID).ToList();
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).Client_GroupPairChangePermissions(dto).ConfigureAwait(false);
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
+        var self = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         foreach (var groupUserPair in groupPairs)
         {
@@ -136,11 +137,12 @@ public partial class MareHub
                 if (userPair.IsOtherPausedForSpecificGroup(dto.Group.GID) is PauseInfo.Paused) continue;
             }
 
-            var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
+            var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(UserUID).Client_UserChangePairedPlayer(new(groupUserPair.GroupUserUID, groupUserIdent, !groupPair.IsPaused)).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, !groupPair.IsPaused)).ConfigureAwait(false);
+                await Clients.User(UserUID).Client_UserSendOnline(new(groupUserPair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID)
+                    .Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
             }
         }
     }
@@ -212,7 +214,7 @@ public partial class MareHub
 
         var self = _dbContext.Users.Single(u => u.UID == UserUID);
 
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
 
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID))
             .Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(), self.ToUserData(), newPair.GetGroupPairUserInfo(), newPair.GetGroupPairPermissions())).ConfigureAwait(false);
@@ -226,11 +228,12 @@ public partial class MareHub
             if (userPair.IsPausedExcludingGroup(gid) is PauseInfo.Unpaused) continue;
             if (userPair.IsPausedPerGroup is PauseInfo.Paused) continue;
 
-            var groupUserIdent = await GetIdentFromUidFromRedis(groupUserPair.GroupUserUID).ConfigureAwait(false);
+            var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(UserUID).Client_UserChangePairedPlayer(new(groupUserPair.GroupUserUID, groupUserIdent, true)).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID).Client_UserChangePairedPlayer(new(UserUID, UserCharaIdent, true)).ConfigureAwait(false);
+                await Clients.User(UserUID).Client_UserSendOnline(new(groupUserPair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
+                await Clients.User(groupUserPair.GroupUserUID)
+                    .Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
             }
         }
 
@@ -363,7 +366,7 @@ public partial class MareHub
         var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).AsNoTracking().ToList();
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).Client_GroupPairLeft(dto).ConfigureAwait(false);
 
-        var userIdent = await GetIdentFromUidFromRedis(dto.User.UID).ConfigureAwait(false);
+        var userIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
         if (userIdent == null) return;
 
         await Clients.User(dto.User.UID).Client_GroupDelete(new GroupDto(dto.Group)).ConfigureAwait(false);
@@ -429,21 +432,16 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
 
-        var (userHasRights, _) = await TryValidateGroupModeratorOrOwner(dto.Group.GID).ConfigureAwait(false);
+        var (userHasRights, group) = await TryValidateGroupModeratorOrOwner(dto.GID).ConfigureAwait(false);
         if (!userHasRights) return new List<BannedGroupUserDto>();
 
-        var banEntries = await _dbContext.GroupBans.Where(g => g.GroupGID == dto.Group.GID).AsNoTracking().ToListAsync().ConfigureAwait(false);
+        var banEntries = await _dbContext.GroupBans.Include(b => b.BannedUser).Where(g => g.GroupGID == dto.Group.GID).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
-        List<BannedGroupUserDto> bannedGroupUsers = banEntries.Select(b => new BannedGroupUserDto()
-        {
-            BannedBy = b.BannedByUID,
-            BannedOn = b.BannedOn,
-            Reason = b.BannedReason,
-            UID = b.BannedUserUID,
+        List<BannedGroupUserDto> bannedGroupUsers = banEntries.Select(b =>
+            new BannedGroupUserDto(group.ToGroupData(), b.BannedUser.ToUserData(), b.BannedReason, b.BannedOn,
+                b.BannedByUID)).ToList();
 
-        }).ToList();
-
-        _logger.LogCallInfo(MareHubLogger.Args(gid, bannedGroupUsers.Count));
+        _logger.LogCallInfo(MareHubLogger.Args(dto, bannedGroupUsers.Count));
 
         return bannedGroupUsers;
     }
@@ -552,7 +550,7 @@ public partial class MareHub
         {
             await Clients.Users(groupPairs.Where(p => p.IsPinned).Select(g => g.GroupUserUID)).Client_GroupPairLeft(new GroupPairDto(dto.Group, pair.GroupUser.ToUserData())).ConfigureAwait(false);
 
-            var pairIdent = await GetIdentFromUidFromRedis(pair.GroupUserUID).ConfigureAwait(false);
+            var pairIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
             var allUserPairs = await GetAllPairedClientsWithPauseState(pair.GroupUserUID).ConfigureAwait(false);

@@ -1,4 +1,6 @@
 ﻿using MareSynchronos.API;
+using MareSynchronos.API.Dto.Admin;
+using MareSynchronos.API.Dto.Files;
 using MareSynchronosShared.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -82,7 +84,7 @@ public partial class MareHub
     public async Task<List<OnlineUserDto>> AdminGetOnlineUsers()
     {
         var users = await _dbContext.Users.AsNoTracking().ToListAsync().ConfigureAwait(false);
-        var redisUsers = await GetIdentFromUidsFromRedis(users.Select(u => u.UID)).ConfigureAwait(false);
+        var redisUsers = await GetOnlineUsers(users.Select(u => u.UID).ToList()).ConfigureAwait(false);
         return users.Select(user => new { User = user, Ident = redisUsers[user.UID] }).Where(a => !string.IsNullOrEmpty(a.Ident)).Select(b => new OnlineUserDto
         {
             CharacterNameHash = b.Ident,

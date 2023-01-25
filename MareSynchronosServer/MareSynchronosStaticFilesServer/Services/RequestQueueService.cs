@@ -5,6 +5,7 @@ using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using System.Timers;
+using MareSynchronos.API.SignalR;
 
 namespace MareSynchronosStaticFilesServer.Services;
 

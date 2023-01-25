@@ -23,7 +23,7 @@ using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Configuration;
 using System.Net;
 using StackExchange.Redis.Extensions.System.Text.Json;
-using MareSynchronos.API.Routes;
+using MareSynchronos.API.SignalR;
 
 namespace MareSynchronosServer;
 
