@@ -45,23 +45,30 @@ public class FileCleanupService : IHostedService
 
         while (!ct.IsCancellationRequested)
         {
-            DirectoryInfo dir = new(_cacheDir);
-            var allFiles = dir.GetFiles("*", SearchOption.AllDirectories);
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
-            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
-
-            using var scope = _services.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
-
-            await CleanUpOutdatedFiles(dbContext, ct).ConfigureAwait(false);
-
-            CleanUpFilesBeyondSizeLimit(dbContext, ct);
-
-            if (_isMainServer)
+            try
             {
-                CleanUpStuckUploads(dbContext);
+                DirectoryInfo dir = new(_cacheDir);
+                var allFiles = dir.GetFiles("*", SearchOption.AllDirectories);
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFiles.Sum(f => f.Length));
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFiles.Length);
 
-                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                using var scope = _services.CreateScope();
+                using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+
+                await CleanUpOutdatedFiles(dbContext, ct).ConfigureAwait(false);
+
+                CleanUpFilesBeyondSizeLimit(dbContext, ct);
+
+                if (_isMainServer)
+                {
+                    CleanUpStuckUploads(dbContext);
+
+                    await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                }
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error during cleanup task");
             }
 
             var now = DateTime.Now;
