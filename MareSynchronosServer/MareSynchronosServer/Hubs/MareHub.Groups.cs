@@ -1,5 +1,4 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Enum;
+﻿using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
