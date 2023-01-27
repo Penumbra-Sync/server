@@ -114,6 +114,8 @@ public partial class MareHub
     [GeneratedRegex(@"^([a-z0-9_ '+&,\.\-\{\}]+\/)+([a-z0-9_ '+&,\.\-\{\}]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
     private static partial Regex GamePathRegex();
 
+    private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
+
     [Authorize(Policy = "Identified")]
     public async Task UserPushData(CharacterCacheDto characterCache, List<string> visibleCharacterIds)
     {
@@ -124,8 +126,9 @@ public partial class MareHub
         List<string> invalidFileSwapPaths = new();
         foreach (var replacement in characterCache.FileReplacements.SelectMany(p => p.Value))
         {
-            var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToArray();
-            replacement.GamePaths = replacement.GamePaths.Where(p => GamePathRegex().IsMatch(p)).ToArray();
+            var invalidPaths = replacement.GamePaths.Where(p => !GamePathRegex().IsMatch(p)).ToList();
+            invalidPaths.AddRange(replacement.GamePaths.Where(p => !AllowedExtensionsForGamePaths.Any(e => p.EndsWith(e, StringComparison.OrdinalIgnoreCase))));
+            replacement.GamePaths = replacement.GamePaths.Where(p => !invalidPaths.Contains(p, StringComparer.OrdinalIgnoreCase)).ToArray();
             bool validGamePaths = replacement.GamePaths.Any();
             bool validHash = string.IsNullOrEmpty(replacement.Hash) || HashRegex().IsMatch(replacement.Hash);
             bool validFileSwapPath = string.IsNullOrEmpty(replacement.FileSwapPath) || GamePathRegex().IsMatch(replacement.FileSwapPath);
@@ -174,13 +177,20 @@ public partial class MareHub
 
         // grab other user, check if it exists and if a pair already exists
         var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
+        if (otherUser == null)
+        {
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, UID does not exist").ConfigureAwait(false);
+            return;
+        }
+
         var existingEntry =
             await _dbContext.ClientPairs.AsNoTracking()
                 .FirstOrDefaultAsync(p =>
-                    p.User.UID == UserUID && p.OtherUserUID == uid).ConfigureAwait(false);
-        if (otherUser == null || existingEntry != null)
+                    p.User.UID == UserUID && p.OtherUserUID == otherUser.UID).ConfigureAwait(false);
+
+        if (existingEntry != null)
         {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, either already paired or UID does not exist").ConfigureAwait(false);
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {uid}, already paired").ConfigureAwait(false);
             return;
         }
 
@@ -233,7 +243,7 @@ public partial class MareHub
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
         // if the other user has paused the main user and there was no previous group connection don't send anything
-        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, uid, StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
+        if (!otherEntry.IsPaused && allUserPairs.Any(p => string.Equals(p.UID, otherUser.UID, StringComparison.Ordinal) && p.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection))
         {
             await Clients.User(user.UID).Client_UserChangePairedPlayer(otherIdent, true).ConfigureAwait(false);
             await Clients.User(otherUser.UID).Client_UserChangePairedPlayer(userIdent, true).ConfigureAwait(false);
