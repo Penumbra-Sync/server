@@ -104,6 +104,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
 
             await UpdateUserOnRedis().ConfigureAwait(false);
+
+            await SendOnlineToAllPairedUsers().ConfigureAwait(false);
         }
         catch { }
 

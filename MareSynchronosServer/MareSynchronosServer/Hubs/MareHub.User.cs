@@ -107,7 +107,7 @@ public partial class MareHub
             ownPerm.SetPaused(c.IsPaused);
             var otherPerm = UserPermissions.NoneSet;
             otherPerm.SetPaired(c.IsSynced);
-            otherPerm.SetPaused(c.IsPaused);
+            otherPerm.SetPaused(c.OtherIsPaused);
             return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
         }).ToList();
     }
@@ -227,6 +227,12 @@ public partial class MareHub
 
         // send push with update to other user if other user is online
         await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), otherPerm, ownPerm)).ConfigureAwait(false);
+
+        if (!otherPerm.IsPaused())
+        {
+            await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherIdent)).ConfigureAwait(false);
+            await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
+        }
     }
 
     [Authorize(Policy = "Identified")]
