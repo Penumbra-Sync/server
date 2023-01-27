@@ -83,7 +83,8 @@ public class FileCleanupService : IHostedService
 
     private void CleanUpStuckUploads(MareDbContext dbContext)
     {
-        var stuckUploads = dbContext.Files.Where(f => !f.Uploaded && f.UploadDate < DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10)));
+        var pastTime = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10));
+        var stuckUploads = dbContext.Files.Where(f => !f.Uploaded && f.UploadDate < pastTime);
         dbContext.Files.RemoveRange(stuckUploads);
     }
 
