@@ -115,6 +115,7 @@ public partial class MareHub
         var (inGroup, groupPair) = await TryValidateUserInGroup(dto.Group.GID).ConfigureAwait(false);
         if (!inGroup) return;
 
+        var wasPaused = groupPair.IsPaused;
         groupPair.DisableSounds = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.DisableSounds);
         groupPair.DisableAnimations = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.DisableAnimations);
         groupPair.IsPaused = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.Paused);
@@ -127,7 +128,9 @@ public partial class MareHub
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
         var self = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
-        foreach (var groupUserPair in groupPairs)
+        if (wasPaused == groupPair.IsPaused) return;
+
+        foreach (var groupUserPair in groupPairs.Where(u => !string.Equals(u.GroupUserUID, UserUID, StringComparison.Ordinal)).ToList())
         {
             var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair != null)
@@ -140,9 +143,18 @@ public partial class MareHub
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
             {
-                await Clients.User(UserUID).Client_UserSendOnline(new(groupUserPair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
-                await Clients.User(groupUserPair.GroupUserUID)
-                    .Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
+                if (!groupPair.IsPaused)
+                {
+                    await Clients.User(UserUID).Client_UserSendOnline(new(groupUserPair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
+                    await Clients.User(groupUserPair.GroupUserUID)
+                        .Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Clients.User(UserUID).Client_UserSendOffline(new(groupUserPair.ToUserData())).ConfigureAwait(false);
+                    await Clients.User(groupUserPair.GroupUserUID)
+                        .Client_UserSendOffline(new(self.ToUserData())).ConfigureAwait(false);
+                }
             }
         }
     }
