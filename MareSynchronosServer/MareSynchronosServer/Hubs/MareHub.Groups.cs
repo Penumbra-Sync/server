@@ -230,6 +230,10 @@ public partial class MareHub
 
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID))
             .Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(), self.ToUserData(), newPair.GetGroupPairUserInfo(), newPair.GetGroupPairPermissions())).ConfigureAwait(false);
+        foreach (var pair in groupPairs)
+        {
+            await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(), pair.ToUserData(), pair.GetGroupPairUserInfo(), pair.GetGroupPairPermissions())).ConfigureAwait(false);
+        }
 
         var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
 
