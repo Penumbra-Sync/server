@@ -1,4 +1,5 @@
 ﻿using MareSynchronos.API.Data.Enum;
+using MareSynchronos.API.Data.Extensions;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
@@ -115,9 +116,9 @@ public partial class MareHub
         if (!inGroup) return;
 
         var wasPaused = groupPair.IsPaused;
-        groupPair.DisableSounds = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.DisableSounds);
-        groupPair.DisableAnimations = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.DisableAnimations);
-        groupPair.IsPaused = dto.GroupPairPermissions.HasFlag(GroupUserPermissions.Paused);
+        groupPair.DisableSounds = dto.GroupPairPermissions.IsDisableSounds();
+        groupPair.DisableAnimations = dto.GroupPairPermissions.IsDisableAnimations();
+        groupPair.IsPaused = dto.GroupPairPermissions.IsPaused();
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
