@@ -69,6 +69,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
+        await SendOnlineToAllPairedUsers().ConfigureAwait(false);
 
         return new ConnectionDto(new UserData(dbUser.UID, dbUser.Alias))
         {
@@ -103,8 +104,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
 
             await UpdateUserOnRedis().ConfigureAwait(false);
-
-            await SendOnlineToAllPairedUsers().ConfigureAwait(false);
         }
         catch { }
 
