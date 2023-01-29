@@ -1,5 +1,6 @@
 ﻿using Grpc.Core;
-using MareSynchronos.API;
+using MareSynchronos.API.Data.Enum;
+using MareSynchronos.API.SignalR;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Protos;
 using Microsoft.AspNetCore.SignalR;

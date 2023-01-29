@@ -9,4 +9,6 @@ public class GroupPair
     public bool IsPaused { get; set; }
     public bool IsPinned { get; set; }
     public bool IsModerator { get; set; }
+    public bool DisableSounds { get; set; }
+    public bool DisableAnimations { get; set; }
 }

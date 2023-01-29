@@ -3,8 +3,8 @@ using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
-using MareSynchronos.API;
 using MareSynchronosShared.Utils;
+using MareSynchronos.API.Routes;
 
 namespace MareSynchronosStaticFilesServer.Services;
 

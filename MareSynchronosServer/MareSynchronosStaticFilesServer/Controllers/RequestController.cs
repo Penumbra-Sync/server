@@ -1,4 +1,4 @@
-﻿using MareSynchronos.API;
+﻿using MareSynchronos.API.Routes;
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using Microsoft.AspNetCore.Mvc;

@@ -35,6 +35,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:6000/health || exit 1"]
+      retries: 60
+      start_period: 10s
+      timeout: 1s
 
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
@@ -48,7 +53,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
 
   mare-files:
     image: darkarchon/mare-synchronos-staticfilesserver:latest
@@ -63,7 +69,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      - "mare-server"
+      mare-server:
+        condition: service_healthy
 
 volumes:
   postgres_socket:
+  cache:
+    driver: local

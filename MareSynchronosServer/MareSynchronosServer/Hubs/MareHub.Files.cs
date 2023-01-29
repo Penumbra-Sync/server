@@ -2,13 +2,12 @@
 using System.Text.RegularExpressions;
 using Google.Protobuf;
 using Grpc.Core;
-using MareSynchronos.API;
+using MareSynchronos.API.Dto.Files;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Hubs;
