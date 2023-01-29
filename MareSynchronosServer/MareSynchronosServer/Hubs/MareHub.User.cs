@@ -223,7 +223,7 @@ public partial class MareHub
         await Clients.User(user.UID).Client_UserAddClientPair(userPairResponse).ConfigureAwait(false);
 
         // check if other user is online
-        if (otherIdent == null) return;
+        if (otherIdent == null || otherEntry == null) return;
 
         // send push with update to other user if other user is online
         await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), otherPerm, ownPerm)).ConfigureAwait(false);
