@@ -71,7 +71,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
         await SendOnlineToAllPairedUsers().ConfigureAwait(false);
 
-        return new ConnectionDto(new UserData(dbUser.UID, dbUser.Alias))
+        return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {
             ServerVersion = IMareHub.ApiVersion,
             IsAdmin = dbUser.IsAdmin,
