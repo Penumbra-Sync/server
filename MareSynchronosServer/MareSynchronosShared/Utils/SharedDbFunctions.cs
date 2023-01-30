@@ -67,7 +67,7 @@ public static class SharedDbFunctions
     {
         bool groupHasMigrated = false;
         string newOwner = string.Empty;
-        foreach (var potentialNewOwner in groupPairs)
+        foreach (var potentialNewOwner in groupPairs.OrderByDescending(p => p.IsModerator).ThenByDescending(p => p.IsPinned).ToList())
         {
             groupHasMigrated = await TryMigrateGroup(context, group, potentialNewOwner.GroupUserUID, maxGroupsByUser).ConfigureAwait(false);
 
