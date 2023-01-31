@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Utils;
 using Microsoft.IdentityModel.Tokens;
+using MareSynchronos.API.Data;
+using MareSynchronos.API.Dto.Group;
+using MareSynchronosShared.Metrics;
+using Microsoft.AspNetCore.SignalR;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -160,5 +164,112 @@ public partial class MareHub
         if (group == null) return (false, null);
 
         return (string.Equals(group.OwnerUID, UserUID, StringComparison.Ordinal), group);
+    }
+
+    private async Task DeleteUser(User user)
+    {
+        var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToListAsync().ConfigureAwait(false);
+        var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
+        var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == user.UID).ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+
+        if (lodestone != null)
+        {
+            _dbContext.Remove(lodestone);
+        }
+
+        while (_dbContext.Files.Any(f => f.Uploader == user))
+        {
+            await Task.Delay(1000).ConfigureAwait(false);
+        }
+
+        _dbContext.ClientPairs.RemoveRange(ownPairData);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
+            .Where(u => u.OtherUser.UID == user.UID).AsNoTracking().ToListAsync().ConfigureAwait(false);
+        foreach (var pair in otherPairData)
+        {
+            await Clients.User(pair.UserUID).Client_UserRemoveClientPair(new(user.ToUserData())).ConfigureAwait(false);
+        }
+
+        foreach (var pair in groupPairs)
+        {
+            await UserLeaveGroup(new GroupDto(new GroupData(pair.GroupGID)), user.UID).ConfigureAwait(false);
+        }
+
+        _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
+
+        _dbContext.ClientPairs.RemoveRange(otherPairData);
+        _dbContext.Users.Remove(user);
+        _dbContext.Auth.Remove(auth);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    private async Task UserLeaveGroup(GroupDto dto, string userUid)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
+
+        var (exists, groupPair) = await TryValidateUserInGroup(dto.Group.GID, userUid).ConfigureAwait(false);
+        if (!exists) return;
+
+        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == dto.Group.GID).ConfigureAwait(false);
+
+        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).ToListAsync().ConfigureAwait(false);
+        var groupPairsWithoutSelf = groupPairs.Where(p => !string.Equals(p.GroupUserUID, userUid, StringComparison.Ordinal)).ToList();
+
+        _dbContext.GroupPairs.Remove(groupPair);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        await Clients.User(userUid).Client_GroupDelete(new GroupDto(group.ToGroupData())).ConfigureAwait(false);
+
+        bool ownerHasLeft = string.Equals(group.OwnerUID, userUid, StringComparison.Ordinal);
+        if (ownerHasLeft)
+        {
+            if (!groupPairsWithoutSelf.Any())
+            {
+                _logger.LogCallInfo(MareHubLogger.Args(dto, "Deleted"));
+
+                _dbContext.Groups.Remove(group);
+            }
+            else
+            {
+                var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(_dbContext, group, groupPairsWithoutSelf, _maxExistingGroupsByUser).ConfigureAwait(false);
+
+                if (groupHasMigrated.Item1)
+                {
+                    _logger.LogCallInfo(MareHubLogger.Args(dto, "Migrated", groupHasMigrated.Item2));
+
+                    var user = await _dbContext.Users.SingleAsync(u => u.UID == groupHasMigrated.Item2).ConfigureAwait(false);
+
+                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupSendInfo(new GroupInfoDto(group.ToGroupData(),
+                        user.ToUserData(), group.GetGroupPermissions())).ConfigureAwait(false);
+                }
+                else
+                {
+                    _logger.LogCallInfo(MareHubLogger.Args(dto, "Deleted"));
+
+                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupDelete(dto).ConfigureAwait(false);
+
+                    await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
+
+                    return;
+                }
+            }
+        }
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
+
+        await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupPairLeft(new GroupPairDto(dto.Group, groupPair.GroupUser.ToUserData())).ConfigureAwait(false);
+
+        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
+
+        var ident = await GetUserIdent(userUid).ConfigureAwait(false);
+
+        foreach (var groupUserPair in groupPairsWithoutSelf)
+        {
+            await UserGroupLeave(groupUserPair, allUserPairs, ident, userUid).ConfigureAwait(false);
+        }
     }
 }

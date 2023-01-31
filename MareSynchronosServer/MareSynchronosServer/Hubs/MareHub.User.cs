@@ -21,41 +21,13 @@ public partial class MareHub
         _logger.LogCallInfo();
 
         var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
-        var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == UserUID).ToListAsync().ConfigureAwait(false);
-        var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
-        var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == UserUID).ConfigureAwait(false);
-        var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == UserUID).ToListAsync().ConfigureAwait(false);
-
-        if (lodestone != null)
+        var secondaryUsers = await _dbContext.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == UserUID).Select(c => c.User).ToListAsync().ConfigureAwait(false);
+        foreach (var user in secondaryUsers)
         {
-            _dbContext.Remove(lodestone);
+            await DeleteUser(user).ConfigureAwait(false);
         }
 
-        while (_dbContext.Files.Any(f => f.Uploader == userEntry))
-        {
-            await Task.Delay(1000).ConfigureAwait(false);
-        }
-
-        _dbContext.ClientPairs.RemoveRange(ownPairData);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
-            .Where(u => u.OtherUser.UID == UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
-        foreach (var pair in otherPairData)
-        {
-            await Clients.User(pair.UserUID).Client_UserRemoveClientPair(new(userEntry.ToUserData())).ConfigureAwait(false);
-        }
-
-        foreach (var pair in groupPairs)
-        {
-            await GroupLeave(new GroupDto(new GroupData(pair.GroupGID))).ConfigureAwait(false);
-        }
-
-        _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
-
-        _dbContext.ClientPairs.RemoveRange(otherPairData);
-        _dbContext.Users.Remove(userEntry);
-        _dbContext.Auth.Remove(auth);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DeleteUser(userEntry).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Identified")]

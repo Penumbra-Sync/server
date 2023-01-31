@@ -52,7 +52,7 @@ public class MareModule : InteractionModuleBase
             Context.Interaction.User.Id, nameof(Register),
             string.Join(",", new[] { $"{nameof(overwrite)}:{overwrite}" }));
 
-        await TryRespondAsync(async () =>
+        try
         {
             if (overwrite)
             {
@@ -60,24 +60,59 @@ public class MareModule : InteractionModuleBase
             }
 
             await RespondWithModalAsync<LodestoneModal>("register_modal").ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
+    }
+
+    [SlashCommand("createsecondaryuid", "Creates a new Secret Key to be used for alts")]
+    public async Task AddSecondary()
+    {
+        try
+        {
+            var embed = await HandleAddSecondary(Context.User.Id).ConfigureAwait(false);
+            await RespondAsync(embeds: new[] { embed }, ephemeral: true).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("setvanityuid", "Sets your Vanity UID.")]
-    public async Task SetVanityUid([Summary("vanity_uid", "Desired Vanity UID")] string vanityUid)
+    public async Task SetVanityUid([Summary("vanity_uid", "Desired Vanity UID")] string vanityUid,
+        [Summary("secondary_uid", "Will set the vanity UID for a secondary UID")] string? secondaryUid = null)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}:{params}",
             Context.Interaction.User.Id, nameof(SetVanityUid),
             string.Join(",", new[] { $"{nameof(vanityUid)}:{vanityUid}" }));
 
-        await TryRespondAsync(async () =>
+        try
         {
             EmbedBuilder eb = new();
 
-            eb = await HandleVanityUid(eb, Context.User.Id, vanityUid);
+            eb = await HandleVanityUid(eb, Context.User.Id, vanityUid, secondaryUid);
 
             await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("setsyncshellvanityid", "Sets a Vanity GID for a Syncshell")]
@@ -89,14 +124,22 @@ public class MareModule : InteractionModuleBase
             Context.Interaction.User.Id, nameof(SetSyncshellVanityId),
             string.Join(",", new[] { $"{nameof(syncshellId)}:{syncshellId}", $"{nameof(vanityId)}:{vanityId}" }));
 
-        await TryRespondAsync(async () =>
+        try
         {
             EmbedBuilder eb = new();
 
             eb = await HandleVanityGid(eb, Context.User.Id, syncshellId, vanityId);
 
             await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("verify", "Finishes the registration process for the Mare Synchronos server of this Discord")]
@@ -104,7 +147,7 @@ public class MareModule : InteractionModuleBase
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(Verify));
-        await TryRespondAsync(async () =>
+        try
         {
             EmbedBuilder eb = new();
             if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
@@ -116,7 +159,7 @@ public class MareModule : InteractionModuleBase
             else if (!_botServices.DiscordLodestoneMapping.ContainsKey(Context.User.Id))
             {
                 eb.WithTitle("Cannot verify registration");
-                eb.WithDescription("You need to **/register** first before you can **/verify**");
+                eb.WithDescription("You need to **/register** first before you can **/verify**" + Environment.NewLine + "If your registration got stuck for some reason, use **/register overwrite:true**");
                 await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
             }
             else
@@ -124,7 +167,15 @@ public class MareModule : InteractionModuleBase
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
                 _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("verify_relink", "Finishes the relink process for your user on the Mare Synchronos server of this Discord")]
@@ -132,7 +183,8 @@ public class MareModule : InteractionModuleBase
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(VerifyRelink));
-        await TryRespondAsync(async () =>
+
+        try
         {
             EmbedBuilder eb = new();
             if (_botServices.VerificationQueue.Any(u => u.Key == Context.User.Id))
@@ -152,33 +204,51 @@ public class MareModule : InteractionModuleBase
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
                 _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
+
     }
 
     [SlashCommand("recover", "Allows you to recover your account by generating a new secret key")]
-    public async Task Recover()
+    public async Task Recover([Summary("secondary_uid", "(Optional) Your secondary UID")] string? secondaryUid = null)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(Recover));
-        await RespondWithModalAsync<LodestoneModal>("recover_modal").ConfigureAwait(false);
+
+        await RespondWithModalAsync<LodestoneModal>($"recover_modal,{secondaryUid}").ConfigureAwait(false);
     }
 
     [SlashCommand("userinfo", "Shows you your user information")]
-    public async Task UserInfo(
+    public async Task UserInfo([Summary("secondary_uid", "(Optional) Your secondary UID")] string? secondaryUid = null,
         [Summary("discord_user", "ADMIN ONLY: Discord User to check for")] IUser? discordUser = null,
         [Summary("uid", "ADMIN ONLY: UID to check for")] string? uid = null)
     {
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(UserInfo));
 
-        await TryRespondAsync(async () =>
+        try
         {
             EmbedBuilder eb = new();
 
-            eb = await HandleUserInfo(eb, Context.User.Id, discordUser?.Id ?? null, uid);
+            eb = await HandleUserInfo(eb, Context.User.Id, secondaryUid, discordUser?.Id ?? null, uid);
 
             await RespondAsync(embeds: new[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("relink", "Allows you to link a new Discord account to an existing Mare account")]
@@ -196,12 +266,20 @@ public class MareModule : InteractionModuleBase
             Context.Interaction.User.Id, nameof(UserAdd),
             string.Join(",", new[] { $"{nameof(desiredUid)}:{desiredUid}" }));
 
-        await TryRespondAsync(async () =>
+        try
         {
             var embed = await HandleUserAdd(desiredUid, Context.User.Id);
 
             await RespondAsync(embeds: new[] { embed }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [SlashCommand("message", "ADMIN ONLY: sends a message to clients")]
@@ -244,17 +322,25 @@ public class MareModule : InteractionModuleBase
         }
     }
 
-    [ModalInteraction("recover_modal")]
-    public async Task RecoverModal(LodestoneModal modal)
+    [ModalInteraction("recover_modal,*")]
+    public async Task RecoverModal(string? secondaryUid, LodestoneModal modal)
     {
         _logger.LogInformation("Modal:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(RecoverModal));
 
-        await TryRespondAsync(async () =>
+        try
         {
-            var embed = await HandleRecoverModalAsync(modal, Context.User.Id).ConfigureAwait(false);
+            var embed = await HandleRecoverModalAsync(modal, Context.User.Id, secondaryUid).ConfigureAwait(false);
             await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [ModalInteraction("register_modal")]
@@ -263,11 +349,19 @@ public class MareModule : InteractionModuleBase
         _logger.LogInformation("Modal:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(RegisterModal));
 
-        await TryRespondAsync(async () =>
+        try
         {
             var embed = await HandleRegisterModalAsync(modal, Context.User.Id).ConfigureAwait(false);
             await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
     }
 
     [ModalInteraction("relink_modal")]
@@ -276,11 +370,79 @@ public class MareModule : InteractionModuleBase
         _logger.LogInformation("Modal:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(RelinkModal));
 
-        await TryRespondAsync(async () =>
+        try
         {
             var embed = await HandleRelinkModalAsync(modal, Context.User.Id).ConfigureAwait(false);
             await RespondAsync(embeds: new Embed[] { embed }, ephemeral: true).ConfigureAwait(false);
-        });
+        }
+        catch (Exception ex)
+        {
+            EmbedBuilder eb = new();
+            eb.WithTitle("An error occured");
+            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
+
+            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
+        }
+    }
+
+    public async Task<Embed> HandleAddSecondary(ulong discordUserId)
+    {
+        var embed = new EmbedBuilder();
+
+        using var scope = _services.CreateScope();
+        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+
+        var lodestoneAuth = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(a => a.DiscordId == discordUserId).ConfigureAwait(false);
+        if (lodestoneAuth == null)
+        {
+            embed.WithTitle("Failed to add secondary user");
+            embed.WithDescription("You have no registered Mare account yet. Register a Mare account first before trying to add secondary keys.");
+            return embed.Build();
+        }
+
+        var secondaryCount = await db.Auth.CountAsync(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ConfigureAwait(false);
+        if (await db.Auth.CountAsync(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ConfigureAwait(false) >= 25)
+        {
+            embed.WithTitle("Failed to add secondary user");
+            embed.WithDescription("You already made 25 secondary UIDs, which is the limit.");
+            return embed.Build();
+        }
+
+        User newUser = new()
+        {
+            IsAdmin = false,
+            IsModerator = false,
+            LastLoggedIn = DateTime.UtcNow,
+        };
+
+        var hasValidUid = false;
+        while (!hasValidUid)
+        {
+            var uid = StringUtils.GenerateRandomString(10);
+            if (await db.Users.AnyAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false)) continue;
+            newUser.UID = uid;
+            hasValidUid = true;
+        }
+
+        var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+        var auth = new Auth()
+        {
+            HashedKey = StringUtils.Sha256String(computedHash),
+            User = newUser,
+            PrimaryUser = lodestoneAuth.User
+        };
+
+        await db.Users.AddAsync(newUser).ConfigureAwait(false);
+        await db.Auth.AddAsync(auth).ConfigureAwait(false); ;
+
+        await db.SaveChangesAsync().ConfigureAwait(false);
+
+        embed.WithTitle("Secondary UID created");
+        embed.AddField("UID", newUser.UID);
+        embed.AddField("Secret Key", computedHash);
+        embed.AddField("Secondary UIDs", $"You now have {secondaryCount + 1}/25 secondary UIDs");
+
+        return embed.Build();
     }
 
     public async Task<Embed> HandleUserAdd(string desiredUid, ulong discordUserId)
@@ -328,38 +490,24 @@ public class MareModule : InteractionModuleBase
         return embed.Build();
     }
 
-    private async Task TryRespondAsync(Action act)
+    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, string? secondaryUserUid = null, ulong? optionalUser = null, string? uid = null)
     {
-        try
-        {
-            act();
-        }
-        catch (Exception ex)
-        {
-            EmbedBuilder eb = new();
-            eb.WithTitle("An error occured");
-            eb.WithDescription("Please report this error to bug-reports: " + Environment.NewLine + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine);
-
-            await RespondAsync(embeds: new Embed[] { eb.Build() }, ephemeral: true).ConfigureAwait(false);
-        }
-    }
-
-    private async Task<EmbedBuilder> HandleUserInfo(EmbedBuilder eb, ulong id, ulong? optionalUser = null, string? uid = null)
-    {
+        bool showForSecondaryUser = secondaryUserUid != null;
         using var scope = _services.CreateScope();
         await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
 
-        var self = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
+        var primaryUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == id).ConfigureAwait(false);
+
         ulong userToCheckForDiscordId = id;
 
-        if (self == null)
+        if (primaryUser == null)
         {
             eb.WithTitle("No account");
             eb.WithDescription("No Mare account was found associated to your Discord user");
             return eb;
         }
 
-        bool isAdminCall = self.User.IsModerator || self.User.IsAdmin;
+        bool isAdminCall = primaryUser.User.IsModerator || primaryUser.User.IsAdmin;
 
         if ((optionalUser != null || uid != null) && !isAdminCall)
         {
@@ -391,21 +539,44 @@ public class MareModule : InteractionModuleBase
 
         var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userToCheckForDiscordId).ConfigureAwait(false);
         var dbUser = lodestoneUser.User;
-        var auth = await db.Auth.SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
-        var identity = await _connectionMultiplexer.GetDatabase().StringGetAsync("UID:" + dbUser.UID).ConfigureAwait(false);
+        if (showForSecondaryUser)
+        {
+            dbUser = (await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.PrimaryUserUID == dbUser.UID && u.UserUID == secondaryUserUid))?.User;
+            if (dbUser == null)
+            {
+                eb.WithTitle("No such secondary UID");
+                eb.WithDescription($"A secondary UID {secondaryUserUid} was not found attached to your primary UID {primaryUser.User.UID}.");
+                return eb;
+            }
+        }
+
+        var auth = await db.Auth.Include(u => u.PrimaryUser).SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
         var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
+        var identity = await _connectionMultiplexer.GetDatabase().StringGetAsync("UID:" + dbUser.UID).ConfigureAwait(false);
 
         eb.WithTitle("User Information");
-        eb.WithDescription("This is the user information for Discord User Id " + userToCheckForDiscordId + Environment.NewLine
-            + "If you want to verify your secret key is valid, go to https://emn178.github.io/online-tools/sha256.html and copy your secret key into there and compare it to the Hashed Secret Key.");
+        eb.WithDescription("This is the user information for Discord User <@" + userToCheckForDiscordId + ">" + Environment.NewLine + Environment.NewLine
+            + "If you want to verify your secret key is valid, go to https://emn178.github.io/online-tools/sha256.html and copy your secret key into there and compare it to the Hashed Secret Key provided below.");
         eb.AddField("UID", dbUser.UID);
         if (!string.IsNullOrEmpty(dbUser.Alias))
         {
             eb.AddField("Vanity UID", dbUser.Alias);
         }
+        if (showForSecondaryUser)
+        {
+            eb.AddField("Primary UID for " + dbUser.UID, auth.PrimaryUserUID);
+        }
+        else
+        {
+            var secondaryUIDs = await db.Auth.Where(p => p.PrimaryUserUID == dbUser.UID).Select(p => p.UserUID).ToListAsync();
+            if (secondaryUIDs.Any())
+            {
+                eb.AddField("Secondary UIDs", string.Join(Environment.NewLine, secondaryUIDs));
+            }
+        }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
-        eb.AddField("Currently online: ", !string.IsNullOrEmpty(identity));
+        eb.AddField("Currently online ", !string.IsNullOrEmpty(identity));
         eb.AddField("Hashed Secret Key", auth.HashedKey);
         eb.AddField("Joined Syncshells", groupsJoined.Count);
         eb.AddField("Owned Syncshells", groups.Count);
@@ -427,7 +598,7 @@ public class MareModule : InteractionModuleBase
         return eb;
     }
 
-    private async Task<Embed> HandleRecoverModalAsync(LodestoneModal arg, ulong userid)
+    private async Task<Embed> HandleRecoverModalAsync(LodestoneModal arg, ulong userid, string? secondaryUid)
     {
         var embed = new EmbedBuilder();
 
@@ -449,7 +620,6 @@ public class MareModule : InteractionModuleBase
                 .FirstOrDefaultAsync(a => a.DiscordId == userid && a.HashedLodestoneId == hashedLodestoneId)
                 .ConfigureAwait(false);
 
-            // check if discord id or lodestone id is banned
             if (existingLodestoneAuth == null || existingLodestoneAuth.User == null)
             {
                 embed.WithTitle("Recovery failed");
@@ -457,18 +627,46 @@ public class MareModule : InteractionModuleBase
             }
             else
             {
-                var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID);
-                if (previousAuth != null)
+                string computedHash = string.Empty;
+                Auth auth;
+                if (string.IsNullOrEmpty(secondaryUid))
                 {
-                    db.Auth.Remove(previousAuth);
-                }
+                    var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID);
+                    if (previousAuth != null)
+                    {
+                        db.Auth.Remove(previousAuth);
+                    }
 
-                var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
-                var auth = new Auth()
+                    computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+                    auth = new Auth()
+                    {
+                        HashedKey = StringUtils.Sha256String(computedHash),
+                        User = existingLodestoneAuth.User,
+                    };
+
+                    await db.Auth.AddAsync(auth).ConfigureAwait(false);
+                }
+                else
                 {
-                    HashedKey = StringUtils.Sha256String(computedHash),
-                    User = existingLodestoneAuth.User,
-                };
+                    var previousAuth = await db.Auth.Include(u => u.User).FirstOrDefaultAsync(u => u.PrimaryUserUID == existingLodestoneAuth.User.UID && u.UserUID == secondaryUid).ConfigureAwait(false);
+                    if (previousAuth == null)
+                    {
+                        embed.WithTitle("Recovery failed");
+                        embed.WithDescription("This DiscordID has no secondary UID " + secondaryUid);
+
+                        return embed.Build();
+                    }
+
+                    db.Auth.Remove(previousAuth);
+
+                    computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+                    auth = new Auth()
+                    {
+                        HashedKey = StringUtils.Sha256String(computedHash),
+                        User = previousAuth.User,
+                        PrimaryUserUID = existingLodestoneAuth.User.UID
+                    };
+                }
 
                 embed.WithTitle("Recovery successful");
                 embed.WithDescription("This is your new private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
@@ -641,7 +839,7 @@ public class MareModule : InteractionModuleBase
         return lodestoneId;
     }
 
-    private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid)
+    private async Task<EmbedBuilder> HandleVanityUid(EmbedBuilder eb, ulong id, string newUid, string? secondaryUid)
     {
         if (_botServices.LastVanityChange.TryGetValue(id, out var lastChange))
         {
@@ -681,15 +879,38 @@ public class MareModule : InteractionModuleBase
             return eb;
         }
 
-        var user = lodestoneUser.User;
-        user.Alias = newUid;
-        db.Update(user);
+        if (secondaryUid != null)
+        {
+            var secondaryUser = await db.Auth.Include(u => u.PrimaryUser).Include(u => u.User)
+                .SingleOrDefaultAsync(u => u.UserUID == secondaryUid && u.PrimaryUserUID == lodestoneUser.User.UID).ConfigureAwait(false);
+            if (secondaryUser == null)
+            {
+                eb.WithTitle("No secondary UID found");
+                eb.WithDescription($"Did not find a secondary UID {secondaryUid} attached to your primary UID {lodestoneUser.User.UID}");
+                return eb;
+            }
+
+            secondaryUser.User.Alias = newUid;
+            db.Update(secondaryUser);
+
+            eb.WithTitle("Vanity UID set");
+            eb.WithDescription($"Your Vanity UID for the secondary UID {secondaryUid} was set to **{newUid}**."
+                + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
+        }
+        else
+        {
+            var user = lodestoneUser.User;
+            user.Alias = newUid;
+            db.Update(user);
+
+            eb.WithTitle("Vanity UID set");
+            eb.WithDescription("Your Vanity UID was set to **" + newUid + "**."
+                + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
+        }
+
         await db.SaveChangesAsync();
 
         _botServices.LastVanityChange[id] = DateTime.UtcNow;
-
-        eb.WithTitle("Vanity UID set");
-        eb.WithDescription("Your Vanity UID was set to **" + newUid + "**." + Environment.NewLine + "For those changes to apply you will have to reconnect to Mare.");
         return eb;
     }
 

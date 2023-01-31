@@ -53,8 +53,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mare-server:
-        condition: service_healthy
 
   mare-files:
     image: darkarchon/mare-synchronos-staticfilesserver:latest

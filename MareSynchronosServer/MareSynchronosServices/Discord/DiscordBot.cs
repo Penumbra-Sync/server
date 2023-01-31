@@ -119,7 +119,15 @@ internal class DiscordBot : IHostedService
                             if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
                             {
                                 _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
-                                lodestoneAuth.User.Alias = string.Empty;
+                                lodestoneAuth.User.Alias = null;
+                                var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
+                                foreach (var secondaryUser in secondaryUsers)
+                                {
+                                    _logger.LogInformation($"Secondary User {secondaryUser.User.UID} not in allowed roles, deleting alias");
+
+                                    secondaryUser.User.Alias = null;
+                                    db.Update(secondaryUser.User);
+                                }
                                 db.Update(lodestoneAuth.User);
                             }
 

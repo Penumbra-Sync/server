@@ -298,68 +298,7 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task GroupLeave(GroupDto dto)
     {
-        _logger.LogCallInfo(MareHubLogger.Args(dto));
-
-        var (exists, groupPair) = await TryValidateUserInGroup(dto.Group.GID).ConfigureAwait(false);
-        if (!exists) return;
-
-        var group = await _dbContext.Groups.SingleOrDefaultAsync(g => g.GID == dto.Group.GID).ConfigureAwait(false);
-
-        var groupPairs = await _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).ToListAsync().ConfigureAwait(false);
-        var groupPairsWithoutSelf = groupPairs.Where(p => !string.Equals(p.GroupUserUID, UserUID, StringComparison.Ordinal)).ToList();
-
-        _dbContext.GroupPairs.Remove(groupPair);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        await Clients.User(UserUID).Client_GroupDelete(new GroupDto(group.ToGroupData())).ConfigureAwait(false);
-
-        bool ownerHasLeft = string.Equals(group.OwnerUID, UserUID, StringComparison.Ordinal);
-        if (ownerHasLeft)
-        {
-            if (!groupPairsWithoutSelf.Any())
-            {
-                _logger.LogCallInfo(MareHubLogger.Args(dto, "Deleted"));
-
-                _dbContext.Groups.Remove(group);
-            }
-            else
-            {
-                var groupHasMigrated = await SharedDbFunctions.MigrateOrDeleteGroup(_dbContext, group, groupPairsWithoutSelf, _maxExistingGroupsByUser).ConfigureAwait(false);
-
-                if (groupHasMigrated.Item1)
-                {
-                    _logger.LogCallInfo(MareHubLogger.Args(dto, "Migrated", groupHasMigrated.Item2));
-
-                    var user = await _dbContext.Users.SingleAsync(u => u.UID == groupHasMigrated.Item2).ConfigureAwait(false);
-
-                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupSendInfo(new GroupInfoDto(group.ToGroupData(),
-                        user.ToUserData(), group.GetGroupPermissions())).ConfigureAwait(false);
-                }
-                else
-                {
-                    _logger.LogCallInfo(MareHubLogger.Args(dto, "Deleted"));
-
-                    await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupDelete(dto).ConfigureAwait(false);
-
-                    await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
-
-                    return;
-                }
-            }
-        }
-
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
-
-        await Clients.Users(groupPairsWithoutSelf.Select(p => p.GroupUserUID)).Client_GroupPairLeft(new GroupPairDto(dto.Group, groupPair.GroupUser.ToUserData())).ConfigureAwait(false);
-
-        var allUserPairs = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
-
-        foreach (var groupUserPair in groupPairsWithoutSelf)
-        {
-            await UserGroupLeave(groupUserPair, allUserPairs, UserCharaIdent).ConfigureAwait(false);
-        }
+        await UserLeaveGroup(dto, UserUID).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Identified")]
