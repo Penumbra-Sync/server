@@ -20,6 +20,7 @@ internal class DiscordBot : IHostedService
     private readonly DiscordSocketClient _discordClient;
     private CancellationTokenSource? _updateStatusCts;
     private CancellationTokenSource? _vanityUpdateCts;
+    private InteractionService _interactionModule;
 
     public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration,
         ILogger<DiscordBot> logger, IConnectionMultiplexer connectionMultiplexer)
@@ -40,15 +41,7 @@ internal class DiscordBot : IHostedService
     private async Task DiscordClient_Ready()
     {
         var guild = (await _discordClient.Rest.GetGuildsAsync()).First();
-        var interactionModule = new InteractionService(_discordClient);
-        await interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
-        await interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
-
-        _discordClient.InteractionCreated += async (x) =>
-        {
-            var ctx = new SocketInteractionContext(_discordClient, x);
-            await interactionModule.ExecuteCommandAsync(ctx, _services);
-        };
+        await _interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
 
         _ = RemoveUsersNotInVanityRole();
     }
@@ -192,10 +185,18 @@ internal class DiscordBot : IHostedService
         var token = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.DiscordBotToken), string.Empty);
         if (!string.IsNullOrEmpty(token))
         {
+            _interactionModule = new InteractionService(_discordClient);
+            await _interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
+
             await _discordClient.LoginAsync(TokenType.Bot, token).ConfigureAwait(false);
             await _discordClient.StartAsync().ConfigureAwait(false);
 
             _discordClient.Ready += DiscordClient_Ready;
+            _discordClient.InteractionCreated += async (x) =>
+            {
+                var ctx = new SocketInteractionContext(_discordClient, x);
+                await _interactionModule.ExecuteCommandAsync(ctx, _services);
+            };
 
             await _botServices.Start();
             _ = UpdateStatusAsync();
