@@ -429,7 +429,7 @@ public class MareModule : InteractionModuleBase
         {
             HashedKey = StringUtils.Sha256String(computedHash),
             User = newUser,
-            PrimaryUser = lodestoneAuth.User
+            PrimaryUserUID = lodestoneAuth.User.UID
         };
 
         await db.Users.AddAsync(newUser).ConfigureAwait(false);
