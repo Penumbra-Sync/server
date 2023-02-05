@@ -118,6 +118,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         try
         {
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
+            if (exception != null)
+                _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
 
             await RemoveUserFromRedis().ConfigureAwait(false);
 
