@@ -16,11 +16,14 @@ public static class Extensions
 
         var ipAddress = accessor.HttpContext.GetServerVariable("HTTP_X_FORWARDED_FOR");
 
-        if (!string.IsNullOrEmpty(ipAddress))
+        if (!string.IsNullOrWhiteSpace(ipAddress))
         {
             var addresses = ipAddress.Split(',', StringSplitOptions.RemoveEmptyEntries);
-            if (addresses.Length != 0)
-                return addresses.Last();
+            var lastEntry = addresses.LastOrDefault();
+            if (lastEntry != null)
+            {
+                return lastEntry;
+            }
         }
 
         return accessor.HttpContext.Connection.RemoteIpAddress.ToString();
