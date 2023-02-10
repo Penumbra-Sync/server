@@ -20,9 +20,12 @@ public partial class MareHub
     public async Task FilesAbortUpload()
     {
         _logger.LogCallInfo();
-        var notUploadedFiles = _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == UserUID).ToList();
-        _dbContext.RemoveRange(notUploadedFiles);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        var notUploadedFiles = await _dbContext.Files.Where(f => !f.Uploaded && f.Uploader.UID == UserUID).ToListAsync();
+        if (notUploadedFiles.Any())
+        {
+            _dbContext.RemoveRange(notUploadedFiles);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
     }
 
     [Authorize(Policy = "Identified")]
