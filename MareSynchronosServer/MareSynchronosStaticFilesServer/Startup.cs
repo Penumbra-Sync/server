@@ -8,6 +8,8 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
+using MessagePack;
+using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -172,6 +174,23 @@ public class Startup
             hubOptions.EnableDetailedErrors = true;
             hubOptions.MaximumParallelInvocationsPerClient = 10;
             hubOptions.StreamBufferCapacity = 200;
+        }).AddMessagePackProtocol(opt =>
+        {
+            var resolver = CompositeResolver.Create(StandardResolverAllowPrivate.Instance,
+                BuiltinResolver.Instance,
+                AttributeFormatterResolver.Instance,
+                // replace enum resolver
+                DynamicEnumAsStringResolver.Instance,
+                DynamicGenericResolver.Instance,
+                DynamicUnionResolver.Instance,
+                DynamicObjectResolver.Instance,
+                PrimitiveObjectResolver.Instance,
+                // final fallback(last priority)
+                StandardResolver.Instance);
+
+            opt.SerializerOptions = MessagePackSerializerOptions.Standard
+                .WithCompression(MessagePackCompression.Lz4Block)
+                .WithResolver(resolver);
         });
 
         // configure redis for SignalR
