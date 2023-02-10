@@ -24,6 +24,7 @@ using StackExchange.Redis.Extensions.Core.Configuration;
 using System.Net;
 using StackExchange.Redis.Extensions.System.Text.Json;
 using MareSynchronos.API.SignalR;
+using MessagePack;
 
 namespace MareSynchronosServer;
 
@@ -102,6 +103,10 @@ public class Startup
             hubOptions.StreamBufferCapacity = 200;
 
             hubOptions.AddFilter<SignalRLimitFilter>();
+        }).AddMessagePackProtocol(opt =>
+        {
+            opt.SerializerOptions = MessagePackSerializerOptions.Standard
+                .WithCompression(MessagePackCompression.Lz4Block);
         });
 
         // configure redis for SignalR

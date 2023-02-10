@@ -8,6 +8,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
+using MessagePack;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -172,6 +173,10 @@ public class Startup
             hubOptions.EnableDetailedErrors = true;
             hubOptions.MaximumParallelInvocationsPerClient = 10;
             hubOptions.StreamBufferCapacity = 200;
+        }).AddMessagePackProtocol(opt =>
+        {
+            opt.SerializerOptions = MessagePackSerializerOptions.Standard
+                .WithCompression(MessagePackCompression.Lz4Block);
         });
 
         // configure redis for SignalR
