@@ -18,7 +18,7 @@ public static class Extensions
 
         if (!string.IsNullOrEmpty(ipAddress))
         {
-            var addresses = ipAddress.Split(',');
+            var addresses = ipAddress.Split(',', StringSplitOptions.RemoveEmptyEntries);
             if (addresses.Length != 0)
                 return addresses.Last();
         }
