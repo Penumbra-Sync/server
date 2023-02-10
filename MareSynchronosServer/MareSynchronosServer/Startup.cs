@@ -25,6 +25,7 @@ using System.Net;
 using StackExchange.Redis.Extensions.System.Text.Json;
 using MareSynchronos.API.SignalR;
 using MessagePack;
+using MessagePack.Resolvers;
 
 namespace MareSynchronosServer;
 
@@ -105,8 +106,21 @@ public class Startup
             hubOptions.AddFilter<SignalRLimitFilter>();
         }).AddMessagePackProtocol(opt =>
         {
+            var resolver = CompositeResolver.Create(StandardResolverAllowPrivate.Instance,
+                BuiltinResolver.Instance,
+                AttributeFormatterResolver.Instance,
+                // replace enum resolver
+                DynamicEnumAsStringResolver.Instance,
+                DynamicGenericResolver.Instance,
+                DynamicUnionResolver.Instance,
+                DynamicObjectResolver.Instance,
+                PrimitiveObjectResolver.Instance,
+                // final fallback(last priority)
+                StandardResolver.Instance);
+
             opt.SerializerOptions = MessagePackSerializerOptions.Standard
-                .WithCompression(MessagePackCompression.Lz4Block);
+                .WithCompression(MessagePackCompression.Lz4Block)
+                .WithResolver(resolver);
         });
 
         // configure redis for SignalR
