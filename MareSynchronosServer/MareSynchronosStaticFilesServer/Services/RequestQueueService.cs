@@ -1,5 +1,4 @@
-﻿using MareSynchronos.API.Routes;
-using MareSynchronosShared.Metrics;
+﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.SignalR;
@@ -19,6 +18,7 @@ public class RequestQueueService : IHostedService
     private readonly int _queueExpirationSeconds;
     private readonly SemaphoreSlim _queueSemaphore = new(1);
     private readonly SemaphoreSlim _queueProcessingSemaphore = new(1);
+    private int _queueLimitForReset;
     private System.Timers.Timer _queueTimer;
     private readonly ConcurrentDictionary<Guid, string> _queueRemoval = new();
 
@@ -26,6 +26,7 @@ public class RequestQueueService : IHostedService
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
+        _queueLimitForReset = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueClearLimit), 15000);
         _metrics = metrics;
         _logger = logger;
         _hubContext = hubContext;
@@ -120,6 +121,12 @@ public class RequestQueueService : IHostedService
 
         try
         {
+            if (_queue.Count > _queueLimitForReset)
+            {
+                _queue.Clear();
+                return;
+            }
+
             Parallel.For(0, _userQueueRequests.Length, new ParallelOptions()
             {
                 MaxDegreeOfParallelism = 10,

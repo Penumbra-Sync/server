@@ -28,17 +28,17 @@
         "DbContextPoolSize": 512,
         "ShardName": "Files Shard 2",
         "MetricsPort": 6250,
-        "FileServerGrpcAddress": "http://mare-files:6205",
         "ForcedDeletionOfFilesAfterHours": 2,
         "CacheSizeHardLimitInGiB": 5,
         "UnusedFileRetentionPeriodInDays": 14,
         "CacheDirectory": "/marecache/",
-        "RemoteCacheSourceUri": "http://mare-files:6200/",
-        "MainServerGrpcAddress": "http://mare-server:6005",
         "DownloadTimeoutSeconds": 30,
         "DownloadQueueSize": 50,
         "DownloadQueueReleaseSeconds": 15,
-        "RedisConnectionString": "redis,password=secretredispassword"
+        "RedisConnectionString": "redis,password=secretredispassword",
+        "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
+        "MainServerAddress": "http://mare-server:6000",
+        "MainFileServerAddress": "http://mare-files:6200"
     },
     "AllowedHosts": "*",
     "Kestrel": {

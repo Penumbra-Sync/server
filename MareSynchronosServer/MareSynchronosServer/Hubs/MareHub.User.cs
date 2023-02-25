@@ -2,7 +2,6 @@
 using MareSynchronos.API.Data;
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
 using MareSynchronos.API.Dto.User;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;

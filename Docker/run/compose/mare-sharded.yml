@@ -82,6 +82,7 @@ services:
     restart: on-failure
     environment:
       MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
+      MareSynchronos__DiscordChannelForMessages: "${DEV_MARE_DISCORDCHANNEL}"
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw

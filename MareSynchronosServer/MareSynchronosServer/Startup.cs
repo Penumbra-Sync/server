@@ -13,8 +13,6 @@ using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using Prometheus;
-using Microsoft.Extensions.Options;
-using Grpc.Net.ClientFactory;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -26,14 +24,19 @@ using StackExchange.Redis.Extensions.System.Text.Json;
 using MareSynchronos.API.SignalR;
 using MessagePack;
 using MessagePack.Resolvers;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using MareSynchronosServer.Controllers;
 
 namespace MareSynchronosServer;
 
 public class Startup
 {
-    public Startup(IConfiguration configuration)
+    private readonly ILogger<Startup> _logger;
+
+    public Startup(IConfiguration configuration, ILogger<Startup> logger)
     {
         Configuration = configuration;
+        _logger = logger;
     }
 
     public IConfiguration Configuration { get; }
@@ -68,16 +71,27 @@ public class Startup
         ConfigureMareServices(services, mareConfig);
 
         services.AddHealthChecks();
-        services.AddControllers();
+        services.AddControllers().ConfigureApplicationPartManager(a =>
+        {
+            a.FeatureProviders.Remove(a.FeatureProviders.OfType<ControllerFeatureProvider>().First());
+            if (mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerAddress), defaultValue: null) == null)
+            {
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareServerConfigurationController), typeof(MareAuthBaseConfigurationController), typeof(JwtController)));
+            }
+            else
+            {
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider());
+            }
+        });
     }
 
-    private static void ConfigureMareServices(IServiceCollection services, IConfigurationSection mareConfig)
+    private void ConfigureMareServices(IServiceCollection services, IConfigurationSection mareConfig)
     {
-        bool isMainServer = mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerGrpcAddress), defaultValue: null) == null;
+        bool isMainServer = mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerAddress), defaultValue: null) == null;
 
-        services.Configure<ServerConfiguration>(mareConfig);
-        services.Configure<MareConfigurationBase>(mareConfig);
-        services.Configure<MareConfigurationAuthBase>(mareConfig);
+        services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationBase>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
@@ -217,6 +231,7 @@ public class Startup
             {
                 policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Moderator | UserRequirements.Administrator));
             });
+            options.AddPolicy("Internal", new AuthorizationPolicyBuilder().RequireClaim(MareClaimTypes.Internal, "true").Build());
         });
     }
 
@@ -264,34 +279,9 @@ public class Startup
     {
         if (!isMainServer)
         {
-            var noRetryConfig = new MethodConfig
-            {
-                Names = { MethodName.Default },
-                RetryPolicy = null,
-            };
+            services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
+            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
 
-            services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
-            {
-                c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServerConfiguration.MainServerGrpcAddress)));
-            }).ConfigureChannel(c =>
-            {
-                c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-                c.HttpHandler = new SocketsHttpHandler()
-                {
-                    EnableMultipleHttp2Connections = true,
-                };
-            });
-
-            services.AddSingleton<IConfigurationService<ServerConfiguration>>(c => new MareConfigurationServiceClient<ServerConfiguration>(
-                c.GetService<ILogger<MareConfigurationServiceClient<ServerConfiguration>>>(),
-                c.GetService<IOptions<ServerConfiguration>>(),
-                c.GetService<GrpcClientFactory>(),
-                "MainServer"));
-            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(c => new MareConfigurationServiceClient<MareConfigurationAuthBase>(
-                c.GetService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
-                c.GetService<IOptions<MareConfigurationAuthBase>>(),
-                c.GetService<GrpcClientFactory>(),
-                "MainServer"));
             services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());
             services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
         }
@@ -358,12 +348,18 @@ public class Startup
 
             if (config.IsMain)
             {
-                endpoints.MapGrpcService<GrpcConfigurationService<ServerConfiguration>>().AllowAnonymous();
                 endpoints.MapGrpcService<GrpcClientMessageService>().AllowAnonymous();
             }
 
             endpoints.MapHealthChecks("/health").AllowAnonymous();
-            endpoints.MapControllers().AllowAnonymous();
+            endpoints.MapControllers();
+
+            foreach (var source in endpoints.DataSources.SelectMany(e => e.Endpoints).Cast<RouteEndpoint>())
+            {
+                if (source == null) continue;
+                _logger.LogInformation("Endpoint: {url} ", source.RoutePattern.RawText);
+            }
         });
+
     }
 }

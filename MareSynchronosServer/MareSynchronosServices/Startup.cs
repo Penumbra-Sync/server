@@ -7,9 +7,6 @@ using MareSynchronosShared.Utils;
 using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
-using Grpc.Net.ClientFactory;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.DependencyInjection;
 using StackExchange.Redis;
 
 namespace MareSynchronosServices;
@@ -52,18 +49,6 @@ public class Startup
         ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
         services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
 
-        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true
-            };
-        });
-
         services.AddGrpcClient<ClientMessageService.ClientMessageServiceClient>("MessageClient", c =>
         {
             c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
@@ -80,19 +65,12 @@ public class Startup
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.AddSingleton(Configuration);
+        services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<DiscordBotServices>();
         services.AddHostedService<DiscordBot>();
         services.AddSingleton<IConfigurationService<ServicesConfiguration>, MareConfigurationServiceServer<ServicesConfiguration>>();
-        services.AddSingleton<IConfigurationService<ServerConfiguration>>(c => new MareConfigurationServiceClient<ServerConfiguration>(
-                c.GetService<ILogger<MareConfigurationServiceClient<ServerConfiguration>>>(),
-                c.GetService<IOptions<ServerConfiguration>>(),
-                c.GetService<GrpcClientFactory>(),
-                "MainServer"));
-        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(c => new MareConfigurationServiceClient<MareConfigurationAuthBase>(
-            c.GetService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
-            c.GetService<IOptions<MareConfigurationAuthBase>>(),
-            c.GetService<GrpcClientFactory>(),
-            "MainServer"));
+        services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
+        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
         services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());

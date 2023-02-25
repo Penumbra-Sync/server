@@ -29,18 +29,21 @@ public class MareModule : InteractionModuleBase
     private readonly IServiceProvider _services;
     private readonly DiscordBotServices _botServices;
     private readonly IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
+    private readonly IConfigurationService<ServicesConfiguration> _mareServicesConfiguration;
     private readonly GrpcClientFactory _grpcClientFactory;
     private readonly IConnectionMultiplexer _connectionMultiplexer;
     private Random random = new();
 
     public MareModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
         IConfigurationService<ServerConfiguration> mareClientConfigurationService,
+        IConfigurationService<ServicesConfiguration> mareServicesConfiguration,
         GrpcClientFactory grpcClientFactory, IConnectionMultiplexer connectionMultiplexer)
     {
         _logger = logger;
         _services = services;
         _botServices = botServices;
         _mareClientConfigurationService = mareClientConfigurationService;
+        _mareServicesConfiguration = mareServicesConfiguration;
         _grpcClientFactory = grpcClientFactory;
         _connectionMultiplexer = connectionMultiplexer;
     }
@@ -313,6 +316,29 @@ public class MareModule : InteractionModuleBase
                 Type = messageType,
                 Uid = uid ?? string.Empty
             });
+
+            var discordChannelForMessages = _mareServicesConfiguration.GetValueOrDefault<ulong?>(nameof(ServicesConfiguration.DiscordChannelForMessages), null);
+            if (uid == null && discordChannelForMessages != null)
+            {
+                var discordChannel = await Context.Guild.GetChannelAsync(discordChannelForMessages.Value) as IMessageChannel;
+                if (discordChannel != null)
+                {
+                    var embedColor = messageType switch
+                    {
+                        MareSynchronosShared.Protos.MessageType.Info => Color.Blue,
+                        MareSynchronosShared.Protos.MessageType.Warning => new Color(255, 255, 0),
+                        MareSynchronosShared.Protos.MessageType.Error => Color.Red,
+                        _ => Color.Blue
+                    };
+
+                    EmbedBuilder eb = new();
+                    eb.WithTitle(messageType + " server message");
+                    eb.WithColor(embedColor);
+                    eb.WithDescription(message);
+
+                    await discordChannel.SendMessageAsync(embed: eb.Build());
+                }
+            }
 
             await RespondAsync("Message sent", ephemeral: true).ConfigureAwait(false);
         }

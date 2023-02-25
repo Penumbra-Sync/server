@@ -26,7 +26,7 @@ public class CachedFileProvider
         _fileStatisticsService = fileStatisticsService;
         _metrics = metrics;
         _generator = generator;
-        _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.RemoteCacheSourceUri), null);
+        _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress), null);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
         _httpClient = new HttpClient();
     }

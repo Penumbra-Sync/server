@@ -28,7 +28,7 @@
         "DbContextPoolSize": 512,
         "ShardName": "Main",
         "MetricsPort": 6050,
-        "MainServerGrpcAddress": "",
+        "MainServerAddress": "",
         "FailedAuthForTempBan": 5,
         "TempBanDurationInMinutes": 5,
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",

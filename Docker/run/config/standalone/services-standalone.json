@@ -28,8 +28,11 @@
         "DbContextPoolSize": 512,
         "ShardName": "Services",
         "MetricsPort": 6150,
-        "MainServerGrpcAddress": "http://mare-server:6005",
+        "MainServerAddress": "http://mare-server:6000/",
+        "MainServerGrpcAddress": "http://mare-server:6005/",
         "DiscordBotToken": "",
+        "DiscordChannelForMessages": "",
+        "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
         "RedisConnectionString": "redis,password=secretredispassword"
     },
     "AllowedHosts": "*",

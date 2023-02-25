@@ -1,24 +1,21 @@
 using Grpc.Net.Client.Configuration;
-using Grpc.Net.ClientFactory;
-using MareSynchronos.API;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosStaticFilesServer.Controllers;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Prometheus;
-using StackExchange.Redis;
 using System.Text;
 
 namespace MareSynchronosStaticFilesServer;
@@ -26,11 +23,14 @@ namespace MareSynchronosStaticFilesServer;
 public class Startup
 {
     private bool _isMain;
-    public Startup(IConfiguration configuration)
+    private readonly ILogger<Startup> _logger;
+
+    public Startup(IConfiguration configuration, ILogger<Startup> logger)
     {
         Configuration = configuration;
+        _logger = logger;
         var mareSettings = Configuration.GetRequiredSection("MareSynchronos");
-        _isMain = string.IsNullOrEmpty(mareSettings.GetValue(nameof(StaticFilesServerConfiguration.RemoteCacheSourceUri), string.Empty));
+        _isMain = string.IsNullOrEmpty(mareSettings.GetValue(nameof(StaticFilesServerConfiguration.MainFileServerAddress), string.Empty));
     }
 
     public IConfiguration Configuration { get; }
@@ -83,30 +83,6 @@ public class Startup
             RetryPolicy = null,
         };
 
-        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("FileServer", c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>(nameof(StaticFilesServerConfiguration.FileServerGrpcAddress)));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true,
-            };
-        });
-
-        services.AddGrpcClient<ConfigurationService.ConfigurationServiceClient>("MainServer", c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>(nameof(StaticFilesServerConfiguration.MainServerGrpcAddress)));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true,
-            };
-        });
-
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IConfigurationService<MareConfigurationAuthBase>>((o, s) =>
             {
@@ -144,26 +120,27 @@ public class Startup
         }
         else
         {
-            services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>>(p => new MareConfigurationServiceClient<StaticFilesServerConfiguration>(
-                p.GetRequiredService<ILogger<MareConfigurationServiceClient<StaticFilesServerConfiguration>>>(),
-                p.GetRequiredService<IOptions<StaticFilesServerConfiguration>>(),
-                p.GetRequiredService<GrpcClientFactory>(),
-                "FileServer"));
-
+            services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>, MareConfigurationServiceClient<StaticFilesServerConfiguration>>();
             services.AddHostedService(p => (MareConfigurationServiceClient<StaticFilesServerConfiguration>)p.GetService<IConfigurationService<StaticFilesServerConfiguration>>());
         }
 
-        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>>(p =>
-             new MareConfigurationServiceClient<MareConfigurationAuthBase>(
-                p.GetRequiredService<ILogger<MareConfigurationServiceClient<MareConfigurationAuthBase>>>(),
-                p.GetService<IOptions<MareConfigurationAuthBase>>(),
-                p.GetRequiredService<GrpcClientFactory>(), "MainServer")
-        );
+        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<RequestQueueService>();
         services.AddHostedService(p => p.GetService<RequestQueueService>());
-        services.AddControllers();
+        services.AddControllers().ConfigureApplicationPartManager(a =>
+        {
+            a.FeatureProviders.Remove(a.FeatureProviders.OfType<ControllerFeatureProvider>().First());
+            if (_isMain)
+            {
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareStaticFilesServerConfigurationController), typeof(CacheController), typeof(RequestController), typeof(ServerFilesController)));
+            }
+            else
+            {
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(CacheController), typeof(RequestController)));
+            }
+        });
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
 
@@ -198,7 +175,6 @@ public class Startup
         signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options => { });
 
         services.AddHealthChecks();
-        services.AddControllers();
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)

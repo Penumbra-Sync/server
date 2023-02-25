@@ -1,5 +1,4 @@
-﻿using System.Globalization;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
@@ -7,9 +6,11 @@ namespace MareSynchronosShared.Utils;
 
 public class MareConfigurationBase : IMareConfiguration
 {
+    public Uri MainServerAddress { get; set; }
     public int DbContextPoolSize { get; set; } = 100;
     public string ShardName { get; set; } = string.Empty;
     public int MetricsPort { get; set; }
+    public string Jwt { get; set; } = string.Empty;
 
     public T GetValue<T>(string key)
     {
@@ -39,6 +40,7 @@ public class MareConfigurationBase : IMareConfiguration
     {
         StringBuilder sb = new();
         sb.AppendLine(base.ToString());
+        sb.AppendLine($"{nameof(MainServerAddress)} => {MainServerAddress}");
         sb.AppendLine($"{nameof(ShardName)} => {ShardName}");
         sb.AppendLine($"{nameof(DbContextPoolSize)} => {DbContextPoolSize}");
         return sb.ToString();

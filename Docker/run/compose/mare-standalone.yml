@@ -28,6 +28,7 @@ services:
       - 6000:6000/tcp
     environment:
       MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
+      DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/server-standalone.json:/opt/MareSynchronosServer/appsettings.json
       - ../log/server-standalone/:/opt/MareSynchronosServer/logs/:rw
@@ -46,11 +47,15 @@ services:
     restart: on-failure
     environment:
       MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
+      MareSynchronos__DiscordChannelForMessages: "${DEV_MARE_DISCORDCHANNEL}"
+      DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json
       - ../log/services-standalone/:/opt/MareSynchronosServices/logs/:rw
       - postgres_socket:/var/run/postgresql/:rw
     depends_on:
+      mare-server:
+        condition: service_healthy
       postgres:
         condition: service_healthy
 
@@ -59,6 +64,8 @@ services:
     ports:
       - 6200:6200/tcp
     restart: on-failure
+    environment:
+      DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/files-standalone.json:/opt/MareSynchronosStaticFilesServer/appsettings.json
       - ../log/files-standalone/:/opt/MareSynchronosStaticFilesServer/logs/:rw

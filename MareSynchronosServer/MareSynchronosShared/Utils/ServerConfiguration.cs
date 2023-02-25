@@ -28,7 +28,6 @@ public class ServerConfiguration : MareConfigurationAuthBase
     {
         StringBuilder sb = new();
         sb.AppendLine(base.ToString());
-        sb.AppendLine($"{nameof(MainServerGrpcAddress)} => {MainServerGrpcAddress}");
         sb.AppendLine($"{nameof(CdnFullUrl)} => {CdnFullUrl}");
         sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration.Select(c => c.ToString()))}");
         sb.AppendLine($"{nameof(StaticFileServiceAddress)} => {StaticFileServiceAddress}");

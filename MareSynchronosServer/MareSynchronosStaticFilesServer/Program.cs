@@ -24,13 +24,21 @@ public class Program
         host.Run();
     }
 
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
+    public static IHostBuilder CreateHostBuilder(string[] args)
+    {
+        var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.ClearProviders();
+            builder.AddConsole();
+        });
+        var logger = loggerFactory.CreateLogger<Startup>();
+        return Host.CreateDefaultBuilder(args)
             .UseSystemd()
             .UseConsoleLifetime()
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);
-                webBuilder.UseStartup<Startup>();
+                webBuilder.UseStartup(ctx => new Startup(ctx.Configuration, logger));
             });
+    }
 }

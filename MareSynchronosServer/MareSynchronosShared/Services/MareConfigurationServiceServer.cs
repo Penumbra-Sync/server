@@ -6,31 +6,31 @@ namespace MareSynchronosShared.Services;
 
 public class MareConfigurationServiceServer<T> : IConfigurationService<T> where T : class, IMareConfiguration
 {
-    private readonly T _config;
+    private readonly IOptionsMonitor<T> _config;
     public bool IsMain => true;
 
-    public MareConfigurationServiceServer(IOptions<T> config)
+    public MareConfigurationServiceServer(IOptionsMonitor<T> config)
     {
-        _config = config.Value;
+        _config = config;
     }
 
     public T1 GetValueOrDefault<T1>(string key, T1 defaultValue)
     {
-        return _config.GetValueOrDefault<T1>(key, defaultValue);
+        return _config.CurrentValue.GetValueOrDefault<T1>(key, defaultValue);
     }
 
     public T1 GetValue<T1>(string key)
     {
-        return _config.GetValue<T1>(key);
+        return _config.CurrentValue.GetValue<T1>(key);
     }
 
     public override string ToString()
     {
-        var props = _config.GetType().GetProperties();
+        var props = _config.CurrentValue.GetType().GetProperties();
         StringBuilder sb = new();
         foreach (var prop in props)
         {
-            sb.AppendLine($"{prop.Name} (IsRemote: {prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()}) => {prop.GetValue(_config)}");
+            sb.AppendLine($"{prop.Name} (IsRemote: {prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()}) => {prop.GetValue(_config.CurrentValue)}");
         }
 
         sb.AppendLine(_config.ToString());

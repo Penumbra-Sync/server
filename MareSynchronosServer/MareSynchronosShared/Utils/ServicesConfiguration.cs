@@ -6,6 +6,7 @@ public class ServicesConfiguration : MareConfigurationBase
 {
     public string DiscordBotToken { get; set; } = string.Empty;
     public Uri MainServerGrpcAddress { get; set; } = null;
+    public ulong? DiscordChannelForMessages { get; set; } = null;
 
     public override string ToString()
     {

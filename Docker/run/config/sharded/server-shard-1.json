@@ -28,8 +28,9 @@
         "DbContextPoolSize": 512,
         "ShardName": "Shard 1",
         "MetricsPort": 6050,
-        "MainServerGrpcAddress": "http://mare-server:6005",
-        "RedisConnectionString": "redis,password=secretredispassword"
+        "MainServerAddress": "http://mare-server:6000",
+        "RedisConnectionString": "redis,password=secretredispassword",
+        "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring"
     },
     "AllowedHosts": "*",
     "Kestrel": {

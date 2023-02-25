@@ -1,43 +1,55 @@
-﻿using Grpc.Net.ClientFactory;
-using MareSynchronosShared.Protos;
-using MareSynchronosShared.Utils;
+﻿using MareSynchronosShared.Utils;
+using MareSynchronosStaticFilesServer;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using static MareSynchronosShared.Protos.ConfigurationService;
 
 namespace MareSynchronosShared.Services;
 
 public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationService<T> where T : class, IMareConfiguration
 {
-    private readonly T _config;
+    private readonly IOptionsMonitor<T> _config;
     private readonly ConcurrentDictionary<string, object> _cachedRemoteProperties = new(StringComparer.Ordinal);
     private readonly ILogger<MareConfigurationServiceClient<T>> _logger;
-    private readonly GrpcClientFactory _grpcClientFactory;
-    private readonly string _grpcClientName;
+    private readonly ServerTokenGenerator _serverTokenGenerator;
     private readonly CancellationTokenSource _updateTaskCts = new();
-    private ConfigurationServiceClient _configurationServiceClient;
     private bool _initialized = false;
+    private readonly HttpClient _httpClient;
 
-    public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptions<T> config, GrpcClientFactory grpcClientFactory, string grpcClientName)
+    private Uri GetRoute(string key, string value)
     {
-        _config = config.Value;
+        if (_config.CurrentValue.GetType() == typeof(ServerConfiguration))
+            return new Uri((_config.CurrentValue as ServerConfiguration).MainServerAddress, $"configuration/MareServerConfiguration/{nameof(MareServerConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+        if (_config.CurrentValue.GetType() == typeof(MareConfigurationAuthBase))
+            return new Uri((_config.CurrentValue as MareConfigurationAuthBase).MainServerAddress, $"configuration/MareAuthBaseConfiguration/{nameof(MareAuthBaseConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+        if (_config.CurrentValue.GetType() == typeof(ServicesConfiguration))
+            return new Uri((_config.CurrentValue as ServicesConfiguration).MainServerAddress, $"configuration/MareServicesConfiguration/{nameof(MareServicesConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+        if (_config.CurrentValue.GetType() == typeof(StaticFilesServerConfiguration))
+            return new Uri((_config.CurrentValue as StaticFilesServerConfiguration).MainFileServerAddress, $"configuration/MareStaticFilesServerConfiguration/{nameof(MareStaticFilesServerConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+
+        throw new NotSupportedException("Config is not supported to be gotten remotely");
+    }
+
+    public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptionsMonitor<T> config, ServerTokenGenerator serverTokenGenerator)
+    {
+        _config = config;
         _logger = logger;
-        _grpcClientFactory = grpcClientFactory;
-        _grpcClientName = grpcClientName;
+        _serverTokenGenerator = serverTokenGenerator;
+        _httpClient = new();
     }
 
     public bool IsMain => false;
 
     public T1 GetValueOrDefault<T1>(string key, T1 defaultValue)
     {
-        var prop = _config.GetType().GetProperty(key);
+        var prop = _config.CurrentValue.GetType().GetProperty(key);
         if (prop == null) return defaultValue;
         if (prop.PropertyType != typeof(T1)) throw new InvalidCastException($"Invalid Cast: Property {key} is {prop.PropertyType}, wanted: {typeof(T1)}");
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
@@ -46,7 +58,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
             return (T1)remotevalue;
         }
 
-        var value = prop.GetValue(_config);
+        var value = prop.GetValue(_config.CurrentValue);
         var defaultPropValue = prop.PropertyType.IsValueType ? Activator.CreateInstance(prop.PropertyType) : null;
         if (value == defaultPropValue) return defaultValue;
         return (T1)value;
@@ -54,7 +66,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
 
     public T1 GetValue<T1>(string key)
     {
-        var prop = _config.GetType().GetProperty(key);
+        var prop = _config.CurrentValue.GetType().GetProperty(key);
         if (prop == null) throw new KeyNotFoundException(key);
         if (prop.PropertyType != typeof(T1)) throw new InvalidCastException($"Invalid Cast: Property {key} is {prop.PropertyType}, wanted: {typeof(T1)}");
         bool isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), inherit: true).Any();
@@ -63,19 +75,19 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
             return (T1)remotevalue;
         }
 
-        var value = prop.GetValue(_config);
+        var value = prop.GetValue(_config.CurrentValue);
         return (T1)value;
     }
 
     public override string ToString()
     {
-        var props = _config.GetType().GetProperties();
+        var props = _config.CurrentValue.GetType().GetProperties();
         StringBuilder sb = new();
         foreach (var prop in props)
         {
             var isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any();
             var getValueMethod = GetType().GetMethod(nameof(GetValue)).MakeGenericMethod(prop.PropertyType);
-            var value = isRemote ? getValueMethod.Invoke(this, new[] { prop.Name }) : prop.GetValue(_config);
+            var value = isRemote ? getValueMethod.Invoke(this, new[] { prop.Name }) : prop.GetValue(_config.CurrentValue);
             if (typeof(IEnumerable).IsAssignableFrom(prop.PropertyType) && !typeof(string).IsAssignableFrom(prop.PropertyType))
             {
                 var enumVal = (IEnumerable)value;
@@ -90,15 +102,18 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
         return sb.ToString();
     }
 
-    private async Task<T1> GetValueFromGrpc<T1>(ConfigurationServiceClient client, string key, object defaultValue)
+    private async Task<T1> GetValueFromRemote<T1>(string key, object defaultValue)
     {
-        // grab stuff from grpc
         try
         {
-            _logger.LogInformation("Getting {key} from Grpc", key);
-            var response = await client.GetConfigurationEntryAsync(new KeyMessage { Key = key, Default = Convert.ToString(defaultValue, CultureInfo.InvariantCulture) }).ConfigureAwait(false);
-            _logger.LogInformation("Grpc Response for {key} = {value}", key, response.Value);
-            return JsonSerializer.Deserialize<T1>(response.Value);
+            _logger.LogInformation("Getting {key} from Http", key);
+            HttpRequestMessage msg = new(HttpMethod.Get, GetRoute(key, Convert.ToString(defaultValue, CultureInfo.InvariantCulture)));
+            msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _serverTokenGenerator.Token);
+            var response = await _httpClient.SendAsync(msg).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            _logger.LogInformation("Http Response for {key} = {value}", key, content);
+            return JsonSerializer.Deserialize<T1>(content);
         }
         catch (Exception ex)
         {
@@ -111,20 +126,19 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
     {
         while (!ct.IsCancellationRequested)
         {
-            _logger.LogInformation("Getting Properties from GRPC");
+            _logger.LogInformation("Getting Properties from Remote for " + typeof(T));
             try
             {
-                _configurationServiceClient = _grpcClientFactory.CreateClient<ConfigurationServiceClient>(_grpcClientName);
-                var properties = _config.GetType().GetProperties();
+                var properties = _config.CurrentValue.GetType().GetProperties();
                 foreach (var prop in properties)
                 {
                     try
                     {
                         if (!prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()) continue;
                         _logger.LogInformation("Checking Property " + prop.Name);
-                        var mi = GetType().GetMethod(nameof(GetValueFromGrpc), BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(prop.PropertyType);
+                        var mi = GetType().GetMethod(nameof(GetValueFromRemote), BindingFlags.NonPublic | BindingFlags.Instance).MakeGenericMethod(prop.PropertyType);
                         var defaultValue = prop.PropertyType.IsValueType ? Activator.CreateInstance(prop.PropertyType) : null;
-                        var task = (Task)mi.Invoke(this, new[] { _configurationServiceClient, prop.Name, defaultValue });
+                        var task = (Task)mi.Invoke(this, new[] { prop.Name, defaultValue });
                         await task.ConfigureAwait(false);
 
                         var resultProperty = task.GetType().GetProperty("Result");
@@ -147,12 +161,12 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
                     _initialized = true;
                 }
 
-                _logger.LogInformation("Saved properties from GRPC are now:");
+                _logger.LogInformation("Saved properties from HTTP are now:");
                 _logger.LogInformation(ToString());
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failure getting or updating properties from GRPC, retrying in 30min");
+                _logger.LogError(ex, "Failure getting or updating properties from HTTP, retrying in 30min");
             }
 
             await Task.Delay(TimeSpan.FromMinutes(30), ct).ConfigureAwait(false);
@@ -169,6 +183,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _updateTaskCts.Cancel();
+        _httpClient.Dispose();
         return Task.CompletedTask;
     }
 }
