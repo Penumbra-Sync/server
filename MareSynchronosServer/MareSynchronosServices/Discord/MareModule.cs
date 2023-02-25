@@ -225,7 +225,7 @@ public class MareModule : InteractionModuleBase
         _logger.LogInformation("SlashCommand:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(Recover));
 
-        await RespondWithModalAsync<LodestoneModal>($"recover_modal:{secondaryUid}").ConfigureAwait(false);
+        await RespondWithModalAsync<LodestoneModal>($"recover_modal:{secondaryUid ?? "-1"}").ConfigureAwait(false);
     }
 
     [SlashCommand("userinfo", "Shows you your user information")]
@@ -353,6 +353,8 @@ public class MareModule : InteractionModuleBase
     {
         _logger.LogInformation("Modal:{userId}:{Method}",
             Context.Interaction.User.Id, nameof(RecoverModal));
+
+        if (secondaryUid == "-1") secondaryUid = null;
 
         try
         {
