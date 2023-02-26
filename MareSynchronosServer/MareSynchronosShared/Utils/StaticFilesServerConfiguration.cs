@@ -14,6 +14,10 @@ public class StaticFilesServerConfiguration : MareConfigurationBase
     public int DownloadTimeoutSeconds { get; set; } = 5;
     public int DownloadQueueReleaseSeconds { get; set; } = 15;
     public int DownloadQueueClearLimit { get; set; } = 15000;
+    [RemoteConfiguration]
+    public Uri CdnFullUrl { get; set; } = null;
+    [RemoteConfiguration]
+    public List<CdnShardConfiguration> CdnShardConfiguration { get; set; } = new();
     public override string ToString()
     {
         StringBuilder sb = new();

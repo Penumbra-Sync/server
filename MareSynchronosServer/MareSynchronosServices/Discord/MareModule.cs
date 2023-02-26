@@ -461,7 +461,7 @@ public class MareModule : InteractionModuleBase
         };
 
         await db.Users.AddAsync(newUser).ConfigureAwait(false);
-        await db.Auth.AddAsync(auth).ConfigureAwait(false); ;
+        await db.Auth.AddAsync(auth).ConfigureAwait(false);
 
         await db.SaveChangesAsync().ConfigureAwait(false);
 

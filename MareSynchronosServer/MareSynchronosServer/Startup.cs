@@ -9,7 +9,6 @@ using MareSynchronosShared.Protos;
 using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Metrics;
 using MareSynchronosServer.Services;
-using MareSynchronosServer.RequirementHandlers;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using Prometheus;
@@ -26,6 +25,7 @@ using MessagePack;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using MareSynchronosServer.Controllers;
+using MareSynchronosShared.RequirementHandlers;
 
 namespace MareSynchronosServer;
 
@@ -51,9 +51,6 @@ public class Startup
 
         // configure metrics
         ConfigureMetrics(services);
-
-        // configure file service grpc connection
-        ConfigureFileServiceGrpcClient(services);
 
         // configure database
         ConfigureDatabase(services, mareConfig);
@@ -292,30 +289,6 @@ public class Startup
 
             services.AddGrpc();
         }
-    }
-
-    private static void ConfigureFileServiceGrpcClient(IServiceCollection services)
-    {
-        var defaultMethodConfig = new MethodConfig
-        {
-            Names = { MethodName.Default },
-            RetryPolicy = new RetryPolicy
-            {
-                MaxAttempts = 1000,
-                InitialBackoff = TimeSpan.FromSeconds(1),
-                MaxBackoff = TimeSpan.FromSeconds(5),
-                BackoffMultiplier = 1.5,
-                RetryableStatusCodes = { Grpc.Core.StatusCode.Unavailable },
-            },
-        };
-        services.AddGrpcClient<FileService.FileServiceClient>((serviceProvider, c) =>
-        {
-            c.Address = serviceProvider.GetRequiredService<IConfigurationService<ServerConfiguration>>()
-                .GetValue<Uri>(nameof(ServerConfiguration.StaticFileServiceAddress));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { defaultMethodConfig } };
-        });
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env, ILogger<Startup> logger)

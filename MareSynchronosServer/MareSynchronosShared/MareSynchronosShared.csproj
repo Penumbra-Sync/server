@@ -21,7 +21,8 @@
 		<PackageReference Include="ByteSize" Version="2.1.1" />
 		<PackageReference Include="EFCore.NamingConventions" Version="7.0.2" />
 		<PackageReference Include="Grpc.AspNetCore" Version="2.51.0" />
-		<PackageReference Include="Meziantou.Analyzer" Version="2.0.14">
+		<PackageReference Include="Karambolo.Extensions.Logging.File" Version="3.4.0" />
+		<PackageReference Include="Meziantou.Analyzer" Version="2.0.19">
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -30,16 +31,21 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.2" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.2">
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="7.0.3" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.3" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.3">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="7.0.2" />
-		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="6.26.0" />
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.1" />
-		<PackageReference Include="prometheus-net" Version="7.0.0" />
-		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.26.0" />
+		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="7.0.3" />
+		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="6.27.0" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.3" />
+		<PackageReference Include="prometheus-net" Version="8.0.0" />
+		<PackageReference Include="StackExchange.Redis" Version="2.6.96" />
+		<PackageReference Include="StackExchange.Redis.Extensions.AspNetCore" Version="9.0.0" />
+		<PackageReference Include="StackExchange.Redis.Extensions.Core" Version="9.0.0" />
+		<PackageReference Include="StackExchange.Redis.Extensions.System.Text.Json" Version="9.0.0" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.27.0" />
 		<PackageReference Include="System.Linq.Async" Version="6.0.1" />
 	</ItemGroup>
 
