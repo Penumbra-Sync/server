@@ -146,10 +146,11 @@ public class ServerFilesController : ControllerBase
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<IActionResult> UploadFile(string hash, CancellationToken requestAborted)
     {
+        _logger.LogInformation("{user} uploading file {file}", MareUser, hash);
         bool initiated = false;
         hash = hash.ToUpperInvariant();
         var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash && f.Uploaded);
-        if (existingFile == null) return Ok();
+        if (existingFile != null) return Ok();
 
         if (!_fileUploadLocks.TryGetValue(hash, out var fileLock))
         {
@@ -199,21 +200,20 @@ public class ServerFilesController : ControllerBase
             await Request.Body.CopyToAsync(compressedFileStream, requestAborted).ConfigureAwait(false);
 
             // decompress and copy the decompressed stream to memory
-            using var decompressedStream = new MemoryStream();
-            using var decompressor = new LZ4Stream(compressedFileStream, LZ4StreamMode.Decompress, LZ4StreamFlags.HighCompression);
-            await decompressor.CopyToAsync(decompressedStream).ConfigureAwait(false);
+            var data = LZ4Codec.Unwrap(compressedFileStream.ToArray());
+
+            // reset streams
+            compressedFileStream.Seek(0, SeekOrigin.Begin);
 
             // compute hash to verify
-            using var sha1 = SHA1.Create();
-            var hashString = BitConverter.ToString(await sha1.ComputeHashAsync(decompressedStream))
+            var hashString = BitConverter.ToString(SHA1.HashData(data))
                 .Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
             if (!string.Equals(hashString, hash, StringComparison.Ordinal))
-                throw new InvalidOperationException("Hash does not match file");
+                throw new InvalidOperationException($"Hash does not match file, computed: {hashString}, expected: {hash}");
 
             // save file
             var path = FilePathUtil.GetFilePath(_basePath, hash);
             using var fileStream = new FileStream(path, FileMode.Create);
-            compressedFileStream.Seek(0, SeekOrigin.Begin);
             await compressedFileStream.CopyToAsync(fileStream).ConfigureAwait(false);
 
             // update on db
