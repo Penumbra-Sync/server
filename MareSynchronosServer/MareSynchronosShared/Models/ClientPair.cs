@@ -14,4 +14,6 @@ public class ClientPair
     public bool AllowReceivingMessages { get; set; } = false;
     [Timestamp]
     public byte[] Timestamp { get; set; }
+    public bool DisableSounds { get; set; } = false;
+    public bool DisableAnimations { get; set; } = false;
 }

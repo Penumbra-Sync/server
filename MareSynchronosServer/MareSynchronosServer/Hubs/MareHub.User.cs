@@ -68,6 +68,10 @@ public partial class MareHub
                 OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
                 userToOther.OtherUserUID,
                 IsSynced = otherEntry != null,
+                DisableOwnAnimations = userToOther.DisableAnimations,
+                DisableOwnSounds = userToOther.DisableSounds,
+                DisableOtherAnimations = otherEntry == null ? false : otherEntry.DisableAnimations,
+                DisableOtherSounds = otherEntry == null ? false : otherEntry.DisableSounds
             };
 
         var results = await query.AsNoTracking().ToListAsync().ConfigureAwait(false);
@@ -76,9 +80,13 @@ public partial class MareHub
         {
             var ownPerm = UserPermissions.Paired;
             ownPerm.SetPaused(c.IsPaused);
+            ownPerm.SetDisableAnimations(c.DisableOwnAnimations);
+            ownPerm.SetDisableSounds(c.DisableOwnSounds);
             var otherPerm = UserPermissions.NoneSet;
             otherPerm.SetPaired(c.IsSynced);
             otherPerm.SetPaused(c.OtherIsPaused);
+            otherPerm.SetDisableAnimations(c.DisableOtherAnimations);
+            otherPerm.SetDisableSounds(c.DisableOtherSounds);
             return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
         }).ToList();
     }
