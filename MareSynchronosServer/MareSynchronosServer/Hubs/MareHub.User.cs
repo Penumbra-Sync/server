@@ -226,6 +226,8 @@ public partial class MareHub
         var pauseChange = pair.IsPaused != dto.Permissions.IsPaused();
 
         pair.IsPaused = dto.Permissions.IsPaused();
+        pair.DisableAnimations = dto.Permissions.IsDisableAnimations();
+        pair.DisableSounds = dto.Permissions.IsDisableSounds();
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 

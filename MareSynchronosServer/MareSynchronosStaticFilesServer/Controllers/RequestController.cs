@@ -60,18 +60,19 @@ public class RequestController : ControllerBase
     [Route(MareFiles.Request_RequestFile)]
     public async Task<IActionResult> RequestFile(string file)
     {
+        Guid g = Guid.NewGuid();
+
         try
         {
             await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
-            Guid g = Guid.NewGuid();
             _cachedFileProvider.DownloadFileWhenRequired(file);
-            await _requestQueue.EnqueueUser(new(g, MareUser, file));
             return Ok(g);
         }
         catch (OperationCanceledException) { return BadRequest(); }
         finally
         {
             _parallelRequestSemaphore.Release();
+            await _requestQueue.EnqueueUser(new(g, MareUser, file));
         }
     }
 
