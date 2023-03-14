@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using MareSynchronosShared.Utils;
 using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Abstractions;
+using Microsoft.Extensions.Logging;
 
-namespace MareSynchronosServer.RequirementHandlers;
+namespace MareSynchronosShared.RequirementHandlers;
 
 public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubInvocationContext>
 {

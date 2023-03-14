@@ -68,6 +68,10 @@ public partial class MareHub
                 OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
                 userToOther.OtherUserUID,
                 IsSynced = otherEntry != null,
+                DisableOwnAnimations = userToOther.DisableAnimations,
+                DisableOwnSounds = userToOther.DisableSounds,
+                DisableOtherAnimations = otherEntry == null ? false : otherEntry.DisableAnimations,
+                DisableOtherSounds = otherEntry == null ? false : otherEntry.DisableSounds
             };
 
         var results = await query.AsNoTracking().ToListAsync().ConfigureAwait(false);
@@ -76,9 +80,13 @@ public partial class MareHub
         {
             var ownPerm = UserPermissions.Paired;
             ownPerm.SetPaused(c.IsPaused);
+            ownPerm.SetDisableAnimations(c.DisableOwnAnimations);
+            ownPerm.SetDisableSounds(c.DisableOwnSounds);
             var otherPerm = UserPermissions.NoneSet;
             otherPerm.SetPaired(c.IsSynced);
             otherPerm.SetPaused(c.OtherIsPaused);
+            otherPerm.SetDisableAnimations(c.DisableOtherAnimations);
+            otherPerm.SetDisableSounds(c.DisableOtherSounds);
             return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
         }).ToList();
     }
@@ -215,7 +223,11 @@ public partial class MareHub
         ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (pair == null) return;
 
+        var pauseChange = pair.IsPaused != dto.Permissions.IsPaused();
+
         pair.IsPaused = dto.Permissions.IsPaused();
+        pair.DisableAnimations = dto.Permissions.IsDisableAnimations();
+        pair.DisableSounds = dto.Permissions.IsDisableSounds();
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -229,19 +241,22 @@ public partial class MareHub
         {
             await Clients.User(dto.User.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID), dto.Permissions)).ConfigureAwait(false);
 
-            var otherCharaIdent = await GetUserIdent(pair.OtherUserUID).ConfigureAwait(false);
-
-            if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
-
-            if (dto.Permissions.IsPaused())
+            if (pauseChange)
             {
-                await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
-                await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
-            }
-            else
-            {
-                await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherCharaIdent)).ConfigureAwait(false);
-                await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
+                var otherCharaIdent = await GetUserIdent(pair.OtherUserUID).ConfigureAwait(false);
+
+                if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
+
+                if (dto.Permissions.IsPaused())
+                {
+                    await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
+                    await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
+                }
+                else
+                {
+                    await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherCharaIdent)).ConfigureAwait(false);
+                    await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
+                }
             }
         }
     }

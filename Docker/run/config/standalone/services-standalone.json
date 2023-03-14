@@ -28,6 +28,7 @@
         "DbContextPoolSize": 512,
         "ShardName": "Services",
         "MetricsPort": 6150,
+        "CdnFullUrl": "http://localhost:6200/",
         "MainServerAddress": "http://mare-server:6000/",
         "MainServerGrpcAddress": "http://mare-server:6005/",
         "DiscordBotToken": "",

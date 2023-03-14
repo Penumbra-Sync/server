@@ -4,11 +4,11 @@
     },
     "Logging": {
         "LogLevel": {
-            "Default": "Warning",
-            "Microsoft": "Warning",
+            "Default": "Debug",
+            "Microsoft": "Debug",
             "Microsoft.Hosting.Lifetime": "Information",
-            "MareSynchronosStaticFilesServer": "Information",
-            "MareSynchronosShared": "Information",
+            "MareSynchronosStaticFilesServer": "Debug",
+            "MareSynchronosShared": "Debug",
             "System.IO": "Information"
         },
         "File": {
@@ -44,10 +44,6 @@
         "Endpoints": {
             "Http": {
                 "Url": "http://+:6200"
-            },
-            "Grpc": {
-                "Protocols": "Http2",
-                "Url": "http://+:6205"
             }
         }
     },

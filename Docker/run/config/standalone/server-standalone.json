@@ -36,13 +36,13 @@
             ""
         ],
         "RedisConnectionString": "redis,password=secretredispassword",
-        "CdnFullUrl": "http://localhost:6200/",
-        "StaticFileServiceAddress": "http://mare-files:6205",
+        "CdnFullUrl": "http://localhost:6200",
         "MaxExistingGroupsByUser": 3,
         "MaxJoinedGroupsByUser": 6,
         "MaxGroupUserCount": 100,
         "PurgeUnusedAccounts": false,
-        "PurgeUnusedAccountsPeriodInDays": 14
+        "PurgeUnusedAccountsPeriodInDays": 14,
+        "ExpectedClientVersion": "0.8.0"
     },
     "AllowedHosts": "*",
     "Kestrel": {

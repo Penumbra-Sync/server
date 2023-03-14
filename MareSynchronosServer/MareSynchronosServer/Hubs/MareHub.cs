@@ -7,7 +7,6 @@ using MareSynchronosServer.Utils;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
-using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
@@ -20,37 +19,33 @@ namespace MareSynchronosServer.Hubs;
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
     private readonly MareMetrics _mareMetrics;
-    private readonly FileService.FileServiceClient _fileServiceClient;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
     private readonly MareHubLogger _logger;
     private readonly MareDbContext _dbContext;
-    private readonly Uri _mainCdnFullUrl;
     private readonly string _shardName;
     private readonly int _maxExistingGroupsByUser;
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
-    private readonly IConfigurationService<ServerConfiguration> _configurationService;
     private readonly IRedisDatabase _redis;
-    private readonly ServerTokenGenerator _generator;
+    private readonly Uri _fileServerAddress;
+    private readonly Version _expectedClientVersion;
 
-    public MareHub(MareMetrics mareMetrics, FileService.FileServiceClient fileServiceClient,
+    public MareHub(MareMetrics mareMetrics,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IRedisDatabase redisDb, ServerTokenGenerator generator)
+        IRedisDatabase redisDb)
     {
         _mareMetrics = mareMetrics;
-        _fileServiceClient = fileServiceClient;
         _systemInfoService = systemInfoService;
-        _configurationService = configuration;
-        _mainCdnFullUrl = configuration.GetValue<Uri>(nameof(ServerConfiguration.CdnFullUrl));
         _shardName = configuration.GetValue<string>(nameof(ServerConfiguration.ShardName));
         _maxExistingGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxExistingGroupsByUser), 3);
         _maxJoinedGroupsByUser = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxJoinedGroupsByUser), 6);
         _maxGroupUserCount = configuration.GetValueOrDefault(nameof(ServerConfiguration.MaxGroupUserCount), 100);
+        _fileServerAddress = configuration.GetValue<Uri>(nameof(ServerConfiguration.CdnFullUrl));
+        _expectedClientVersion = configuration.GetValueOrDefault(nameof(ServerConfiguration.ExpectedClientVersion), new Version(0, 0, 0));
         _contextAccessor = contextAccessor;
         _redis = redisDb;
-        _generator = generator;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
@@ -73,6 +68,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {
+            CurrentClientVersion = _expectedClientVersion,
             ServerVersion = IMareHub.ApiVersion,
             IsAdmin = dbUser.IsAdmin,
             IsModerator = dbUser.IsModerator,
@@ -82,6 +78,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 ShardName = _shardName,
                 MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
                 MaxGroupUserCount = _maxGroupUserCount,
+                FileServerAddress = _fileServerAddress
             },
         };
     }

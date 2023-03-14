@@ -1,4 +1,3 @@
-using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
@@ -16,6 +15,10 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Prometheus;
+using StackExchange.Redis.Extensions.Core.Configuration;
+using StackExchange.Redis.Extensions.System.Text.Json;
+using StackExchange.Redis;
+using System.Net;
 using System.Text;
 
 namespace MareSynchronosStaticFilesServer;
@@ -77,12 +80,6 @@ public class Startup
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
 
-        var noRetryConfig = new MethodConfig
-        {
-            Names = { MethodName.Default },
-            RetryPolicy = null,
-        };
-
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IConfigurationService<MareConfigurationAuthBase>>((o, s) =>
             {
@@ -111,11 +108,6 @@ public class Startup
 
         if (_isMain)
         {
-            services.AddGrpc(o =>
-            {
-                o.MaxReceiveMessageSize = null;
-            });
-
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>, MareConfigurationServiceServer<StaticFilesServerConfiguration>>();
         }
         else
@@ -174,6 +166,39 @@ public class Startup
         var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
         signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options => { });
 
+        var options = ConfigurationOptions.Parse(redisConnection);
+
+        var endpoint = options.EndPoints[0];
+        string address = "";
+        int port = 0;
+        if (endpoint is DnsEndPoint dnsEndPoint) { address = dnsEndPoint.Host; port = dnsEndPoint.Port; }
+        if (endpoint is IPEndPoint ipEndPoint) { address = ipEndPoint.Address.ToString(); port = ipEndPoint.Port; }
+        var redisConfiguration = new RedisConfiguration()
+        {
+            AbortOnConnectFail = true,
+            KeyPrefix = "",
+            Hosts = new RedisHost[]
+            {
+                new RedisHost(){ Host = address, Port = port },
+            },
+            AllowAdmin = true,
+            ConnectTimeout = options.ConnectTimeout,
+            Database = 0,
+            Ssl = false,
+            Password = options.Password,
+            ServerEnumerationStrategy = new ServerEnumerationStrategy()
+            {
+                Mode = ServerEnumerationStrategy.ModeOptions.All,
+                TargetRole = ServerEnumerationStrategy.TargetRoleOptions.Any,
+                UnreachableServerAction = ServerEnumerationStrategy.UnreachableServerActionOptions.Throw,
+            },
+            MaxValueLength = 1024,
+            PoolSize = mareConfig.GetValue(nameof(ServerConfiguration.RedisPool), 50),
+            SyncTimeout = options.SyncTimeout,
+        };
+
+        services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
+
         services.AddHealthChecks();
     }
 
@@ -195,10 +220,6 @@ public class Startup
 
         app.UseEndpoints(e =>
         {
-            if (_isMain)
-            {
-                e.MapGrpcService<GrpcFileService>();
-            }
             e.MapHub<MareSynchronosServer.Hubs.MareHub>("/dummyhub");
             e.MapControllers();
             e.MapHealthChecks("/health").WithMetadata(new AllowAnonymousAttribute());

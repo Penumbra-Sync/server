@@ -65,6 +65,7 @@ services:
       - 6200:6200/tcp
     restart: on-failure
     environment:
+      MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
       DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/files-standalone.json:/opt/MareSynchronosStaticFilesServer/appsettings.json

@@ -6,11 +6,10 @@ public class ServerConfiguration : MareConfigurationAuthBase
 {
     public string RedisConnectionString { get; set; } = string.Empty;
     public int RedisPool { get; set; } = 50;
-
+    [RemoteConfiguration]
+    public Version ExpectedClientVersion { get; set; } = new Version(0, 0, 0);
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
-    [RemoteConfiguration]
-    public Uri StaticFileServiceAddress { get; set; } = null;
     [RemoteConfiguration]
     public int MaxExistingGroupsByUser { get; set; } = 3;
     [RemoteConfiguration]
@@ -21,18 +20,15 @@ public class ServerConfiguration : MareConfigurationAuthBase
     public bool PurgeUnusedAccounts { get; set; } = false;
     [RemoteConfiguration]
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
-    [RemoteConfiguration]
-    public List<CdnShardConfiguration> CdnShardConfiguration { get; set; } = new();
 
     public override string ToString()
     {
         StringBuilder sb = new();
         sb.AppendLine(base.ToString());
         sb.AppendLine($"{nameof(CdnFullUrl)} => {CdnFullUrl}");
-        sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration.Select(c => c.ToString()))}");
-        sb.AppendLine($"{nameof(StaticFileServiceAddress)} => {StaticFileServiceAddress}");
         sb.AppendLine($"{nameof(RedisConnectionString)} => {RedisConnectionString}");
         sb.AppendLine($"{nameof(RedisPool)} => {RedisPool}");
+        sb.AppendLine($"{nameof(ExpectedClientVersion)} => {ExpectedClientVersion}");
         sb.AppendLine($"{nameof(MaxExistingGroupsByUser)} => {MaxExistingGroupsByUser}");
         sb.AppendLine($"{nameof(MaxJoinedGroupsByUser)} => {MaxJoinedGroupsByUser}");
         sb.AppendLine($"{nameof(MaxGroupUserCount)} => {MaxGroupUserCount}");
