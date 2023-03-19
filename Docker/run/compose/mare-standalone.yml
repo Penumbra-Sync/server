@@ -2,6 +2,8 @@ services:
   postgres:
     image: postgres:latest
     restart: always
+    ports:
+      - 5432:5432/tcp
     environment:
       POSTGRES_DB: mare
       POSTGRES_USER: mare
@@ -48,6 +50,7 @@ services:
     environment:
       MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
       MareSynchronos__DiscordChannelForMessages: "${DEV_MARE_DISCORDCHANNEL}"
+      MareSynchronos__DiscordChannelForReports: "${DEV_MARE_DISCORDCHANNEL}"
       DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json

@@ -4,22 +4,28 @@ namespace MareSynchronosShared.Utils;
 
 public class ServerConfiguration : MareConfigurationAuthBase
 {
-    public string RedisConnectionString { get; set; } = string.Empty;
-    public int RedisPool { get; set; } = 50;
-    [RemoteConfiguration]
-    public Version ExpectedClientVersion { get; set; } = new Version(0, 0, 0);
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
+
+    [RemoteConfiguration]
+    public Version ExpectedClientVersion { get; set; } = new Version(0, 0, 0);
+
     [RemoteConfiguration]
     public int MaxExistingGroupsByUser { get; set; } = 3;
-    [RemoteConfiguration]
-    public int MaxJoinedGroupsByUser { get; set; } = 6;
+
     [RemoteConfiguration]
     public int MaxGroupUserCount { get; set; } = 100;
+
+    [RemoteConfiguration]
+    public int MaxJoinedGroupsByUser { get; set; } = 6;
+
     [RemoteConfiguration]
     public bool PurgeUnusedAccounts { get; set; } = false;
+
     [RemoteConfiguration]
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
+
+    public int RedisPool { get; set; } = 50;
 
     public override string ToString()
     {

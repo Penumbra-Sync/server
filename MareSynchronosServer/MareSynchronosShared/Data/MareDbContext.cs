@@ -31,19 +31,20 @@ public class MareDbContext : DbContext
     {
     }
 
-    public DbSet<User> Users { get; set; }
-    public DbSet<FileCache> Files { get; set; }
-    public DbSet<ClientPair> ClientPairs { get; set; }
-    public DbSet<ForbiddenUploadEntry> ForbiddenUploadEntries { get; set; }
-    public DbSet<Banned> BannedUsers { get; set; }
     public DbSet<Auth> Auth { get; set; }
-    public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
     public DbSet<BannedRegistrations> BannedRegistrations { get; set; }
-    public DbSet<Group> Groups { get; set; }
-    public DbSet<GroupPair> GroupPairs { get; set; }
+    public DbSet<Banned> BannedUsers { get; set; }
+    public DbSet<ClientPair> ClientPairs { get; set; }
+    public DbSet<FileCache> Files { get; set; }
+    public DbSet<ForbiddenUploadEntry> ForbiddenUploadEntries { get; set; }
     public DbSet<GroupBan> GroupBans { get; set; }
+    public DbSet<GroupPair> GroupPairs { get; set; }
+    public DbSet<Group> Groups { get; set; }
     public DbSet<GroupTempInvite> GroupTempInvites { get; set; }
-
+    public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
+    public DbSet<UserProfileData> UserProfileData { get; set; }
+    public DbSet<UserProfileDataReport> UserProfileReports { get; set; }
+    public DbSet<User> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,5 +74,8 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<GroupTempInvite>().HasKey(u => new { u.GroupGID, u.Invite });
         modelBuilder.Entity<GroupTempInvite>().HasIndex(c => c.GroupGID);
         modelBuilder.Entity<GroupTempInvite>().HasIndex(c => c.Invite);
+        modelBuilder.Entity<UserProfileData>().ToTable("user_profile_data");
+        modelBuilder.Entity<UserProfileData>().HasKey(c => c.UserUID);
+        modelBuilder.Entity<UserProfileDataReport>().ToTable("user_profile_data_reports");
     }
 }

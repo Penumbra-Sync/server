@@ -8,6 +8,9 @@ using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using StackExchange.Redis;
+using MessagePack.Resolvers;
+using MessagePack;
+using Microsoft.AspNetCore.Authorization;
 
 namespace MareSynchronosServices;
 
@@ -19,6 +22,20 @@ public class Startup
     }
 
     public IConfiguration Configuration { get; }
+
+    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+    {
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+
+        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4982));
+        metricServer.Start();
+
+        app.UseRouting();
+        app.UseEndpoints(e =>
+        {
+            e.MapHub<MareSynchronosServer.Hubs.MareHub>("/dummyhub");
+        });
+    }
 
     public void ConfigureServices(IServiceCollection services)
     {
@@ -61,6 +78,35 @@ public class Startup
             };
         });
 
+        var signalRServiceBuilder = services.AddSignalR(hubOptions =>
+        {
+            hubOptions.MaximumReceiveMessageSize = long.MaxValue;
+            hubOptions.EnableDetailedErrors = true;
+            hubOptions.MaximumParallelInvocationsPerClient = 10;
+            hubOptions.StreamBufferCapacity = 200;
+        }).AddMessagePackProtocol(opt =>
+        {
+            var resolver = CompositeResolver.Create(StandardResolverAllowPrivate.Instance,
+                BuiltinResolver.Instance,
+                AttributeFormatterResolver.Instance,
+                // replace enum resolver
+                DynamicEnumAsStringResolver.Instance,
+                DynamicGenericResolver.Instance,
+                DynamicUnionResolver.Instance,
+                DynamicObjectResolver.Instance,
+                PrimitiveObjectResolver.Instance,
+                // final fallback(last priority)
+                StandardResolver.Instance);
+
+            opt.SerializerOptions = MessagePackSerializerOptions.Standard
+                .WithCompression(MessagePackCompression.Lz4Block)
+                .WithResolver(resolver);
+        });
+
+        // configure redis for SignalR
+        var redisConnection = mareConfig.GetValue(nameof(MareConfigurationBase.RedisConnectionString), string.Empty);
+        signalRServiceBuilder.AddStackExchangeRedis(redisConnection, options => { });
+
         services.Configure<ServicesConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
@@ -74,13 +120,5 @@ public class Startup
 
         services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
         services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());
-    }
-
-    public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-    {
-        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
-
-        var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4982));
-        metricServer.Start();
     }
 }

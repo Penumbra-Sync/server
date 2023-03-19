@@ -12,26 +12,53 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    private async Task UpdateUserOnRedis()
-    {
-        await _redis.AddAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), StackExchange.Redis.When.Always, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
-    }
+    public string UserCharaIdent => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))?.Value ?? throw new Exception("No Chara Ident in Claims");
 
-    private async Task RemoveUserFromRedis()
-    {
-        await _redis.RemoveAsync("UID:" + UserUID, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
-    }
+    public string UserUID => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? throw new Exception("No UID in Claims");
 
-    private async Task<string> GetUserIdent(string uid)
+    private async Task DeleteUser(User user)
     {
-        if (uid.IsNullOrEmpty()) return string.Empty;
-        return await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
-    }
+        var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToListAsync().ConfigureAwait(false);
+        var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
+        var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == user.UID).ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+        var userProfileData = await _dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
 
-    private async Task<Dictionary<string, string>> GetOnlineUsers(List<string> uids)
-    {
-        var result = await _redis.GetAllAsync<string>(uids.Select(u => "UID:" + u).ToHashSet(StringComparer.Ordinal)).ConfigureAwait(false);
-        return uids.Where(u => result.TryGetValue("UID:" + u, out var ident) && !string.IsNullOrEmpty(ident)).ToDictionary(u => u, u => result["UID:" + u], StringComparer.Ordinal);
+        if (lodestone != null)
+        {
+            _dbContext.Remove(lodestone);
+        }
+
+        if (userProfileData != null)
+        {
+            _dbContext.Remove(userProfileData);
+        }
+
+        while (_dbContext.Files.Any(f => f.Uploader == user))
+        {
+            await Task.Delay(1000).ConfigureAwait(false);
+        }
+
+        _dbContext.ClientPairs.RemoveRange(ownPairData);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
+            .Where(u => u.OtherUser.UID == user.UID).AsNoTracking().ToListAsync().ConfigureAwait(false);
+        foreach (var pair in otherPairData)
+        {
+            await Clients.User(pair.UserUID).Client_UserRemoveClientPair(new(user.ToUserData())).ConfigureAwait(false);
+        }
+
+        foreach (var pair in groupPairs)
+        {
+            await UserLeaveGroup(new GroupDto(new GroupData(pair.GroupGID)), user.UID).ConfigureAwait(false);
+        }
+
+        _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
+
+        _dbContext.ClientPairs.RemoveRange(otherPairData);
+        _dbContext.Users.Remove(user);
+        _dbContext.Auth.Remove(auth);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 
     private async Task<List<PausedEntry>> GetAllPairedClientsWithPauseState(string? uid = null)
@@ -79,43 +106,21 @@ public partial class MareHub
         return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
     }
 
-    private async Task<List<string>> SendOnlineToAllPairedUsers()
+    private async Task<Dictionary<string, string>> GetOnlineUsers(List<string> uids)
     {
-        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        var self = await _dbContext.Users.AsNoTracking().SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
-        await Clients.Users(usersToSendDataTo).Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
-
-        return usersToSendDataTo;
+        var result = await _redis.GetAllAsync<string>(uids.Select(u => "UID:" + u).ToHashSet(StringComparer.Ordinal)).ConfigureAwait(false);
+        return uids.Where(u => result.TryGetValue("UID:" + u, out var ident) && !string.IsNullOrEmpty(ident)).ToDictionary(u => u, u => result["UID:" + u], StringComparer.Ordinal);
     }
 
-    private async Task<List<string>> SendOfflineToAllPairedUsers()
+    private async Task<string> GetUserIdent(string uid)
     {
-        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        var self = await _dbContext.Users.AsNoTracking().SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
-        await Clients.Users(usersToSendDataTo).Client_UserSendOffline(new(self.ToUserData())).ConfigureAwait(false);
-
-        return usersToSendDataTo;
+        if (uid.IsNullOrEmpty()) return string.Empty;
+        return await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
     }
 
-    public string UserUID => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? throw new Exception("No UID in Claims");
-    public string UserCharaIdent => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))?.Value ?? throw new Exception("No Chara Ident in Claims");
-
-    private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
+    private async Task RemoveUserFromRedis()
     {
-        uid ??= UserUID;
-        var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
-        if (userPair != null)
-        {
-            if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) return;
-            if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) return;
-        }
-
-        var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
-        if (!string.IsNullOrEmpty(groupUserIdent))
-        {
-            await Clients.User(uid).Client_UserSendOffline(new(new(groupUserPair.GroupUserUID))).ConfigureAwait(false);
-            await Clients.User(groupUserPair.GroupUserUID).Client_UserSendOffline(new(new(uid))).ConfigureAwait(false);
-        }
+        await _redis.RemoveAsync("UID:" + UserUID, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
     }
 
     private async Task SendGroupDeletedToAll(List<GroupPair> groupUsers)
@@ -134,15 +139,22 @@ public partial class MareHub
         }
     }
 
-    private async Task<(bool IsValid, GroupPair ReferredPair)> TryValidateUserInGroup(string gid, string? uid = null)
+    private async Task<List<string>> SendOfflineToAllPairedUsers()
     {
-        uid ??= UserUID;
+        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
+        var self = await _dbContext.Users.AsNoTracking().SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserSendOffline(new(self.ToUserData())).ConfigureAwait(false);
 
-        var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser)
-            .SingleOrDefaultAsync(g => g.GroupGID == gid && (g.GroupUserUID == uid || g.GroupUser.Alias == uid)).ConfigureAwait(false);
-        if (groupPair == null) return (false, null);
+        return usersToSendDataTo;
+    }
 
-        return (true, groupPair);
+    private async Task<List<string>> SendOnlineToAllPairedUsers()
+    {
+        var usersToSendDataTo = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
+        var self = await _dbContext.Users.AsNoTracking().SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
+        await Clients.Users(usersToSendDataTo).Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
+
+        return usersToSendDataTo;
     }
 
     private async Task<(bool IsValid, Group ReferredGroup)> TryValidateGroupModeratorOrOwner(string gid)
@@ -166,43 +178,38 @@ public partial class MareHub
         return (string.Equals(group.OwnerUID, UserUID, StringComparison.Ordinal), group);
     }
 
-    private async Task DeleteUser(User user)
+    private async Task<(bool IsValid, GroupPair ReferredPair)> TryValidateUserInGroup(string gid, string? uid = null)
     {
-        var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToListAsync().ConfigureAwait(false);
-        var auth = await _dbContext.Auth.SingleAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
-        var lodestone = await _dbContext.LodeStoneAuth.SingleOrDefaultAsync(a => a.User.UID == user.UID).ConfigureAwait(false);
-        var groupPairs = await _dbContext.GroupPairs.Where(g => g.GroupUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+        uid ??= UserUID;
 
-        if (lodestone != null)
+        var groupPair = await _dbContext.GroupPairs.Include(c => c.GroupUser)
+            .SingleOrDefaultAsync(g => g.GroupGID == gid && (g.GroupUserUID == uid || g.GroupUser.Alias == uid)).ConfigureAwait(false);
+        if (groupPair == null) return (false, null);
+
+        return (true, groupPair);
+    }
+
+    private async Task UpdateUserOnRedis()
+    {
+        await _redis.AddAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), StackExchange.Redis.When.Always, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
+    }
+
+    private async Task UserGroupLeave(GroupPair groupUserPair, List<PausedEntry> allUserPairs, string userIdent, string? uid = null)
+    {
+        uid ??= UserUID;
+        var userPair = allUserPairs.SingleOrDefault(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
+        if (userPair != null)
         {
-            _dbContext.Remove(lodestone);
+            if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) return;
+            if (userPair.IsPausedPerGroup is PauseInfo.Unpaused) return;
         }
 
-        while (_dbContext.Files.Any(f => f.Uploader == user))
+        var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
+        if (!string.IsNullOrEmpty(groupUserIdent))
         {
-            await Task.Delay(1000).ConfigureAwait(false);
+            await Clients.User(uid).Client_UserSendOffline(new(new(groupUserPair.GroupUserUID))).ConfigureAwait(false);
+            await Clients.User(groupUserPair.GroupUserUID).Client_UserSendOffline(new(new(uid))).ConfigureAwait(false);
         }
-
-        _dbContext.ClientPairs.RemoveRange(ownPairData);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
-            .Where(u => u.OtherUser.UID == user.UID).AsNoTracking().ToListAsync().ConfigureAwait(false);
-        foreach (var pair in otherPairData)
-        {
-            await Clients.User(pair.UserUID).Client_UserRemoveClientPair(new(user.ToUserData())).ConfigureAwait(false);
-        }
-
-        foreach (var pair in groupPairs)
-        {
-            await UserLeaveGroup(new GroupDto(new GroupData(pair.GroupGID)), user.UID).ConfigureAwait(false);
-        }
-
-        _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
-
-        _dbContext.ClientPairs.RemoveRange(otherPairData);
-        _dbContext.Users.Remove(user);
-        _dbContext.Auth.Remove(auth);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 
     private async Task UserLeaveGroup(GroupDto dto, string userUid)

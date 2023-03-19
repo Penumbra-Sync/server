@@ -7,15 +7,52 @@ namespace MareSynchronosShared.Utils;
 
 public static class SharedDbFunctions
 {
+    public static async Task<(bool, string)> MigrateOrDeleteGroup(MareDbContext context, Group group, List<GroupPair> groupPairs, int maxGroupsByUser)
+    {
+        bool groupHasMigrated = false;
+        string newOwner = string.Empty;
+        foreach (var potentialNewOwner in groupPairs.OrderByDescending(p => p.IsModerator).ThenByDescending(p => p.IsPinned).ToList())
+        {
+            groupHasMigrated = await TryMigrateGroup(context, group, potentialNewOwner.GroupUserUID, maxGroupsByUser).ConfigureAwait(false);
+
+            if (groupHasMigrated)
+            {
+                newOwner = potentialNewOwner.GroupUserUID;
+                potentialNewOwner.IsPinned = true;
+                potentialNewOwner.IsModerator = false;
+
+                await context.SaveChangesAsync().ConfigureAwait(false);
+                break;
+            }
+        }
+
+        if (!groupHasMigrated)
+        {
+            context.GroupPairs.RemoveRange(groupPairs);
+            context.Groups.Remove(group);
+
+            await context.SaveChangesAsync().ConfigureAwait(false);
+        }
+
+        return (groupHasMigrated, newOwner);
+    }
+
     public static async Task PurgeUser(ILogger _logger, User user, MareDbContext dbContext, int maxGroupsByUser)
     {
         _logger.LogInformation("Purging user: {uid}", user.UID);
 
         var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
 
+        var userProfileData = await dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
+
         if (lodestone != null)
         {
             dbContext.Remove(lodestone);
+        }
+
+        if (userProfileData != null)
+        {
+            dbContext.Remove(userProfileData);
         }
 
         var auth = dbContext.Auth.Single(a => a.UserUID == user.UID);
@@ -61,36 +98,6 @@ public static class SharedDbFunctions
         dbContext.Users.Remove(user);
 
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
-    }
-
-    public static async Task<(bool, string)> MigrateOrDeleteGroup(MareDbContext context, Group group, List<GroupPair> groupPairs, int maxGroupsByUser)
-    {
-        bool groupHasMigrated = false;
-        string newOwner = string.Empty;
-        foreach (var potentialNewOwner in groupPairs.OrderByDescending(p => p.IsModerator).ThenByDescending(p => p.IsPinned).ToList())
-        {
-            groupHasMigrated = await TryMigrateGroup(context, group, potentialNewOwner.GroupUserUID, maxGroupsByUser).ConfigureAwait(false);
-
-            if (groupHasMigrated)
-            {
-                newOwner = potentialNewOwner.GroupUserUID;
-                potentialNewOwner.IsPinned = true;
-                potentialNewOwner.IsModerator = false;
-
-                await context.SaveChangesAsync().ConfigureAwait(false);
-                break;
-            }
-        }
-
-        if (!groupHasMigrated)
-        {
-            context.GroupPairs.RemoveRange(groupPairs);
-            context.Groups.Remove(group);
-
-            await context.SaveChangesAsync().ConfigureAwait(false);
-        }
-
-        return (groupHasMigrated, newOwner);
     }
 
     private static async Task<bool> TryMigrateGroup(MareDbContext context, Group group, string potentialNewOwnerUid, int maxGroupsByUser)

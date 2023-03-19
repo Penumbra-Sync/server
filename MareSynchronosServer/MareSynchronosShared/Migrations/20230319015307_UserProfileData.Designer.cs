@@ -3,6 +3,7 @@ using System;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20230319015307_UserProfileData")]
+    partial class UserProfileData
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -425,18 +428,6 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("text")
                         .HasColumnName("base64profile_image");
 
-                    b.Property<bool>("FlaggedForReport")
-                        .HasColumnType("boolean")
-                        .HasColumnName("flagged_for_report");
-
-                    b.Property<bool>("IsNSFW")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_nsfw");
-
-                    b.Property<bool>("ProfileDisabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("profile_disabled");
-
                     b.Property<string>("UserDescription")
                         .HasColumnType("text")
                         .HasColumnName("user_description");
@@ -445,43 +436,6 @@ namespace MareSynchronosServer.Migrations
                         .HasName("pk_user_profile_data");
 
                     b.ToTable("user_profile_data", (string)null);
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.UserProfileDataReport", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("ReportDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("report_date");
-
-                    b.Property<string>("ReportReason")
-                        .HasColumnType("text")
-                        .HasColumnName("report_reason");
-
-                    b.Property<string>("ReportedUserUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("reported_user_uid");
-
-                    b.Property<string>("ReportingUserUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("reporting_user_uid");
-
-                    b.HasKey("Id")
-                        .HasName("pk_user_profile_data_reports");
-
-                    b.HasIndex("ReportedUserUID")
-                        .HasDatabaseName("ix_user_profile_data_reports_reported_user_uid");
-
-                    b.HasIndex("ReportingUserUID")
-                        .HasDatabaseName("ix_user_profile_data_reports_reporting_user_uid");
-
-                    b.ToTable("user_profile_data_reports", (string)null);
                 });
 
             modelBuilder.Entity("MareSynchronosShared.Models.Auth", b =>
@@ -623,23 +577,6 @@ namespace MareSynchronosServer.Migrations
                         .HasConstraintName("fk_user_profile_data_users_user_uid");
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.UserProfileDataReport", b =>
-                {
-                    b.HasOne("MareSynchronosShared.Models.User", "ReportedUser")
-                        .WithMany()
-                        .HasForeignKey("ReportedUserUID")
-                        .HasConstraintName("fk_user_profile_data_reports_users_reported_user_uid");
-
-                    b.HasOne("MareSynchronosShared.Models.User", "ReportingUser")
-                        .WithMany()
-                        .HasForeignKey("ReportingUserUID")
-                        .HasConstraintName("fk_user_profile_data_reports_users_reporting_user_uid");
-
-                    b.Navigation("ReportedUser");
-
-                    b.Navigation("ReportingUser");
                 });
 #pragma warning restore 612, 618
         }
