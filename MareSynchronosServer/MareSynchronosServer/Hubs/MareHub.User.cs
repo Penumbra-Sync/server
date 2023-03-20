@@ -387,13 +387,13 @@ public partial class MareHub
 
         var existingData = await _dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
 
-        if (existingData.FlaggedForReport)
+        if (existingData?.FlaggedForReport ?? false)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "Your profile is currently flagged for report and cannot be edited").ConfigureAwait(false);
             return;
         }
 
-        if (existingData.ProfileDisabled)
+        if (existingData?.ProfileDisabled ?? false)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "Your profile was permanently disabled and cannot be edited").ConfigureAwait(false);
             return;
