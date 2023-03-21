@@ -127,6 +127,26 @@ internal class DiscordBot : IHostedService
                     .ConfigureAwait(false);
                 break;
 
+            case "banreporting":
+                builder.AddField("Resolution", $"Dismissed by <@{userId}>, Reporting user banned");
+                builder.WithColor(Color.DarkGreen);
+                profile.FlaggedForReport = false;
+                var reportingUser = await dbContext.Auth.SingleAsync(u => u.UserUID == split[2]).ConfigureAwait(false);
+                reportingUser.IsBanned = true;
+                var regReporting = await dbContext.LodeStoneAuth.SingleAsync(u => u.User.UID == reportingUser.UserUID).ConfigureAwait(false);
+                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
+                {
+                    DiscordIdOrLodestoneAuth = regReporting.HashedLodestoneId
+                });
+                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
+                {
+                    DiscordIdOrLodestoneAuth = regReporting.DiscordId.ToString()
+                });
+                await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
+                        MessageSeverity.Warning, "The Mare profile report against you has been evaluated and your profile re-enabled.")
+                    .ConfigureAwait(false);
+                break;
+
             case "banprofile":
                 builder.AddField("Resolution", $"Profile has been banned by <@{userId}>");
                 builder.WithColor(Color.Red);
@@ -147,6 +167,15 @@ internal class DiscordBot : IHostedService
                 profile.Base64ProfileImage = null;
                 profile.UserDescription = null;
                 profile.ProfileDisabled = true;
+                var reg = await dbContext.LodeStoneAuth.SingleAsync(u => u.User.UID == offendingUser.UserUID).ConfigureAwait(false);
+                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
+                {
+                    DiscordIdOrLodestoneAuth = reg.HashedLodestoneId
+                });
+                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
+                {
+                    DiscordIdOrLodestoneAuth = reg.DiscordId.ToString()
+                });
                 await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
                     MessageSeverity.Warning, "The Mare profile report against you has been evaluated and your account permanently banned.")
                     .ConfigureAwait(false);
@@ -245,6 +274,7 @@ internal class DiscordBot : IHostedService
                         cb.WithButton("Dismiss Report", customId: $"mare-report-button-dismiss-{reportedUser.UID}", style: ButtonStyle.Primary);
                         cb.WithButton("Ban profile", customId: $"mare-report-button-banprofile-{reportedUser.UID}", style: ButtonStyle.Secondary);
                         cb.WithButton("Ban user", customId: $"mare-report-button-banuser-{reportedUser.UID}", style: ButtonStyle.Danger);
+                        cb.WithButton("Dismiss and Ban Reporting user", customId: $"mare-report-button-banreporting-{reportedUser.UID}-{reportingUser.UID}", style: ButtonStyle.Danger);
 
                         if (!string.IsNullOrEmpty(reportedUserProfile.Base64ProfileImage))
                         {
