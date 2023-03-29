@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
+using System.Security.Policy;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -24,6 +25,7 @@ namespace MareSynchronosStaticFilesServer.Controllers;
 [Route(MareFiles.ServerFiles)]
 public class ServerFilesController : ControllerBase
 {
+    private static readonly SemaphoreSlim _fileLockDictLock = new(1);
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _fileUploadLocks = new(StringComparer.Ordinal);
     private readonly string _basePath;
     private readonly CachedFileProvider _cachedFileProvider;
@@ -160,39 +162,27 @@ public class ServerFilesController : ControllerBase
     public async Task<IActionResult> UploadFile(string hash, CancellationToken requestAborted)
     {
         _logger.LogInformation("{user} uploading file {file}", MareUser, hash);
-        bool initiated = false;
         hash = hash.ToUpperInvariant();
         var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
-        if (!_fileUploadLocks.TryGetValue(hash, out var fileLock))
+        SemaphoreSlim fileLock;
+        lock (_fileUploadLocks)
         {
-            initiated = true;
-            _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
-            await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
         }
 
-        if (!initiated)
-        {
-            try
-            {
-                await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
-                var file = await _mareDbContext.Files.SingleOrDefaultAsync(c => c.Hash == hash).ConfigureAwait(false);
-                if (file != null)
-                {
-                    fileLock.Release();
-                    return Ok();
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                fileLock.Release();
-                return Ok();
-            }
-        }
+        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
 
         try
         {
+            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            if (existingFileCheck2 != null)
+            {
+                return Ok();
+            }
+
             // copy the request body to memory
             using var compressedFileStream = new MemoryStream();
             await Request.Body.CopyToAsync(compressedFileStream, requestAborted).ConfigureAwait(false);
@@ -228,7 +218,9 @@ public class ServerFilesController : ControllerBase
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, compressedFileStream.Length);
 
-            _fileUploadLocks.Remove(hash, out _);
+            _fileUploadLocks.TryRemove(hash, out _);
+
+            return Ok();
         }
         catch (Exception e)
         {
@@ -238,9 +230,6 @@ public class ServerFilesController : ControllerBase
         finally
         {
             fileLock.Release();
-            _fileUploadLocks.TryRemove(hash, out _);
         }
-
-        return Ok();
     }
 }
