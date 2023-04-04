@@ -136,7 +136,7 @@ public class ServerFilesController : ControllerBase
             };
         }
 
-        if (notCoveredFiles.Any())
+        if (notCoveredFiles.Any(p => !p.Value.IsForbidden))
         {
             await _hubContext.Clients.Users(filesSendDto.UIDs).SendAsync(nameof(IMareHub.Client_UserReceiveUploadStatus), new MareSynchronos.API.Dto.User.UserDto(new(MareUser)))
                 .ConfigureAwait(false);
@@ -217,6 +217,81 @@ public class ServerFilesController : ControllerBase
 
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, compressedFileStream.Length);
+
+            _fileUploadLocks.TryRemove(hash, out _);
+
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error during file upload");
+            return BadRequest();
+        }
+        finally
+        {
+            fileLock.Release();
+        }
+    }
+
+    [HttpPost(MareFiles.ServerFiles_UploadRaw + "/{hash}")]
+    [RequestSizeLimit(200 * 1024 * 1024)]
+    public async Task<IActionResult> UploadFileRaw(string hash, CancellationToken requestAborted)
+    {
+        _logger.LogInformation("{user} uploading raw file {file}", MareUser, hash);
+        hash = hash.ToUpperInvariant();
+        var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+        if (existingFile != null) return Ok();
+
+        SemaphoreSlim fileLock;
+        lock (_fileUploadLocks)
+        {
+            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
+        }
+
+        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+
+        try
+        {
+            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            if (existingFileCheck2 != null)
+            {
+                return Ok();
+            }
+
+            // copy the request body to memory
+            using var rawFileStream = new MemoryStream();
+            await Request.Body.CopyToAsync(rawFileStream, requestAborted).ConfigureAwait(false);
+
+            // reset streams
+            rawFileStream.Seek(0, SeekOrigin.Begin);
+
+            // compute hash to verify
+            var hashString = BitConverter.ToString(SHA1.HashData(rawFileStream.ToArray()))
+                .Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+            if (!string.Equals(hashString, hash, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Hash does not match file, computed: {hashString}, expected: {hash}");
+
+            // save file
+            var path = FilePathUtil.GetFilePath(_basePath, hash);
+            using var fileStream = new FileStream(path, FileMode.Create);
+            var lz4 = LZ4Codec.WrapHC(rawFileStream.ToArray(), 0, (int)rawFileStream.Length);
+            using var compressedStream = new MemoryStream(lz4);
+            await compressedStream.CopyToAsync(fileStream).ConfigureAwait(false);
+
+            // update on db
+            await _mareDbContext.Files.AddAsync(new FileCache()
+            {
+                Hash = hash,
+                UploadDate = DateTime.UtcNow,
+                UploaderUID = MareUser,
+                Size = compressedStream.Length,
+                Uploaded = true
+            }).ConfigureAwait(false);
+            await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, rawFileStream.Length);
 
             _fileUploadLocks.TryRemove(hash, out _);
 
