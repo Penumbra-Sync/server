@@ -148,32 +148,39 @@ public class RequestQueueService : IHostedService
             },
             async (i) =>
             {
-                if (!_queue.Any()) return;
-
-                if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
-
-                if (_userQueueRequests[i] == null)
+                try
                 {
-                    bool enqueued = false;
-                    while (!enqueued)
-                    {
-                        if (_queue.TryDequeue(out var request))
-                        {
-                            if (_queueRemoval.TryGetValue(request.RequestId, out string user) && string.Equals(user, request.User, StringComparison.Ordinal))
-                            {
-                                _logger.LogDebug("Request cancelled: {requestId} by {user}", request.RequestId, user);
-                                _queueRemoval.Remove(request.RequestId, out _);
-                                continue;
-                            }
+                    if (!_queue.Any()) return;
 
-                            await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
-                            enqueued = true;
-                        }
-                        else
+                    if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
+
+                    if (_userQueueRequests[i] == null)
+                    {
+                        bool enqueued = false;
+                        while (!enqueued)
                         {
-                            enqueued = true;
+                            if (_queue.TryDequeue(out var request))
+                            {
+                                if (_queueRemoval.TryGetValue(request.RequestId, out string user) && string.Equals(user, request.User, StringComparison.Ordinal))
+                                {
+                                    _logger.LogDebug("Request cancelled: {requestId} by {user}", request.RequestId, user);
+                                    _queueRemoval.Remove(request.RequestId, out _);
+                                    continue;
+                                }
+
+                                await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
+                                enqueued = true;
+                            }
+                            else
+                            {
+                                enqueued = true;
+                            }
                         }
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error during inside queue processing");
                 }
             });
         }
