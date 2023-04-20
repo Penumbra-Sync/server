@@ -11,4 +11,5 @@ public class GroupPair
     public bool IsModerator { get; set; }
     public bool DisableSounds { get; set; }
     public bool DisableAnimations { get; set; }
+    public bool DisableVFX { get; set; }
 }

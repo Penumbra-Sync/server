@@ -15,4 +15,5 @@ public class Group
     public string HashedPassword { get; set; }
     public bool DisableSounds { get; set; }
     public bool DisableAnimations { get; set; }
+    public bool DisableVFX { get; set; }
 }

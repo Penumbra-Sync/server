@@ -16,4 +16,5 @@ public class ClientPair
     public byte[] Timestamp { get; set; }
     public bool DisableSounds { get; set; } = false;
     public bool DisableAnimations { get; set; } = false;
+    public bool DisableVFX { get; set; } = false;
 }
