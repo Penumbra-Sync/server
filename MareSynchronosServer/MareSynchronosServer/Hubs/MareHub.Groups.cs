@@ -119,6 +119,7 @@ public partial class MareHub
         groupPair.DisableSounds = dto.GroupPairPermissions.IsDisableSounds();
         groupPair.DisableAnimations = dto.GroupPairPermissions.IsDisableAnimations();
         groupPair.IsPaused = dto.GroupPairPermissions.IsPaused();
+        groupPair.DisableVFX = dto.GroupPairPermissions.IsDisableVFX();
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -214,7 +215,8 @@ public partial class MareHub
             GroupGID = group.GID,
             GroupUserUID = UserUID,
             DisableAnimations = false,
-            DisableSounds = false
+            DisableSounds = false,
+            DisableVFX = false
         };
 
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);

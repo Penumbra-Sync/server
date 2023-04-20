@@ -28,6 +28,7 @@ namespace MareSynchronosServer.Utils
             permissions.SetDisableAnimations(group.DisableAnimations);
             permissions.SetDisableSounds(group.DisableSounds);
             permissions.SetDisableInvites(!group.InvitesEnabled);
+            permissions.SetDisableVFX(group.DisableVFX);
             return permissions;
         }
 
@@ -37,6 +38,7 @@ namespace MareSynchronosServer.Utils
             permissions.SetDisableAnimations(groupPair.DisableAnimations);
             permissions.SetDisableSounds(groupPair.DisableSounds);
             permissions.SetPaused(groupPair.IsPaused);
+            permissions.SetDisableVFX(groupPair.DisableVFX);
             return permissions;
         }
 

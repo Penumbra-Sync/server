@@ -137,8 +137,10 @@ public partial class MareHub
                 IsSynced = otherEntry != null,
                 DisableOwnAnimations = userToOther.DisableAnimations,
                 DisableOwnSounds = userToOther.DisableSounds,
+                DisableOwnVFX = userToOther.DisableVFX,
                 DisableOtherAnimations = otherEntry == null ? false : otherEntry.DisableAnimations,
-                DisableOtherSounds = otherEntry == null ? false : otherEntry.DisableSounds
+                DisableOtherSounds = otherEntry == null ? false : otherEntry.DisableSounds,
+                DisableOtherVFX = otherEntry == null ? false : otherEntry.DisableVFX
             };
 
         var results = await query.AsNoTracking().ToListAsync().ConfigureAwait(false);
@@ -149,11 +151,13 @@ public partial class MareHub
             ownPerm.SetPaused(c.IsPaused);
             ownPerm.SetDisableAnimations(c.DisableOwnAnimations);
             ownPerm.SetDisableSounds(c.DisableOwnSounds);
+            ownPerm.SetDisableVFX(c.DisableOwnVFX);
             var otherPerm = UserPermissions.NoneSet;
             otherPerm.SetPaired(c.IsSynced);
             otherPerm.SetPaused(c.OtherIsPaused);
             otherPerm.SetDisableAnimations(c.DisableOtherAnimations);
             otherPerm.SetDisableSounds(c.DisableOtherSounds);
+            otherPerm.SetDisableVFX(c.DisableOtherVFX);
             return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
         }).ToList();
     }
@@ -345,6 +349,7 @@ public partial class MareHub
         pair.IsPaused = dto.Permissions.IsPaused();
         pair.DisableAnimations = dto.Permissions.IsDisableAnimations();
         pair.DisableSounds = dto.Permissions.IsDisableSounds();
+        pair.DisableVFX = dto.Permissions.IsDisableVFX();
         _dbContext.Update(pair);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
