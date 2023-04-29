@@ -328,17 +328,17 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<bool> GroupJoin(GroupPasswordDto dto)
     {
-        var gid = dto.Group.GID.Trim();
+        var aliasOrGid = dto.Group.GID.Trim();
 
         _logger.LogCallInfo(MareHubLogger.Args(dto.Group));
 
-        var group = await _dbContext.Groups.Include(g => g.Owner).AsNoTracking().SingleOrDefaultAsync(g => g.GID == gid || g.Alias == gid).ConfigureAwait(false);
-        var existingPair = await _dbContext.GroupPairs.AsNoTracking().SingleOrDefaultAsync(g => g.GroupGID == gid && g.GroupUserUID == UserUID).ConfigureAwait(false);
-        var hashedPw = StringUtils.Sha256String(dto.Password);
-        var existingUserCount = await _dbContext.GroupPairs.AsNoTracking().CountAsync(g => g.GroupGID == gid).ConfigureAwait(false);
-        var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == UserUID).ConfigureAwait(false);
-        var isBanned = await _dbContext.GroupBans.AnyAsync(g => g.GroupGID == gid && g.BannedUserUID == UserUID).ConfigureAwait(false);
+        var group = await _dbContext.Groups.Include(g => g.Owner).AsNoTracking().SingleOrDefaultAsync(g => g.GID == aliasOrGid || g.Alias == aliasOrGid).ConfigureAwait(false);
         var groupGid = group?.GID ?? string.Empty;
+        var existingPair = await _dbContext.GroupPairs.AsNoTracking().SingleOrDefaultAsync(g => g.GroupGID == groupGid && g.GroupUserUID == UserUID).ConfigureAwait(false);
+        var hashedPw = StringUtils.Sha256String(dto.Password);
+        var existingUserCount = await _dbContext.GroupPairs.AsNoTracking().CountAsync(g => g.GroupGID == groupGid).ConfigureAwait(false);
+        var joinedGroups = await _dbContext.GroupPairs.CountAsync(g => g.GroupUserUID == UserUID).ConfigureAwait(false);
+        var isBanned = await _dbContext.GroupBans.AnyAsync(g => g.GroupGID == groupGid && g.BannedUserUID == UserUID).ConfigureAwait(false);
         var oneTimeInvite = await _dbContext.GroupTempInvites.SingleOrDefaultAsync(g => g.GroupGID == groupGid && g.Invite == hashedPw).ConfigureAwait(false);
 
         if (group == null
@@ -352,7 +352,7 @@ public partial class MareHub
 
         if (oneTimeInvite != null)
         {
-            _logger.LogCallInfo(MareHubLogger.Args(gid, "TempInvite", oneTimeInvite.Invite));
+            _logger.LogCallInfo(MareHubLogger.Args(aliasOrGid, "TempInvite", oneTimeInvite.Invite));
             _dbContext.Remove(oneTimeInvite);
         }
 
@@ -368,7 +368,7 @@ public partial class MareHub
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(gid, "Success"));
+        _logger.LogCallInfo(MareHubLogger.Args(aliasOrGid, "Success"));
 
         await Clients.User(UserUID).Client_GroupSendFullInfo(new GroupFullInfoDto(group.ToGroupData(), group.Owner.ToUserData(), group.GetGroupPermissions(), newPair.GetGroupPairPermissions(), newPair.GetGroupPairUserInfo())).ConfigureAwait(false);
 
@@ -389,7 +389,7 @@ public partial class MareHub
         {
             var userPair = allUserPairs.Single(p => string.Equals(p.UID, groupUserPair.GroupUserUID, StringComparison.Ordinal));
             if (userPair.IsDirectlyPaused != PauseInfo.NoConnection) continue;
-            if (userPair.IsPausedExcludingGroup(gid) is PauseInfo.Unpaused) continue;
+            if (userPair.IsPausedExcludingGroup(group.GID) is PauseInfo.Unpaused) continue;
             if (userPair.IsPausedPerGroup is PauseInfo.Paused) continue;
 
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
