@@ -21,7 +21,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
 
-        // don't allow adding yourself or nothing
+        // don't allow adding nothing
         var uid = dto.User.UID.Trim();
         if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(dto.User.UID)) return;
 
@@ -30,6 +30,12 @@ public partial class MareHub
         if (otherUser == null)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {dto.User.UID}, UID does not exist").ConfigureAwait(false);
+            return;
+        }
+
+        if (string.Equals(otherUser.UID, UserUID, StringComparison.Ordinal))
+        {
+            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"My god you can't pair with yourself why would you do that please stop").ConfigureAwait(false);
             return;
         }
 
