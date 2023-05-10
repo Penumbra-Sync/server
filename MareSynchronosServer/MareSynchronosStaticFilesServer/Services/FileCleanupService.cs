@@ -10,12 +10,12 @@ namespace MareSynchronosStaticFilesServer.Services;
 
 public class FileCleanupService : IHostedService
 {
-    private readonly MareMetrics _metrics;
-    private readonly ILogger<FileCleanupService> _logger;
-    private readonly IServiceProvider _services;
+    private readonly string _cacheDir;
     private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
     private readonly bool _isMainServer;
-    private readonly string _cacheDir;
+    private readonly ILogger<FileCleanupService> _logger;
+    private readonly MareMetrics _metrics;
+    private readonly IServiceProvider _services;
     private CancellationTokenSource _cleanupCts;
 
     public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
@@ -26,17 +26,6 @@ public class FileCleanupService : IHostedService
         _configuration = configuration;
         _isMainServer = configuration.IsMain;
         _cacheDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Cleanup Service started");
-
-        _cleanupCts = new();
-
-        _ = CleanUpTask(_cleanupCts.Token);
-
-        return Task.CompletedTask;
     }
 
     public async Task CleanUpTask(CancellationToken ct)
@@ -81,11 +70,22 @@ public class FileCleanupService : IHostedService
         }
     }
 
-    private void CleanUpStuckUploads(MareDbContext dbContext)
+    public Task StartAsync(CancellationToken cancellationToken)
     {
-        var pastTime = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10));
-        var stuckUploads = dbContext.Files.Where(f => !f.Uploaded && f.UploadDate < pastTime);
-        dbContext.Files.RemoveRange(stuckUploads);
+        _logger.LogInformation("Cleanup Service started");
+
+        _cleanupCts = new();
+
+        _ = CleanUpTask(_cleanupCts.Token);
+
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        _cleanupCts.Cancel();
+
+        return Task.CompletedTask;
     }
 
     private void CleanUpFilesBeyondSizeLimit(MareDbContext dbContext, CancellationToken ct)
@@ -126,6 +126,26 @@ public class FileCleanupService : IHostedService
         }
     }
 
+    private void CleanUpOrphanedFiles(List<FileCache> allFiles, FileInfo[] allPhysicalFiles, CancellationToken ct)
+    {
+        if (_isMainServer)
+        {
+            var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
+            foreach (var file in allPhysicalFiles)
+            {
+                if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    file.Delete();
+                    _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
+                }
+
+                ct.ThrowIfCancellationRequested();
+            }
+        }
+    }
+
     private async Task CleanUpOutdatedFiles(MareDbContext dbContext, CancellationToken ct)
     {
         try
@@ -142,6 +162,8 @@ public class FileCleanupService : IHostedService
             // clean up files in DB but not on disk or last access is expired
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(unusedRetention));
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
+            DirectoryInfo dir = new(_cacheDir);
+            var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
             var allFiles = await dbContext.Files.ToListAsync().ConfigureAwait(false);
             int fileCounter = 0;
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
@@ -193,7 +215,7 @@ public class FileCleanupService : IHostedService
             }
 
             // clean up files that are on disk but not in DB for some reason
-            CleanUpOrphanedFiles(allFiles, ct);
+            CleanUpOrphanedFiles(allFiles, allFilesInDir, ct);
         }
         catch (Exception ex)
         {
@@ -201,32 +223,10 @@ public class FileCleanupService : IHostedService
         }
     }
 
-    private void CleanUpOrphanedFiles(List<FileCache> allFiles, CancellationToken ct)
+    private void CleanUpStuckUploads(MareDbContext dbContext)
     {
-        if (_isMainServer)
-        {
-            var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
-            DirectoryInfo dir = new(_cacheDir);
-            var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
-            foreach (var file in allFilesInDir)
-            {
-                if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
-                {
-                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
-                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
-                    file.Delete();
-                    _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
-                }
-
-                ct.ThrowIfCancellationRequested();
-            }
-        }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        _cleanupCts.Cancel();
-
-        return Task.CompletedTask;
+        var pastTime = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(10));
+        var stuckUploads = dbContext.Files.Where(f => !f.Uploaded && f.UploadDate < pastTime);
+        dbContext.Files.RemoveRange(stuckUploads);
     }
 }
