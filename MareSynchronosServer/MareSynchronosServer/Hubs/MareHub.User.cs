@@ -203,10 +203,10 @@ public partial class MareHub
             var deserialized = JsonSerializer.Deserialize<JsonElement>(honorificJson);
             if (deserialized.TryGetProperty("Title", out var honorificTitle))
             {
-                var title = honorificTitle.GetString();
-                if (title.Contains('.') || title.Contains('/'))
+                var title = honorificTitle.GetString().Normalize(NormalizationForm.FormKD);
+                if (UrlRegex().IsMatch(title))
                 {
-                    await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "Your data was not pushed: The usage of . and / in the Honorific titles is prohibited. Remove them to be able to continue to push data.").ConfigureAwait(false);
+                    await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "Your data was not pushed: The usage of URLs the Honorific titles is prohibited. Remove them to be able to continue to push data.").ConfigureAwait(false);
                     throw new HubException("Invalid data provided, Honorific title invalid: " + title);
                 }
             }
@@ -504,6 +504,9 @@ public partial class MareHub
     [GeneratedRegex(@"^[A-Z0-9]{40}$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
     private static partial Regex HashRegex();
 
+    [GeneratedRegex("^[-a-zA-Z0-9@:%._\\+~#=]{1,256}[\\.,][a-zA-Z0-9()]{1,6}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&\\/=]*)$")]
+    private static partial Regex UrlRegex();
+
     private ClientPair OppositeEntry(string otherUID) =>
-                                _dbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == UserUID);
+                                    _dbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == UserUID);
 }
