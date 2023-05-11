@@ -1,4 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using MareSynchronos.API.Data;
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
@@ -193,6 +195,30 @@ public partial class MareHub
     public async Task UserPushData(UserCharaDataMessageDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto.CharaData.FileReplacements.Count));
+
+        // check for honorific containing . and /
+        try
+        {
+            var honorificJson = Encoding.Default.GetString(Convert.FromBase64String(dto.CharaData.HonorificData));
+            var deserialized = JsonSerializer.Deserialize<JsonElement>(honorificJson);
+            if (deserialized.TryGetProperty("Title", out var honorificTitle))
+            {
+                var title = honorificTitle.GetString();
+                if (title.Contains('.') || title.Contains('/'))
+                {
+                    await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "Your data was not pushed: The usage of . and / in the Honorific titles is prohibited. Remove them to be able to continue to push data.").ConfigureAwait(false);
+                    throw new HubException("Invalid data provided, Honorific title invalid: " + title);
+                }
+            }
+        }
+        catch (HubException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // swallow
+        }
 
         bool hadInvalidData = false;
         List<string> invalidGamePaths = new();
