@@ -41,6 +41,14 @@ public static class SharedDbFunctions
     {
         _logger.LogInformation("Purging user: {uid}", user.UID);
 
+        var secondaryUsers = await dbContext.Auth.Include(u => u.PrimaryUser)
+            .Where(u => u.PrimaryUserUID == user.UID).Select(c => c.User).ToListAsync().ConfigureAwait(false);
+
+        foreach (var secondaryUser in secondaryUsers)
+        {
+            await PurgeUser(_logger, secondaryUser, dbContext, maxGroupsByUser).ConfigureAwait(false);
+        }
+
         var lodestone = dbContext.LodeStoneAuth.SingleOrDefault(a => a.User.UID == user.UID);
 
         var userProfileData = await dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
