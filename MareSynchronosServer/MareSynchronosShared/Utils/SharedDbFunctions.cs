@@ -41,7 +41,7 @@ public static class SharedDbFunctions
     {
         _logger.LogInformation("Purging user: {uid}", user.UID);
 
-        var secondaryUsers = await dbContext.Auth.Include(u => u.PrimaryUser)
+        var secondaryUsers = await dbContext.Auth.Include(u => u.User)
             .Where(u => u.PrimaryUserUID == user.UID).Select(c => c.User).ToListAsync().ConfigureAwait(false);
 
         foreach (var secondaryUser in secondaryUsers)
