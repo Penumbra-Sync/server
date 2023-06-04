@@ -266,8 +266,8 @@ internal class DiscordBot : IHostedService
                         eb.AddField("Reported User", reportedUserSb.ToString());
                         eb.AddField("Reporting User", reportingUserSb.ToString());
                         eb.AddField("Report Date (UTC)", report.ReportDate);
-                        eb.AddField("Report Reason", report.ReportReason ?? "-");
-                        eb.AddField("Reported User Profile Description", string.IsNullOrEmpty(reportedUserProfile.UserDescription) ? "-" : reportedUserProfile.UserDescription);
+                        eb.AddField("Report Reason", string.IsNullOrWhiteSpace(report.ReportReason) ? "-" : report.ReportReason);
+                        eb.AddField("Reported User Profile Description", string.IsNullOrWhiteSpace(reportedUserProfile.UserDescription) ? "-" : reportedUserProfile.UserDescription);
                         eb.AddField("Reported User Profile Is NSFW", reportedUserProfile.IsNSFW);
 
                         var cb = new ComponentBuilder();
