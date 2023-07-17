@@ -1053,7 +1053,7 @@ public class MareModule : InteractionModuleBase
 
                     var existingLodestoneAuth = db.LodeStoneAuth.Include(u => u.User).SingleOrDefault(u => u.DiscordId != cmd.User.Id && u.HashedLodestoneId == lodestoneAuth.HashedLodestoneId);
 
-                    var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID);
+                    var previousAuth = await db.Auth.FirstOrDefaultAsync(u => u.UserUID == existingLodestoneAuth.User.UID && string.IsNullOrEmpty(u.PrimaryUserUID));
                     if (previousAuth != null)
                     {
                         db.Auth.Remove(previousAuth);
