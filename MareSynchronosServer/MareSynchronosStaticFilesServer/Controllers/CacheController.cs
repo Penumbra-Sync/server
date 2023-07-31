@@ -2,6 +2,8 @@
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
+using System.Text;
 
 namespace MareSynchronosStaticFilesServer.Controllers;
 
@@ -21,7 +23,7 @@ public class CacheController : ControllerBase
     }
 
     [HttpGet(MareFiles.Cache_Get)]
-    public async Task<IActionResult> GetFile(Guid requestId)
+    public async Task<IActionResult> GetFiles(Guid requestId)
     {
         _logger.LogDebug($"GetFile:{MareUser}:{requestId}");
 
@@ -29,13 +31,22 @@ public class CacheController : ControllerBase
 
         _requestQueue.ActivateRequest(requestId);
 
-        var fs = await _cachedFileProvider.GetAndDownloadFileStream(request.FileId);
-        if (fs == null)
+        Response.ContentType = "application/octet-stream";
+        var memoryStream = new MemoryStream();
+        var streamWriter = new BinaryWriter(memoryStream);
+
+        foreach (var file in request.FileIds)
         {
-            _requestQueue.FinishRequest(requestId);
-            return NotFound();
+            var fs = await _cachedFileProvider.GetAndDownloadFileStream(file);
+            streamWriter.Write(Encoding.ASCII.GetBytes("#" + file + ":" + fs.Length.ToString(CultureInfo.InvariantCulture) + "#"));
+            byte[] buffer = new byte[fs.Length];
+            _ = await fs.ReadAsync(buffer, HttpContext.RequestAborted);
+            streamWriter.Write(buffer);
         }
 
-        return _requestFileStreamResultFactory.Create(requestId, fs);
+        streamWriter.Flush();
+        memoryStream.Position = 0;
+
+        return _requestFileStreamResultFactory.Create(requestId, memoryStream);
     }
 }
