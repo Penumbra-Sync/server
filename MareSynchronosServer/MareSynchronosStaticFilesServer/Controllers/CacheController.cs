@@ -38,6 +38,7 @@ public class CacheController : ControllerBase
         foreach (var file in request.FileIds)
         {
             var fs = await _cachedFileProvider.GetAndDownloadFileStream(file);
+            if (fs == null) continue;
             streamWriter.Write(Encoding.ASCII.GetBytes("#" + file + ":" + fs.Length.ToString(CultureInfo.InvariantCulture) + "#"));
             byte[] buffer = new byte[fs.Length];
             _ = await fs.ReadAsync(buffer, HttpContext.RequestAborted);
