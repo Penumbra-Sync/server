@@ -21,7 +21,7 @@ public class RequestFileStreamResult : FileStreamResult
         _mareMetrics.IncGauge(MetricsAPI.GaugeCurrentDownloads);
 
         // forcefully release slot after secondsUntilRelease
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             try
             {

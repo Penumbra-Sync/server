@@ -40,7 +40,7 @@ public class RequestQueueService : IHostedService
 
     public async Task EnqueueUser(UserRequest request)
     {
-        _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, request.FileId);
+        _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, string.Join(", ", request.FileIds));
 
         if (_queueProcessingSemaphore.CurrentCount == 0)
         {
@@ -123,7 +123,7 @@ public class RequestQueueService : IHostedService
 
     private async Task DequeueIntoSlotAsync(UserRequest userRequest, int slot)
     {
-        _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, userRequest.FileId);
+        _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, string.Join(", ", userRequest.FileIds));
         _userQueueRequests[slot] = new(userRequest, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
         await _hubContext.Clients.User(userRequest.User).SendAsync(nameof(IMareHub.Client_DownloadReady), userRequest.RequestId).ConfigureAwait(false);
     }

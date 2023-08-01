@@ -17,9 +17,9 @@ public class RequestFileStreamResultFactory
         _configurationService = configurationService;
     }
 
-    public RequestFileStreamResult Create(Guid requestId, FileStream fs)
+    public RequestFileStreamResult Create(Guid requestId, MemoryStream ms)
     {
         return new RequestFileStreamResult(requestId, _configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueReleaseSeconds), 15),
-            _requestQueueService, _metrics, fs, "application/octet-stream");
+            _requestQueueService, _metrics, ms, "application/octet-stream");
     }
 }
