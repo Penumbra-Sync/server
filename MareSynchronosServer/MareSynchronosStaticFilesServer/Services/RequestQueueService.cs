@@ -72,10 +72,17 @@ public class RequestQueueService : IHostedService
 
     public void FinishRequest(Guid request)
     {
-        var req = _userQueueRequests.First(f => f != null && f.UserRequest.RequestId == request);
-        var idx = Array.IndexOf(_userQueueRequests, req);
-        _logger.LogDebug("Finishing Request {guid}, clearing slot {idx}", request, idx);
-        _userQueueRequests[idx] = null;
+        var req = _userQueueRequests.FirstOrDefault(f => f != null && f.UserRequest.RequestId == request);
+        if (req != null)
+        {
+            var idx = Array.IndexOf(_userQueueRequests, req);
+            _logger.LogDebug("Finishing Request {guid}, clearing slot {idx}", request, idx);
+            _userQueueRequests[idx] = null;
+        }
+        else
+        {
+            _logger.LogDebug("Request {guid} already cleared", request);
+        }
     }
 
     public bool IsActiveProcessing(Guid request, string user, out UserRequest userRequest)
