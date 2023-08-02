@@ -1,6 +1,21 @@
 ﻿namespace MareSynchronosStaticFilesServer.Utils;
 
-public record UserQueueEntry(UserRequest UserRequest, DateTime ExpirationDate)
+public class UserQueueEntry
 {
-    public bool IsActive { get; set; } = false;
+    public UserQueueEntry(UserRequest userRequest, DateTime expirationDate)
+    {
+        UserRequest = userRequest;
+        ExpirationDate = expirationDate;
+    }
+
+    public void MarkActive()
+    {
+        IsActive = true;
+        ActivationDate = DateTime.UtcNow;
+    }
+
+    public UserRequest UserRequest { get; }
+    public DateTime ExpirationDate { get; }
+    public bool IsActive { get; private set; } = false;
+    public DateTime ActivationDate { get; private set; }
 }

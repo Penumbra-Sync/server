@@ -20,6 +20,7 @@ public class RequestQueueService : IHostedService
     private readonly SemaphoreSlim _queueSemaphore = new(1);
     private readonly UserQueueEntry[] _userQueueRequests;
     private int _queueLimitForReset;
+    private readonly int _queueReleaseSeconds;
     private System.Timers.Timer _queueTimer;
 
     public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService, ILogger<RequestQueueService> logger, IHubContext<MareSynchronosServer.Hubs.MareHub> hubContext)
@@ -27,6 +28,7 @@ public class RequestQueueService : IHostedService
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
         _queueLimitForReset = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueClearLimit), 15000);
+        _queueReleaseSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueReleaseSeconds), 15);
         _metrics = metrics;
         _logger = logger;
         _hubContext = hubContext;
@@ -35,7 +37,8 @@ public class RequestQueueService : IHostedService
     public void ActivateRequest(Guid request)
     {
         _logger.LogDebug("Activating request {guid}", request);
-        _userQueueRequests.First(f => f != null && f.UserRequest.RequestId == request).IsActive = true;
+        var req = _userQueueRequests.First(f => f != null && f.UserRequest.RequestId == request);
+        req.MarkActive();
     }
 
     public async Task EnqueueUser(UserRequest request)
@@ -152,7 +155,17 @@ public class RequestQueueService : IHostedService
                 {
                     if (!_queue.Any()) return;
 
-                    if (_userQueueRequests[i] != null && !_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow) _userQueueRequests[i] = null;
+                    if (_userQueueRequests[i] != null && ((!_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow)))
+                    {
+                        _logger.LogDebug("Expiring inactive request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
+                        _userQueueRequests[i] = null;
+                    }
+
+                    if (_userQueueRequests[i] != null && (_userQueueRequests[i].IsActive && _userQueueRequests[i].ActivationDate < DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(_queueReleaseSeconds))))
+                    {
+                        _logger.LogDebug("Expiring active request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
+                        _userQueueRequests[i] = null;
+                    }
 
                     if (_userQueueRequests[i] == null)
                     {
