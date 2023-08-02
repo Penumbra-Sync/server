@@ -65,6 +65,9 @@ public class Startup
             MetricsAPI.GaugeFilesUniquePastHourSize,
             MetricsAPI.GaugeCurrentDownloads,
             MetricsAPI.GaugeDownloadQueue,
+            MetricsAPI.GaugeQueueFree,
+            MetricsAPI.GaugeQueueInactive,
+            MetricsAPI.GaugeQueueActive,
         }));
         services.AddSingleton<CachedFileProvider>();
         services.AddSingleton<FileStatisticsService>();

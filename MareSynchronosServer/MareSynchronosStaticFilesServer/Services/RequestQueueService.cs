@@ -193,6 +193,9 @@ public class RequestQueueService : IHostedService
             _queueProcessingSemaphore.Release();
         }
 
+        _metrics.SetGaugeTo(MetricsAPI.GaugeQueueFree, _userQueueRequests.Count(c => c == null));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeQueueActive, _userQueueRequests.Count(c => c != null && c.IsActive));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeQueueInactive, _userQueueRequests.Count(c => c != null && !c.IsActive));
         _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
     }
 }

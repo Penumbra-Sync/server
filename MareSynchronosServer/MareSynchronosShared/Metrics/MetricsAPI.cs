@@ -27,6 +27,9 @@ public class MetricsAPI
     public const string GaugeFilesUniquePastDay = "mare_files_unique_past_day";
     public const string GaugeFilesUniquePastDaySize = "mare_files_unique_past_day_size";
     public const string GaugeCurrentDownloads = "mare_current_downloads";
+    public const string GaugeQueueFree = "mare_download_queue_free";
+    public const string GaugeQueueActive = "mare_download_queue_active";
+    public const string GaugeQueueInactive = "mare_download_queue_inactive";
     public const string GaugeDownloadQueue = "mare_download_queue";
     public const string CounterFileRequests = "mare_files_requests";
     public const string CounterFileRequestSize = "mare_files_request_size";
