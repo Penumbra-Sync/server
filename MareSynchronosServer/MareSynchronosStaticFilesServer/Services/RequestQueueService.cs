@@ -160,8 +160,6 @@ public class RequestQueueService : IHostedService
             {
                 try
                 {
-                    if (!_queue.Any()) return;
-
                     if (_userQueueRequests[i] != null && ((!_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow)))
                     {
                         _logger.LogDebug("Expiring inactive request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
@@ -173,6 +171,8 @@ public class RequestQueueService : IHostedService
                         _logger.LogDebug("Expiring active request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
                         _userQueueRequests[i] = null;
                     }
+
+                    if (!_queue.Any()) return;
 
                     if (_userQueueRequests[i] == null)
                     {
