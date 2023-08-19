@@ -50,24 +50,34 @@ public class SecretKeyAuthenticatorService
                     _failedAuthorizations.Remove(ip, out _);
                 });
             }
-            return new(Success: false, Uid: null, TempBan: true, Permaban: false);
+            return new(Success: false, Uid: null, PrimaryUid: null, TempBan: true, Permaban: false);
         }
 
         using var scope = _serviceScopeFactory.CreateScope();
         using var context = scope.ServiceProvider.GetService<MareDbContext>();
         var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
+        var isBanned = authReply?.IsBanned ?? false;
+        var primaryUid = authReply.PrimaryUserUID ?? authReply.UserUID;
 
-        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, false, authReply?.IsBanned ?? false);
+        if (authReply.PrimaryUserUID != null)
+        {
+            var primaryUser = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.UserUID == authReply.PrimaryUserUID).ConfigureAwait(false);
+            isBanned = isBanned || primaryUser.IsBanned;
+        }
+
+        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, authReply.PrimaryUserUID ?? authReply.UserUID, TempBan: false, isBanned);
 
         if (reply.Success)
         {
             _metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
+            _metrics.IncGauge(MetricsAPI.GaugeAuthenticationCacheEntries);
 
             _cachedPositiveResponses[hashedSecretKey] = reply;
             _ = Task.Run(async () =>
             {
                 await Task.Delay(TimeSpan.FromMinutes(5)).ConfigureAwait(false);
                 _cachedPositiveResponses.TryRemove(hashedSecretKey, out _);
+                _metrics.DecGauge(MetricsAPI.GaugeAuthenticationCacheEntries);
             });
 
         }
@@ -85,7 +95,7 @@ public class SecretKeyAuthenticatorService
 
         _logger.LogWarning("Failed authorization from {ip}", ip);
         var whitelisted = _configurationService.GetValueOrDefault(nameof(MareConfigurationAuthBase.WhitelistedIps), new List<string>());
-        if (!whitelisted.Any(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
+        if (!whitelisted.Exists(w => ip.Contains(w, StringComparison.OrdinalIgnoreCase)))
         {
             if (_failedAuthorizations.TryGetValue(ip, out var auth))
             {
@@ -97,6 +107,6 @@ public class SecretKeyAuthenticatorService
             }
         }
 
-        return new(Success: false, Uid: null, TempBan: false, Permaban: false);
+        return new(Success: false, Uid: null, PrimaryUid: null, TempBan: false, Permaban: false);
     }
 }

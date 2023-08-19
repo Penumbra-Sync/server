@@ -5,10 +5,11 @@
     "Logging": {
         "LogLevel": {
             "Default": "Warning",
-            "Microsoft": "Warning",
+            "Microsoft": "trace",
             "Microsoft.Hosting.Lifetime": "Information",
+            "Microsoft.EntityFramework": "Warning",
             "MareSynchronosServer": "Information",
-            "MareSynchronosShared": "Information",
+            "MareSynchronosShared": "Debug",
             "System.IO": "Information"
         },
         "File": {
