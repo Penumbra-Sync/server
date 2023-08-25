@@ -17,9 +17,9 @@ public class RequestFileStreamResultFactory
         _configurationService = configurationService;
     }
 
-    public RequestFileStreamResult Create(Guid requestId, MemoryStream ms)
+    public RequestFileStreamResult Create(Guid requestId, Stream stream)
     {
         return new RequestFileStreamResult(requestId, _requestQueueService,
-            _metrics, ms, "application/octet-stream");
+            _metrics, stream, "application/octet-stream");
     }
 }

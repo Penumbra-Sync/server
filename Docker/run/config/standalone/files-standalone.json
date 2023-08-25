@@ -4,12 +4,12 @@
     },
     "Logging": {
         "LogLevel": {
-            "Default": "Debug",
-            "Microsoft": "Debug",
+            "Default": "Warning",
+            "Microsoft": "Warning",
             "Microsoft.Hosting.Lifetime": "Information",
             "MareSynchronosStaticFilesServer": "Debug",
             "MareSynchronosShared": "Debug",
-            "System.IO": "Information"
+            "System.IO": "Information",
         },
         "File": {
             "BasePath": "logs",
