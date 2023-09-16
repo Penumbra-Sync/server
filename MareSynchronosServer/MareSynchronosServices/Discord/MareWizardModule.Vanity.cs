@@ -14,7 +14,7 @@ public partial class MareWizardModule
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
         StringBuilder sb = new();
-        var user = await Context.Guild.GetCurrentUserAsync().ConfigureAwait(false);
+        var user = await Context.Guild.GetUserAsync(Context.User.Id).ConfigureAwait(false);
         bool userIsInVanityRole = _botServices.VanityRoles.Exists(u => user.RoleIds.Contains(u.Id)) || !_botServices.VanityRoles.Any();
         if (!userIsInVanityRole)
         {
