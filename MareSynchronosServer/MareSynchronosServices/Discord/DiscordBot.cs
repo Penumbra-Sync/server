@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 using System.Text;
+using System.Threading.Channels;
 
 namespace MareSynchronosServices.Discord;
 
@@ -54,7 +55,9 @@ internal class DiscordBot : IHostedService
         if (!string.IsNullOrEmpty(token))
         {
             _interactionModule = new InteractionService(_discordClient);
+            _interactionModule.Log += Log;
             await _interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
+            await _interactionModule.AddModuleAsync(typeof(MareWizardModule), _services).ConfigureAwait(false);
 
             await _discordClient.LoginAsync(TokenType.Bot, token).ConfigureAwait(false);
             await _discordClient.StartAsync().ConfigureAwait(false);
@@ -64,10 +67,10 @@ internal class DiscordBot : IHostedService
             _discordClient.InteractionCreated += async (x) =>
             {
                 var ctx = new SocketInteractionContext(_discordClient, x);
-                await _interactionModule.ExecuteCommandAsync(ctx, _services);
+                await _interactionModule.ExecuteCommandAsync(ctx, _services).ConfigureAwait(false);
             };
 
-            await _botServices.Start();
+            await _botServices.Start().ConfigureAwait(false);
             _ = UpdateStatusAsync();
         }
     }
@@ -78,7 +81,7 @@ internal class DiscordBot : IHostedService
         {
             _discordClient.ButtonExecuted -= ButtonExecutedHandler;
 
-            await _botServices.Stop();
+            await _botServices.Stop().ConfigureAwait(false);
             _processReportQueueCts?.Cancel();
             _updateStatusCts?.Cancel();
             _vanityUpdateCts?.Cancel();
@@ -197,16 +200,100 @@ internal class DiscordBot : IHostedService
 
     private async Task DiscordClient_Ready()
     {
-        var guild = (await _discordClient.Rest.GetGuildsAsync()).First();
+        var guild = (await _discordClient.Rest.GetGuildsAsync().ConfigureAwait(false)).First();
         await _interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
 
+        await CreateOrUpdateModal(guild).ConfigureAwait(false);
         _ = RemoveUsersNotInVanityRole();
         _ = ProcessReportsQueue();
+        _ = UpdateVanityRoles(guild);
+    }
+
+    private async Task UpdateVanityRoles(RestGuild guild)
+    {
+        while (!_updateStatusCts.IsCancellationRequested)
+        {
+            var vanityRoles = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), Array.Empty<ulong>());
+            if (vanityRoles.Length != _botServices.VanityRoles.Count)
+            {
+                _botServices.VanityRoles.Clear();
+                foreach (var role in vanityRoles)
+                {
+                    var restrole = guild.GetRole(role);
+                    if (restrole != null) _botServices.VanityRoles.Add(restrole);
+                }
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(30), _updateStatusCts.Token).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CreateOrUpdateModal(RestGuild guild)
+    {
+        _logger.LogInformation("Creating Wizard: Getting Channel");
+
+        var discordChannelForCommands = _configurationService.GetValue<ulong?>(nameof(ServicesConfiguration.DiscordChannelForCommands));
+        if (discordChannelForCommands == null)
+        {
+            _logger.LogWarning("Creating Wizard: No channel configured");
+            return;
+        }
+
+        IUserMessage? message = null;
+        var socketchannel = await _discordClient.GetChannelAsync(discordChannelForCommands.Value).ConfigureAwait(false) as SocketTextChannel;
+        var pinnedMessages = await socketchannel.GetPinnedMessagesAsync().ConfigureAwait(false);
+        foreach (var msg in pinnedMessages)
+        {
+            _logger.LogInformation("Creating Wizard: Checking message id {id}, author is: {author}, hasEmbeds: {embeds}", msg.Id, msg.Author.Id, msg.Embeds.Any());
+            if (msg.Author.Id == _discordClient.CurrentUser.Id
+                && msg.Embeds.Any())
+            {
+                message = await socketchannel.GetMessageAsync(msg.Id).ConfigureAwait(false) as IUserMessage;
+                break;
+            }
+        }
+
+        _logger.LogInformation("Creating Wizard: Found message id: {id}", message?.Id ?? 0);
+
+        await GenerateOrUpdateWizardMessage(socketchannel, message).ConfigureAwait(false);
+    }
+
+    private async Task GenerateOrUpdateWizardMessage(SocketTextChannel channel, IUserMessage? prevMessage)
+    {
+        EmbedBuilder eb = new EmbedBuilder();
+        eb.WithTitle("Mare Services Bot Interaction Service");
+        eb.WithDescription("Press \"Start\" to interact with this bot!" + Environment.NewLine + Environment.NewLine
+            + "You can handle all of your Mare account needs in this server through the easy to use interactive bot prompt. Just follow the instructions!");
+        eb.WithThumbnailUrl("https://raw.githubusercontent.com/Penumbra-Sync/repo/main/MareSynchronos/images/icon.png");
+        var cb = new ComponentBuilder();
+        cb.WithButton("Start", style: ButtonStyle.Primary, customId: "wizard-home:true", emote: Emoji.Parse("➡️"));
+        if (prevMessage == null)
+        {
+            var msg = await channel.SendMessageAsync(embed: eb.Build(), components: cb.Build()).ConfigureAwait(false);
+            await msg.PinAsync().ConfigureAwait(false);
+        }
+        else
+        {
+            await prevMessage.ModifyAsync(p =>
+            {
+                p.Embed = eb.Build();
+                p.Components = cb.Build();
+            }).ConfigureAwait(false);
+        }
     }
 
     private Task Log(LogMessage msg)
     {
-        _logger.LogInformation("{msg}", msg);
+        switch (msg.Severity)
+        {
+            case LogSeverity.Critical:
+            case LogSeverity.Error:
+                _logger.LogError(msg.Exception, msg.Message); break;
+            case LogSeverity.Warning:
+                _logger.LogWarning(msg.Exception, msg.Message); break;
+            default:
+                _logger.LogInformation(msg.Message); break;
+        }
 
         return Task.CompletedTask;
     }

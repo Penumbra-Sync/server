@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using Discord.Rest;
+using Discord.WebSocket;
 using MareSynchronosShared.Metrics;
 
 namespace MareSynchronosServices.Discord;
@@ -8,10 +10,13 @@ public class DiscordBotServices
     public readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
     public ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
     public ConcurrentDictionary<ulong, string> DiscordRelinkLodestoneMapping = new();
+    public ConcurrentDictionary<ulong, bool> DiscordVerifiedUsers { get; } = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
+    public ConcurrentDictionary<ulong, ulong> ValidInteractions { get; } = new();
+    public List<RestRole> VanityRoles { get; set; } = new();
     private readonly IServiceProvider _serviceProvider;
-    private CancellationTokenSource? verificationTaskCts;
+    private CancellationTokenSource verificationTaskCts;
 
     public DiscordBotServices(IServiceProvider serviceProvider, ILogger<DiscordBotServices> logger, MareMetrics metrics)
     {
