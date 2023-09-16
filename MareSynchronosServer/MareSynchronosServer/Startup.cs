@@ -276,7 +276,6 @@ public class Startup
             MetricsAPI.GaugeAvailableWorkerThreads,
             MetricsAPI.GaugeGroups,
             MetricsAPI.GaugeGroupPairs,
-            MetricsAPI.GaugeGroupPairsPaused,
             MetricsAPI.GaugeUsersRegistered,
             MetricsAPI.GaugeAuthenticationCacheEntries,
         }));

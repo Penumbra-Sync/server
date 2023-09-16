@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using MareSynchronos.API.Data;
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
+using MareSynchronos.API.Dto;
 using MareSynchronos.API.Dto.User;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
@@ -18,6 +19,7 @@ public partial class MareHub
 {
     private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
 
+    // TODO: needed, requires change
     [Authorize(Policy = "Identified")]
     public async Task UserAddPair(UserDto dto)
     {
@@ -59,29 +61,59 @@ public partial class MareHub
 
         ClientPair wl = new ClientPair()
         {
-            IsPaused = false,
             OtherUser = otherUser,
             User = user,
         };
         await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        var existingPermissions = await _dbContext.Permissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID && f.OtherUserUID == otherUser.UID).ConfigureAwait(false);
+        if (existingPermissions == null)
+        {
+            var ownDefaultPermissions = await _dbContext.UserDefaultPreferredPermissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID).ConfigureAwait(false);
+
+            existingPermissions = new UserPermissionSet()
+            {
+                User = user,
+                OtherUser = otherUser,
+                DisableAnimations = ownDefaultPermissions.DisableIndividualAnimations,
+                DisableSounds = ownDefaultPermissions.DisableIndividualSounds,
+                DisableVFX = ownDefaultPermissions.DisableIndividualVFX,
+                IsPaused = false,
+                Sticky = ownDefaultPermissions.IndividualIsSticky
+            };
+
+            await _dbContext.Permissions.AddAsync(existingPermissions).ConfigureAwait(false);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
+
         // get the opposite entry of the client pair
         var otherEntry = OppositeEntry(otherUser.UID);
         var otherIdent = await GetUserIdent(otherUser.UID).ConfigureAwait(false);
 
         var ownPerm = UserPermissions.Paired;
+        ownPerm.SetPaused(existingPermissions.IsPaused);
+        ownPerm.SetDisableAnimations(existingPermissions.DisableAnimations);
+        ownPerm.SetDisableSounds(existingPermissions.DisableSounds);
+        ownPerm.SetDisableVFX(existingPermissions.DisableVFX);
+        ownPerm.SetSticky(existingPermissions.Sticky);
+
+        var otherPermissions = await _dbContext.Permissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == otherUser.UID && f.OtherUserUID == UserUID).ConfigureAwait(false);
         var otherPerm = UserPermissions.NoneSet;
         otherPerm.SetPaired(otherEntry != null);
-        otherPerm.SetPaused(otherEntry?.IsPaused ?? false);
-        var userPairResponse = new UserPairDto(otherUser.ToUserData(), ownPerm, otherPerm);
+        otherPerm.SetPaused(otherPermissions?.IsPaused ?? false);
+        otherPerm.SetDisableAnimations(otherPermissions?.DisableAnimations ?? false);
+        otherPerm.SetDisableSounds(otherPermissions?.DisableSounds ?? false);
+        otherPerm.SetDisableVFX(otherPermissions?.DisableVFX ?? false);
+
+        var userPairResponse = new UserPairDto(otherUser.ToUserData(), new List<string>(), ownPerm, otherPerm);
         await Clients.User(user.UID).Client_UserAddClientPair(userPairResponse).ConfigureAwait(false);
 
         // check if other user is online
         if (otherIdent == null || otherEntry == null) return;
 
         // send push with update to other user if other user is online
-        await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), otherPerm, ownPerm)).ConfigureAwait(false);
+        await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), new List<string>(), otherPerm, ownPerm)).ConfigureAwait(false);
 
         if (!otherPerm.IsPaused())
         {
@@ -90,6 +122,7 @@ public partial class MareHub
         }
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserDelete()
     {
@@ -105,6 +138,7 @@ public partial class MareHub
         await DeleteUser(userEntry).ConfigureAwait(false);
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task<List<OnlineUserIdentDto>> UserGetOnlinePairs()
     {
@@ -116,60 +150,61 @@ public partial class MareHub
         return pairs.Select(p => new OnlineUserIdentDto(new UserData(p.Key), p.Value)).ToList();
     }
 
+    // todo: needed, requires adjustment for individual permissions, requires new dto
     [Authorize(Policy = "Identified")]
     public async Task<List<UserPairDto>> UserGetPairedClients()
     {
         _logger.LogCallInfo();
 
-        var query =
-            from userToOther in _dbContext.ClientPairs
-            join otherToUser in _dbContext.ClientPairs
+        var allUserPairsWithPermissions =
+            from otherUser in
+                (GetAllPairs(UserUID)
+                    .GroupBy(g => g.UID, g => g)
+                    .Select(g => new { UID = g.Key, g.First().Alias, GIDs = g.Where(g => g.GID != "DIRECT").Select(f => f.GID), IsPaired = g.Max(f => f.IsPaired) }))
+            join permissionsForSelf in _dbContext.Permissions
+            on new
+            {
+                user = UserUID,
+                other = otherUser.UID,
+            } equals new
+            {
+                user = permissionsForSelf.UserUID,
+                other = permissionsForSelf.OtherUserUID,
+            } into leftJoin2
+            from ownPermissions in leftJoin2.DefaultIfEmpty()
+            join permissionsForOther in _dbContext.Permissions
                 on new
                 {
-                    user = userToOther.UserUID,
-                    other = userToOther.OtherUserUID,
+                    user = otherUser.UID,
+                    other = UserUID,
                 } equals new
                 {
-                    user = otherToUser.OtherUserUID,
-                    other = otherToUser.UserUID,
-                } into leftJoin
-            from otherEntry in leftJoin.DefaultIfEmpty()
-            where
-                userToOther.UserUID == UserUID
+                    user = permissionsForOther.OtherUserUID,
+                    other = permissionsForOther.UserUID,
+                } into leftJoin3
+            from otherPermissions in leftJoin3.DefaultIfEmpty()
             select new
             {
-                userToOther.OtherUser.Alias,
-                userToOther.IsPaused,
-                OtherIsPaused = otherEntry != null && otherEntry.IsPaused,
-                userToOther.OtherUserUID,
-                IsSynced = otherEntry != null,
-                DisableOwnAnimations = userToOther.DisableAnimations,
-                DisableOwnSounds = userToOther.DisableSounds,
-                DisableOwnVFX = userToOther.DisableVFX,
-                DisableOtherAnimations = otherEntry == null ? false : otherEntry.DisableAnimations,
-                DisableOtherSounds = otherEntry == null ? false : otherEntry.DisableSounds,
-                DisableOtherVFX = otherEntry == null ? false : otherEntry.DisableVFX
+                OtherUserUID = otherUser.UID,
+                otherUser.Alias,
+                OwnPermissions = ownPermissions,
+                OtherPermissions = otherPermissions,
+                IsSynced = otherUser.IsPaired,
+                Groups = otherUser.GIDs,
             };
 
-        var results = await query.AsNoTracking().ToListAsync().ConfigureAwait(false);
 
-        return results.Select(c =>
+        return (await allUserPairsWithPermissions.AsNoTracking().ToListAsync().ConfigureAwait(false))
+            .Select(c =>
         {
-            var ownPerm = UserPermissions.Paired;
-            ownPerm.SetPaused(c.IsPaused);
-            ownPerm.SetDisableAnimations(c.DisableOwnAnimations);
-            ownPerm.SetDisableSounds(c.DisableOwnSounds);
-            ownPerm.SetDisableVFX(c.DisableOwnVFX);
-            var otherPerm = UserPermissions.NoneSet;
-            otherPerm.SetPaired(c.IsSynced);
-            otherPerm.SetPaused(c.OtherIsPaused);
-            otherPerm.SetDisableAnimations(c.DisableOtherAnimations);
-            otherPerm.SetDisableSounds(c.DisableOtherSounds);
-            otherPerm.SetDisableVFX(c.DisableOtherVFX);
-            return new UserPairDto(new(c.OtherUserUID, c.Alias), ownPerm, otherPerm);
+            return new UserPairDto(new(c.OtherUserUID, c.Alias),
+                c.Groups.ToList(),
+                OwnPermissions: UserPermissionsFromPermissionSet(c.OwnPermissions, isPaired: true, setSticky: true),
+                OtherPermissions: UserPermissionsFromPermissionSet(c.OtherPermissions, c.IsSynced, setSticky: false));
         }).ToList();
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task<UserProfileDto> UserGetProfile(UserDto user)
     {
@@ -191,6 +226,7 @@ public partial class MareHub
         return new UserProfileDto(user.User, false, data.IsNSFW, data.Base64ProfileImage, data.UserDescription);
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserPushData(UserCharaDataMessageDto dto)
     {
@@ -264,6 +300,7 @@ public partial class MareHub
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipients.Count());
     }
 
+    // todo: verify this makes sense as written
     [Authorize(Policy = "Identified")]
     public async Task UserRemovePair(UserDto dto)
     {
@@ -275,8 +312,6 @@ public partial class MareHub
         ClientPair callerPair =
             await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (callerPair == null) return;
-
-        bool callerHadPaused = callerPair.IsPaused;
 
         // delete from database, send update info to users pair list
         _dbContext.ClientPairs.Remove(callerPair);
@@ -294,37 +329,35 @@ public partial class MareHub
         var otherIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
         if (otherIdent == null) return;
 
-        // get own ident and
+        // if the other user had paused the user the state will be offline for either, do nothing
+        UserPermissionSet callerPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
+        bool callerHadPaused = callerPermissions?.IsPaused ?? false;
+        var updatedPerms = UserPermissionsFromPermissionSet(callerPermissions, false, false);
+
+        // send updated permissions
         await Clients.User(dto.User.UID)
             .Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID),
-                UserPermissions.NoneSet)).ConfigureAwait(false);
+                updatedPerms)).ConfigureAwait(false);
 
-        // if the other user had paused the user the state will be offline for either, do nothing
-        bool otherHadPaused = oppositeClientPair.IsPaused;
-        if (!callerHadPaused && otherHadPaused) return;
+        UserPermissionSet? otherPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == dto.User.UID && w.OtherUserUID == UserUID).ConfigureAwait(false);
+        bool otherHadPaused = otherPermissions?.IsPaused ?? true;
 
-        var allUsers = await GetAllPairedClientsWithPauseState().ConfigureAwait(false);
-        var pauseEntry = allUsers.SingleOrDefault(f => string.Equals(f.UID, dto.User.UID, StringComparison.Ordinal));
-        var isPausedInGroup = pauseEntry == null || pauseEntry.IsPausedPerGroup is PauseInfo.Paused or PauseInfo.NoConnection;
+        // if the either had paused, do nothing
+        if (callerHadPaused && otherHadPaused) return;
 
-        // if neither user had paused each other and both are in unpaused groups, state will be online for both, do nothing
-        if (!callerHadPaused && !otherHadPaused && !isPausedInGroup) return;
+        var userGroups = await _dbContext.GroupPairs.Where(u => u.GroupUserUID == UserUID).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
+        var otherUserGroups = await _dbContext.GroupPairs.Where(u => u.GroupUserUID == dto.User.UID).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
+        bool anyGroupsInCommon = userGroups.Exists(u => otherUserGroups.Contains(u, StringComparer.OrdinalIgnoreCase));
 
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
-        if (!callerHadPaused && !otherHadPaused && isPausedInGroup)
+        if (!callerHadPaused && !otherHadPaused && !anyGroupsInCommon)
         {
             await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
             await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
         }
-
-        // if the caller had paused other but not the other has paused the caller and they are in an unpaused group together, change state to online
-        if (callerHadPaused && !otherHadPaused && !isPausedInGroup)
-        {
-            await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherIdent)).ConfigureAwait(false);
-            await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
-        }
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserReportProfile(UserProfileReportDto dto)
     {
@@ -367,22 +400,26 @@ public partial class MareHub
         await Clients.Users(dto.User.UID).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
     }
 
+    // todo: verify this makes sense as written
     [Authorize(Policy = "Identified")]
     public async Task UserSetPairPermissions(UserPermissionsDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
 
         if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal)) return;
-        ClientPair pair = await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
-        if (pair == null) return;
+        UserPermissionSet prevPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
+        if (prevPermissions == null) return;
 
-        var pauseChange = pair.IsPaused != dto.Permissions.IsPaused();
+        // todo: check for stickyness on default permission set and find out if current pair its set to is only in a group and not directly paired
 
-        pair.IsPaused = dto.Permissions.IsPaused();
-        pair.DisableAnimations = dto.Permissions.IsDisableAnimations();
-        pair.DisableSounds = dto.Permissions.IsDisableSounds();
-        pair.DisableVFX = dto.Permissions.IsDisableVFX();
-        _dbContext.Update(pair);
+        var pauseChange = prevPermissions.IsPaused != dto.Permissions.IsPaused();
+
+        prevPermissions.IsPaused = dto.Permissions.IsPaused();
+        prevPermissions.DisableAnimations = dto.Permissions.IsDisableAnimations();
+        prevPermissions.DisableSounds = dto.Permissions.IsDisableSounds();
+        prevPermissions.DisableVFX = dto.Permissions.IsDisableVFX();
+        prevPermissions.Sticky = dto.Permissions.IsSticky();
+        _dbContext.Update(prevPermissions);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
@@ -397,9 +434,10 @@ public partial class MareHub
 
             if (pauseChange)
             {
-                var otherCharaIdent = await GetUserIdent(pair.OtherUserUID).ConfigureAwait(false);
+                var otherCharaIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
+                var otherPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == dto.User.UID && w.OtherUserUID == UserUID).ConfigureAwait(false);
 
-                if (UserCharaIdent == null || otherCharaIdent == null || otherEntry.IsPaused) return;
+                if (UserCharaIdent == null || otherCharaIdent == null || otherPermissions.IsPaused) return;
 
                 if (dto.Permissions.IsPaused())
                 {
@@ -415,6 +453,7 @@ public partial class MareHub
         }
     }
 
+    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserSetProfile(UserProfileDto dto)
     {
@@ -496,6 +535,28 @@ public partial class MareHub
 
         await Clients.Users(pairs.Select(p => p.Key)).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
         await Clients.Caller.Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
+    }
+
+    // needed, no adjustment
+    [Authorize(Policy = "Authenticated")]
+    public async Task UserUpdateDefaultPermissions(DefaultPermissionsDto defaultPermissions)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(defaultPermissions));
+
+        var permissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+
+        permissions.DisableGroupAnimations = defaultPermissions.DisableGroupAnimations;
+        permissions.DisableGroupSounds = defaultPermissions.DisableGroupSounds;
+        permissions.DisableGroupVFX = defaultPermissions.DisableGroupVFX;
+        permissions.DisableIndividualAnimations = defaultPermissions.DisableIndividualAnimations;
+        permissions.DisableIndividualSounds = defaultPermissions.DisableIndividualSounds;
+        permissions.DisableIndividualVFX = defaultPermissions.DisableIndividualVFX;
+        permissions.IndividualIsSticky = defaultPermissions.IndividualIsSticky;
+
+        _dbContext.Update(permissions);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        await Clients.Caller.Client_UserUpdateDefaultPermissions(defaultPermissions).ConfigureAwait(false);
     }
 
     [GeneratedRegex(@"^([a-z0-9_ '+&,\.\-\{\}]+\/)+([a-z0-9_ '+&,\.\-\{\}]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]

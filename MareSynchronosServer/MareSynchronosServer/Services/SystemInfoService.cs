@@ -70,10 +70,9 @@ public class SystemInfoService : IHostedService, IDisposable
 
                 _mareMetrics.SetGaugeTo(MetricsAPI.GaugeAuthorizedConnections, onlineUsers);
                 _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairs, db.ClientPairs.AsNoTracking().Count());
-                _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.ClientPairs.AsNoTracking().Count(p => p.IsPaused));
+                _mareMetrics.SetGaugeTo(MetricsAPI.GaugePairsPaused, db.Permissions.AsNoTracking().Count(p => p.IsPaused));
                 _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroups, db.Groups.AsNoTracking().Count());
                 _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairs, db.GroupPairs.AsNoTracking().Count());
-                _mareMetrics.SetGaugeTo(MetricsAPI.GaugeGroupPairsPaused, db.GroupPairs.AsNoTracking().Count(p => p.IsPaused));
                 _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUsersRegistered, db.Users.AsNoTracking().Count());
             }
         }

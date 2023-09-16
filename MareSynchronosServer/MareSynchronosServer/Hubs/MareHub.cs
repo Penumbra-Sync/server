@@ -7,10 +7,12 @@ using MareSynchronosServer.Utils;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.Hubs;
@@ -66,6 +68,18 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
         await SendOnlineToAllPairedUsers().ConfigureAwait(false);
 
+        var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleOrDefaultAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        if (defaultPermissions == null)
+        {
+            defaultPermissions = new UserDefaultPreferredPermission()
+            {
+                UserUID = UserUID,
+            };
+
+            _dbContext.UserDefaultPreferredPermissions.Add(defaultPermissions);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
+
         return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {
             CurrentClientVersion = _expectedClientVersion,
@@ -78,7 +92,17 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 ShardName = _shardName,
                 MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
                 MaxGroupUserCount = _maxGroupUserCount,
-                FileServerAddress = _fileServerAddress
+                FileServerAddress = _fileServerAddress,
+            },
+            DefaultPreferredPermissions = new DefaultPermissionsDto()
+            {
+                DisableGroupAnimations = defaultPermissions.DisableGroupAnimations,
+                DisableGroupSounds = defaultPermissions.DisableGroupSounds,
+                DisableGroupVFX = defaultPermissions.DisableGroupVFX,
+                DisableIndividualAnimations = defaultPermissions.DisableIndividualAnimations,
+                DisableIndividualSounds = defaultPermissions.DisableIndividualSounds,
+                DisableIndividualVFX = defaultPermissions.DisableIndividualVFX,
+                IndividualIsSticky = defaultPermissions.IndividualIsSticky,
             },
         };
     }

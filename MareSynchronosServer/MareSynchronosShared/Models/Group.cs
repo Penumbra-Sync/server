@@ -13,7 +13,7 @@ public class Group
     public string Alias { get; set; }
     public bool InvitesEnabled { get; set; }
     public string HashedPassword { get; set; }
-    public bool DisableSounds { get; set; }
-    public bool DisableAnimations { get; set; }
-    public bool DisableVFX { get; set; }
+    public bool PreferDisableSounds { get; set; }
+    public bool PreferDisableAnimations { get; set; }
+    public bool PreferDisableVFX { get; set; }
 }

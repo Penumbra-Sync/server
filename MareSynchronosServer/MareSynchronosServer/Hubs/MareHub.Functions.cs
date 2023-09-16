@@ -7,6 +7,7 @@ using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
+using MareSynchronos.API.Data.Enum;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -16,6 +17,7 @@ public partial class MareHub
 
     public string UserUID => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? throw new Exception("No UID in Claims");
 
+    // TODO: add the whole permissions stuff
     private async Task DeleteUser(User user)
     {
         var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToListAsync().ConfigureAwait(false);
@@ -99,11 +101,56 @@ public partial class MareHub
             }, StringComparer.Ordinal).ToList();
     }
 
+    private IQueryable<UserQueryEntry> GetAllPairs(string uid)
+        => (from userToOther in _dbContext.ClientPairs.Include(g => g.OtherUser)
+            join otherToUser in _dbContext.ClientPairs
+                on new
+                {
+                    user = userToOther.UserUID,
+                    other = userToOther.OtherUserUID,
+                } equals new
+                {
+                    user = otherToUser.OtherUserUID,
+                    other = otherToUser.UserUID,
+                } into leftJoin
+            from otherEntry in leftJoin.DefaultIfEmpty()
+            where
+                userToOther.UserUID == uid
+            select new UserQueryEntry(Convert.ToString(userToOther.OtherUserUID), otherEntry != null, "DIRECT", userToOther.User.Alias)
+            ).Union(from userGroupPair in _dbContext.GroupPairs.Include(g => g.GroupUser)
+                    join otherGroupPair in _dbContext.GroupPairs on userGroupPair.GroupGID equals otherGroupPair.GroupGID
+                    where
+                        userGroupPair.GroupUserUID == uid && otherGroupPair.GroupUserUID != UserUID
+                    select new UserQueryEntry(Convert.ToString(otherGroupPair.GroupUserUID), true, Convert.ToString(otherGroupPair.GroupGID), otherGroupPair.GroupUser.Alias))
+        .AsNoTracking();
+
+    private async Task<IQueryable<UserQueryPermissionEntry>> GetAllPairsWithPermissions(string uid)
+    {
+        var allUserPairs = await GetAllPairs(uid).ToDictionaryAsync(u => u.UID, u => u);
+        return (from ownPermissions in _dbContext.Permissions
+                join otherPermissions in _dbContext.Permissions
+                on new
+                {
+                    user = uid,
+                    other = ownPermissions.OtherUserUID
+                } equals new
+                {
+                    user = otherPermissions.UserUID,
+                    other = uid
+                } into permissionJoin
+                from joinedPermissions in permissionJoin.DefaultIfEmpty()
+                where allUserPairs.ContainsKey(ownPermissions.OtherUserUID)
+                select new UserQueryPermissionEntry(allUserPairs[ownPermissions.OtherUserUID], ownPermissions, joinedPermissions)
+            ).AsNoTracking();
+    }
+
     private async Task<List<string>> GetAllPairedUnpausedUsers(string? uid = null)
     {
         uid ??= UserUID;
-        var ret = await GetAllPairedClientsWithPauseState(uid).ConfigureAwait(false);
-        return ret.Where(k => !k.IsPaused).Select(k => k.UID).ToList();
+
+        return await (await GetAllPairsWithPermissions(uid).ConfigureAwait(false))
+            .Where(u => !u.OwnPermissions.IsPaused && u.OtherPermissions != null && !u.OtherPermissions.IsPaused)
+            .Select(u => u.OtherUser.UID).ToListAsync().ConfigureAwait(false);
     }
 
     private async Task<Dictionary<string, string>> GetOnlineUsers(List<string> uids)
@@ -279,4 +326,21 @@ public partial class MareHub
             await UserGroupLeave(groupUserPair, allUserPairs, ident, userUid).ConfigureAwait(false);
         }
     }
+
+    private static UserPermissions UserPermissionsFromPermissionSet(UserPermissionSet? permissions, bool isPaired, bool setSticky)
+    {
+        if (permissions == null) return UserPermissions.NoneSet;
+
+        UserPermissions perm = isPaired ? UserPermissions.Paired : UserPermissions.NoneSet;
+        perm.SetPaused(permissions.IsPaused);
+        perm.SetDisableAnimations(permissions.DisableAnimations);
+        perm.SetDisableSounds(permissions.DisableSounds);
+        perm.SetDisableVFX(permissions.DisableVFX);
+        if (setSticky)
+            perm.SetSticky(permissions.Sticky);
+        return perm;
+    }
+
+    private record UserQueryPermissionEntry(UserQueryEntry OtherUser, UserPermissionSet OwnPermissions, UserPermissionSet? OtherPermissions);
+    private record UserQueryEntry(string UID, bool IsPaired, string GID, string Alias);
 }

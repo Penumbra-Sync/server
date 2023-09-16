@@ -25,16 +25,16 @@ namespace MareSynchronosServer.Utils
         public static GroupPermissions GetGroupPermissions(this Group group)
         {
             var permissions = GroupPermissions.NoneSet;
-            permissions.SetDisableAnimations(group.DisableAnimations);
-            permissions.SetDisableSounds(group.DisableSounds);
-            permissions.SetDisableInvites(!group.InvitesEnabled);
-            permissions.SetDisableVFX(group.DisableVFX);
+            permissions.SetPreferDisableAnimations(group.PreferDisableAnimations);
+            permissions.SetPreferDisableSounds(group.PreferDisableSounds);
+            permissions.SetPreferDisableVFX(group.PreferDisableVFX);
+            permissions.SetPreferDisableInvites(!group.InvitesEnabled);
             return permissions;
         }
 
-        public static GroupUserPermissions GetGroupPairPermissions(this GroupPair groupPair)
+        public static GroupUserPreferredPermissions GetGroupPairPermissions(this GroupPairPreferredPermission groupPair)
         {
-            var permissions = GroupUserPermissions.NoneSet;
+            var permissions = GroupUserPreferredPermissions.NoneSet;
             permissions.SetDisableAnimations(groupPair.DisableAnimations);
             permissions.SetDisableSounds(groupPair.DisableSounds);
             permissions.SetPaused(groupPair.IsPaused);
