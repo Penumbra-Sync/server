@@ -65,7 +65,7 @@ public class RequestController : ControllerBase
     {
         try
         {
-            if (!_requestQueue.StillEnqueued(requestId, MareUser))
+            if (!await _requestQueue.StillEnqueued(requestId, MareUser))
                 await _requestQueue.EnqueueUser(new(requestId, MareUser, files.ToList()));
             return Ok();
         }
