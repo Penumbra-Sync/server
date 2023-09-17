@@ -16,7 +16,6 @@ public class RequestQueueService : IHostedService
     private record PriorityEntry(bool IsHighPriority, DateTime LastChecked);
 
     private readonly IHubContext<MareSynchronosServer.Hubs.MareHub> _hubContext;
-    private readonly MareDbContext _mareDbContext;
     private readonly ILogger<RequestQueueService> _logger;
     private readonly MareMetrics _metrics;
     private readonly ConcurrentQueue<UserRequest> _queue = new();
@@ -32,7 +31,7 @@ public class RequestQueueService : IHostedService
     private System.Timers.Timer _queueTimer;
 
     public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService,
-        ILogger<RequestQueueService> logger, IHubContext<MareSynchronosServer.Hubs.MareHub> hubContext, MareDbContext mareDbContext)
+        ILogger<RequestQueueService> logger, IHubContext<MareSynchronosServer.Hubs.MareHub> hubContext)
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
@@ -41,7 +40,6 @@ public class RequestQueueService : IHostedService
         _metrics = metrics;
         _logger = logger;
         _hubContext = hubContext;
-        _mareDbContext = mareDbContext;
     }
 
     public void ActivateRequest(Guid request)
@@ -51,11 +49,11 @@ public class RequestQueueService : IHostedService
         req.MarkActive();
     }
 
-    private async Task<bool> IsHighPriority(string uid)
+    private async Task<bool> IsHighPriority(string uid, MareDbContext mareDbContext)
     {
         if (!_priorityCache.TryGetValue(uid, out PriorityEntry entry) || entry.LastChecked.Add(TimeSpan.FromHours(6)) < DateTime.UtcNow)
         {
-            var user = await _mareDbContext.Users.FirstOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
+            var user = await mareDbContext.Users.FirstOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
             entry = new(user != null && !string.IsNullOrEmpty(user.Alias), DateTime.UtcNow);
             _priorityCache[uid] = entry;
         }
@@ -63,11 +61,11 @@ public class RequestQueueService : IHostedService
         return entry.IsHighPriority;
     }
 
-    public async Task EnqueueUser(UserRequest request)
+    public async Task EnqueueUser(UserRequest request, MareDbContext mareDbContext)
     {
         _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, string.Join(", ", request.FileIds));
 
-        bool isPriorityQueue = await IsHighPriority(request.User).ConfigureAwait(false);
+        bool isPriorityQueue = await IsHighPriority(request.User, mareDbContext).ConfigureAwait(false);
 
         if (_queueProcessingSemaphore.CurrentCount == 0)
         {
@@ -146,9 +144,9 @@ public class RequestQueueService : IHostedService
         return Task.CompletedTask;
     }
 
-    public async Task<bool> StillEnqueued(Guid request, string user)
+    public async Task<bool> StillEnqueued(Guid request, string user, MareDbContext mareDbContext)
     {
-        bool isPriorityQueue = await IsHighPriority(user).ConfigureAwait(false);
+        bool isPriorityQueue = await IsHighPriority(user, mareDbContext).ConfigureAwait(false);
         if (isPriorityQueue)
         {
             return _priorityQueue.Any(c => c.RequestId == request && string.Equals(c.User, user, StringComparison.Ordinal));
