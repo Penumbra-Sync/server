@@ -24,6 +24,7 @@ using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using MareSynchronosServer.Controllers;
 using MareSynchronosShared.RequirementHandlers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MareSynchronosServer;
 
@@ -252,6 +253,15 @@ public class Startup
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
+        services.AddDbContextFactory<MareDbContext>(options =>
+        {
+            options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
+            {
+                builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+                builder.MigrationsAssembly("MareSynchronosShared");
+            }).UseSnakeCaseNamingConvention();
+            options.EnableThreadSafetyChecks(false);
+        });
     }
 
     private static void ConfigureMetrics(IServiceCollection services)
