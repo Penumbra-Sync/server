@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using AspNetCoreRateLimit;
 using MareSynchronosShared.Data;
-using MareSynchronosShared.Protos;
-using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Metrics;
 using MareSynchronosServer.Services;
 using MareSynchronosShared.Utils;
@@ -92,7 +90,9 @@ public class Startup
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
+        services.AddSingleton<UserPairCacheService>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
+        services.AddHostedService(p => p.GetService<UserPairCacheService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 

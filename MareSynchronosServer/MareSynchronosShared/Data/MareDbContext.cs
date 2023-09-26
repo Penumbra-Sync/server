@@ -49,6 +49,8 @@ public class MareDbContext : DbContext
     public DbSet<GroupPairPreferredPermission> GroupPairPreferredPermissions { get; set; }
     public DbSet<UserDefaultPreferredPermission> UserDefaultPreferredPermissions { get; set; }
 
+    public IQueryable<UserPermissionQuery> GetAllPairsForUser(string uid) => FromExpression(() => GetAllPairsForUser(uid));
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Auth>().ToTable("auth");
@@ -89,5 +91,7 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<GroupPairPreferredPermission>().HasIndex(c => c.UserUID);
         modelBuilder.Entity<GroupPairPreferredPermission>().HasIndex(c => c.GroupGID);
         modelBuilder.Entity<UserDefaultPreferredPermission>().ToTable("user_default_preferred_permissions");
+        modelBuilder.HasDbFunction(typeof(MareDbContext).GetMethod(nameof(GetAllPairsForUser), new[] { typeof(string) }))
+            .HasName("get_all_pairs_for_user");
     }
 }
