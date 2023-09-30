@@ -118,6 +118,16 @@ namespace MareSynchronosServer.Migrations
                 group by gp.group_user_uid, gp2.group_user_uid
                 on conflict do nothing;");
 
+            migrationBuilder.Sql(@"insert into group_pair_preferred_permissions
+                        select group_gid
+                        , group_user_uid
+                        , gp.is_paused
+                        , gp.disable_animations or g.disable_animations as disable_animations 
+                        , gp.disable_sounds or g.disable_sounds as disable_sounds 
+                        , gp.disable_vfx or g.disable_vfx as disable_vfx 
+                        from group_pairs as gp
+                left join groups g on g.gid = gp.group_gid");
+
             migrationBuilder.DropForeignKey(
                 name: "fk_group_pairs_groups_group_temp_id1",
                 table: "group_pairs");

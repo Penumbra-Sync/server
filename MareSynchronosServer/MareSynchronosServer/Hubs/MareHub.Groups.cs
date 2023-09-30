@@ -180,7 +180,7 @@ public partial class MareHub
 
     // needed, no changes
     [Authorize(Policy = "Identified")]
-    public async Task<bool> GroupChangePassword(GroupJoinDto dto)
+    public async Task<bool> GroupChangePassword(GroupPasswordDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
 
@@ -652,27 +652,14 @@ public partial class MareHub
         _logger.LogCallInfo();
 
         var groups = await _dbContext.GroupPairs.Include(g => g.Group).Include(g => g.Group.Owner).Where(g => g.GroupUserUID == UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
-        var preferredPermissions = await _dbContext.GroupPairPreferredPermissions.Where(u => groups.Exists(k => k.GroupGID == u.GroupGID) && u.UserUID == UserUID)
-            .ToDictionaryAsync(u => groups.First(f => string.Equals(f.GroupGID, u.GroupGID, StringComparison.Ordinal)), u => u).ConfigureAwait(false);
+        var preferredPermissions = (await _dbContext.GroupPairPreferredPermissions.Where(u => u.UserUID == UserUID).ToListAsync().ConfigureAwait(false))
+            .Where(u => groups.Exists(k => string.Equals(k.GroupGID, u.GroupGID, StringComparison.Ordinal)))
+            .ToDictionary(u => groups.First(f => string.Equals(f.GroupGID, u.GroupGID, StringComparison.Ordinal)), u => u);
 
         return preferredPermissions.Select(g => new GroupFullInfoDto(g.Key.Group.ToGroupData(), g.Key.Group.Owner.ToUserData(),
                 g.Key.Group.ToEnum(), g.Value.ToEnum(), g.Key.ToEnum())).ToList();
     }
 
-    // this is probably not needed anymore
-    [Authorize(Policy = "Identified")]
-    public async Task<List<GroupPairFullInfoDto>> GroupsGetUsersInGroup(GroupDto dto)
-    {
-        _logger.LogCallInfo(MareHubLogger.Args(dto));
-        return null;
-
-        var (inGroup, _) = await TryValidateUserInGroup(dto.Group.GID).ConfigureAwait(false);
-        if (!inGroup) return new List<GroupPairFullInfoDto>();
-
-        var group = await _dbContext.Groups.SingleAsync(g => g.GID == dto.Group.GID).ConfigureAwait(false);
-        var allPairs = await _dbContext.GroupPairs.Include(g => g.GroupUser).Where(g => g.GroupGID == dto.Group.GID && g.GroupUserUID != UserUID).AsNoTracking().ToListAsync().ConfigureAwait(false);
-        // return allPairs.Select(p => new GroupPairFullInfoDto(group.ToGroupData(), p.GroupUser.ToUserData(), p.GetGroupPairUserInfo(), ())).ToList();
-    }
 
     // needed, no changes
     [Authorize(Policy = "Identified")]
