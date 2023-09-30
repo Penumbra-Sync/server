@@ -438,7 +438,7 @@ public partial class MareHub
 
         // get all pairs before we join
         var allUserPairs = (await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false))
-            .Where(u => u.Value.IsPaired).ToList();
+            .ToDictionary(u => u.Key, u => u.Value, StringComparer.Ordinal);
 
         if (oneTimeInvite != null)
         {
@@ -490,8 +490,9 @@ public partial class MareHub
 
         foreach (var pair in groupPairs)
         {
+            var perms = allUserPairs.TryGetValue(pair.GroupUserUID, out var userinfo);
             // check if we have had prior permissions to that pair, if not add them
-            var ownPermissionsToOther = await _dbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == UserUID && p.OtherUserUID == pair.GroupUserUID).ConfigureAwait(false);
+            var ownPermissionsToOther = userinfo?.OwnPermissions ?? null;
             if (ownPermissionsToOther == null)
             {
                 ownPermissionsToOther = new()
@@ -509,6 +510,8 @@ public partial class MareHub
             }
             else if (!ownPermissionsToOther.Sticky)
             {
+                ownPermissionsToOther = await _dbContext.Permissions.SingleAsync(u => u.UserUID == UserUID && u.OtherUserUID == pair.GroupUserUID).ConfigureAwait(false);
+
                 // update the existing permission only if it was not set to sticky
                 ownPermissionsToOther.DisableAnimations = preferredPermissions.DisableAnimations;
                 ownPermissionsToOther.DisableVFX = preferredPermissions.DisableVFX;
@@ -519,7 +522,7 @@ public partial class MareHub
             }
 
             // get others permissionset to self and eventually update it
-            var otherPermissionToSelf = await _dbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == pair.GroupUserUID && p.OtherUserUID == UserUID).ConfigureAwait(false);
+            var otherPermissionToSelf = userinfo?.OtherPermissions ?? null;
             if (otherPermissionToSelf == null)
             {
                 var otherPreferred = await _dbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
@@ -543,7 +546,7 @@ public partial class MareHub
                 self.ToUserData(), newPair.ToEnum(), ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
 
             // if not paired prior and neither has the permissions set to paused, send online
-            if (!allUserPairs.Exists(u => string.Equals(u.Key, pair.GroupUserUID, StringComparison.Ordinal))
+            if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.ContainsKey(pair.GroupUserUID) && !allUserPairs[pair.GroupUserUID].IsPaired))
                 && !otherPermissionToSelf.IsPaused && !ownPermissionsToOther.IsPaused)
             {
                 var groupUserIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
@@ -660,8 +663,8 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<List<GroupPairFullInfoDto>> GroupsGetUsersInGroup(GroupDto dto)
     {
-        throw new NotImplementedException();
         _logger.LogCallInfo(MareHubLogger.Args(dto));
+        return null;
 
         var (inGroup, _) = await TryValidateUserInGroup(dto.Group.GID).ConfigureAwait(false);
         if (!inGroup) return new List<GroupPairFullInfoDto>();
