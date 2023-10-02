@@ -93,8 +93,6 @@ namespace MareSynchronosServer.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            // todo: actual data migration to permissions
-
             migrationBuilder.Sql(@"insert into user_permission_sets
                 select user1.user_uid as user_uid, user1.other_user_uid as other_user_uid,
 	                true,

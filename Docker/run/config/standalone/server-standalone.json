@@ -8,7 +8,7 @@
             "Microsoft": "Warning",
             "Microsoft.Hosting.Lifetime": "Information",
             "Microsoft.EntityFramework": "Warning",
-            "MareSynchronosServer": "Information",
+            "MareSynchronosServer": "Debug",
             "MareSynchronosShared": "Debug",
             "System.IO": "Information"
         },

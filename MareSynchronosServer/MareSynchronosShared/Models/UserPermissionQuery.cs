@@ -21,6 +21,7 @@ public class UserPermissionQuery
     {
         UserUID = UserUID,
         OtherUserUID = OtherUserUID,
+        IsPaused = OwnpermIsPaused,
         DisableAnimations = OwnpermDisableAnimations,
         DisableSounds = OwnpermDisableSounds,
         DisableVFX = OwnpermDisableVFX,
@@ -31,6 +32,7 @@ public class UserPermissionQuery
     {
         UserUID = OtherUserUID,
         OtherUserUID = UserUID,
+        IsPaused = OtherpermIsPaused ?? false,
         DisableAnimations = OtherpermDisableAnimations ?? false,
         DisableSounds = OtherpermDisableSounds ?? false,
         DisableVFX = OtherpermDisableVFX ?? false,

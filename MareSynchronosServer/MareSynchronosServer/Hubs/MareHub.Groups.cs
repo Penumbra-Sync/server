@@ -1,6 +1,8 @@
-﻿using MareSynchronos.API.Data.Enum;
+﻿using MareSynchronos.API.Data;
+using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
 using MareSynchronos.API.Dto.Group;
+using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
@@ -113,11 +115,11 @@ public partial class MareHub
 
         // send apporpriate permission set to each user
         await Clients.Users(affectedGroupPairs.Where(u =>
-            !allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains("DIRECT", StringComparer.Ordinal)))
+            !allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)))
             .Select(k => k.Key))
             .Client_UserUpdateOtherPairPermissions(new(new(UserUID), unpairedPermissions)).ConfigureAwait(false);
         await Clients.Users(affectedGroupPairs.Where(u =>
-            allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains("DIRECT", StringComparer.Ordinal)))
+            allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)))
             .Select(k => k.Key))
             .Client_UserUpdateOtherPairPermissions(new(new(UserUID), pairedPermissions)).ConfigureAwait(false);
 
@@ -294,7 +296,7 @@ public partial class MareHub
         var self = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         await Clients.User(UserUID).Client_GroupSendFullInfo(new GroupFullInfoDto(newGroup.ToGroupData(), self.ToUserData(),
-            newGroup.ToEnum(), initialPrefPermissions.ToEnum(), initialPair.ToEnum()))
+            newGroup.ToEnum(), initialPrefPermissions.ToEnum(), initialPair.ToEnum(), new(StringComparer.Ordinal)))
             .ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(gid));
@@ -481,8 +483,10 @@ public partial class MareHub
 
         _logger.LogCallInfo(MareHubLogger.Args(aliasOrGid, "Success"));
 
+        var groupInfos = await _dbContext.GroupPairs.Where(u => u.GroupGID == group.GID && (u.IsPinned || u.IsModerator)).ToListAsync().ConfigureAwait(false);
         await Clients.User(UserUID).Client_GroupSendFullInfo(new GroupFullInfoDto(group.ToGroupData(), group.Owner.ToUserData(),
-            group.ToEnum(), preferredPermissions.ToEnum(), newPair.ToEnum())).ConfigureAwait(false);
+            group.ToEnum(), preferredPermissions.ToEnum(), newPair.ToEnum(),
+            groupInfos.ToDictionary(u => u.GroupUserUID, u => u.ToEnum(), StringComparer.Ordinal))).ConfigureAwait(false);
 
         var self = _dbContext.Users.Single(u => u.UID == UserUID);
 
@@ -541,9 +545,11 @@ public partial class MareHub
             }
 
             await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                pair.ToUserData(), pair.ToEnum(), otherPermissionToSelf.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
+                pair.ToUserData(), ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false),
+                otherPermissionToSelf.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
             await Clients.User(pair.GroupUserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                self.ToUserData(), newPair.ToEnum(), ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
+                self.ToUserData(), otherPermissionToSelf.ToEnum(isPaired: true, setSticky: false),
+                ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
 
             // if not paired prior and neither has the permissions set to paused, send online
             if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.ContainsKey(pair.GroupUserUID) && !allUserPairs[pair.GroupUserUID].IsPaired))
@@ -655,9 +661,13 @@ public partial class MareHub
         var preferredPermissions = (await _dbContext.GroupPairPreferredPermissions.Where(u => u.UserUID == UserUID).ToListAsync().ConfigureAwait(false))
             .Where(u => groups.Exists(k => string.Equals(k.GroupGID, u.GroupGID, StringComparison.Ordinal)))
             .ToDictionary(u => groups.First(f => string.Equals(f.GroupGID, u.GroupGID, StringComparison.Ordinal)), u => u);
+        var groupInfos = await _dbContext.GroupPairs.Where(u => groups.Select(g => g.GroupGID).Contains(u.GroupGID) && (u.IsPinned || u.IsModerator))
+            .ToListAsync().ConfigureAwait(false);
 
         return preferredPermissions.Select(g => new GroupFullInfoDto(g.Key.Group.ToGroupData(), g.Key.Group.Owner.ToUserData(),
-                g.Key.Group.ToEnum(), g.Value.ToEnum(), g.Key.ToEnum())).ToList();
+                g.Key.Group.ToEnum(), g.Value.ToEnum(), g.Key.ToEnum(),
+                groupInfos.Where(i => string.Equals(i.GroupGID, g.Key.GroupGID, StringComparison.Ordinal))
+                .ToDictionary(i => i.GroupUserUID, i => i.ToEnum(), StringComparer.Ordinal))).ToList();
     }
 
 

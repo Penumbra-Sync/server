@@ -66,6 +66,7 @@ public partial class MareHub
             User = user,
         };
         await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         var existingData = await _cacheService.GetPairData(UserUID, otherUser.UID).ConfigureAwait(false);
 
@@ -89,6 +90,7 @@ public partial class MareHub
         }
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         _cacheService.MarkAsStale(UserUID, otherUser.UID);
 
         // get the opposite entry of the client pair
@@ -100,16 +102,16 @@ public partial class MareHub
         var otherPermissions = existingData.OtherPermissions;
         var otherPerm = otherPermissions.ToEnum(otherEntry != null, false);
 
-        var userPairResponse = new UserPairDto(otherUser.ToUserData(), new List<string>(), ownPerm, otherPerm);
+        var userPairResponse = new UserPairDto(otherUser.ToUserData(), new List<string> { Constants.IndividualKeyword }, ownPerm, otherPerm);
         await Clients.User(user.UID).Client_UserAddClientPair(userPairResponse).ConfigureAwait(false);
 
         // check if other user is online
         if (otherIdent == null || otherEntry == null) return;
 
         // send push with update to other user if other user is online
-        await Clients.User(otherUser.UID).Client_UserAddClientPair(new UserPairDto(user.ToUserData(), new List<string>(), otherPerm, ownPerm)).ConfigureAwait(false);
+        await Clients.User(otherUser.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(user.ToUserData(), existingPermissions.ToEnum(true, false))).ConfigureAwait(false);
 
-        if (!otherPerm.IsPaused())
+        if (!ownPerm.IsPaused() && !otherPerm.IsPaused())
         {
             await Clients.User(UserUID).Client_UserSendOnline(new(otherUser.ToUserData(), otherIdent)).ConfigureAwait(false);
             await Clients.User(otherUser.UID).Client_UserSendOnline(new(user.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
@@ -153,7 +155,9 @@ public partial class MareHub
         var pairs = await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false);
         return pairs.Select(p =>
         {
-            return new UserPairDto(new UserData(p.Key, p.Value.Alias), p.Value.GIDs, p.Value.OwnPermissions.ToEnum(true, true), p.Value.OtherPermissions.ToEnum(p.Value.IsPaired, false));
+            return new UserPairDto(new UserData(p.Key, p.Value.Alias), p.Value.GIDs,
+                p.Value.OwnPermissions.ToEnum(isPaired: true, setSticky: true),
+                p.Value.OtherPermissions.ToEnum(p.Value.IsPaired, false));
         }).ToList();
     }
 
@@ -369,10 +373,13 @@ public partial class MareHub
 
         var pairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
         bool setSticky = false;
-        if (!pairData.GIDs.Contains("DIRECT", StringComparer.Ordinal))
+        if (!pairData.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal))
         {
-            var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
-            setSticky = defaultPermissions.IndividualIsSticky;
+            if (!pairData.OwnPermissions.Sticky && !dto.Permissions.IsSticky())
+            {
+                var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+                setSticky = defaultPermissions.IndividualIsSticky;
+            }
         }
 
         var pauseChange = prevPermissions.IsPaused != dto.Permissions.IsPaused();
