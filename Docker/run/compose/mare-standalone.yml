@@ -51,6 +51,7 @@ services:
       MareSynchronos__DiscordBotToken: "${DEV_MARE_DISCORDTOKEN}"
       MareSynchronos__DiscordChannelForMessages: "${DEV_MARE_DISCORDCHANNEL}"
       MareSynchronos__DiscordChannelForReports: "${DEV_MARE_DISCORDCHANNEL}"
+      MareSynchronos__DiscordChannelForCommands: "${DEV_MARE_DISCORDCHANNEL}"
       DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/services-standalone.json:/opt/MareSynchronosServices/appsettings.json

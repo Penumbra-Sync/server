@@ -33,8 +33,10 @@
         "MainServerGrpcAddress": "http://mare-server:6005/",
         "DiscordBotToken": "",
         "DiscordChannelForMessages": "",
+        "DiscordChannelForCommands": "",
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
-        "RedisConnectionString": "redis,password=secretredispassword"
+        "RedisConnectionString": "redis,password=secretredispassword",
+        "VanityRoles": []
     },
     "AllowedHosts": "*",
     "Kestrel": {

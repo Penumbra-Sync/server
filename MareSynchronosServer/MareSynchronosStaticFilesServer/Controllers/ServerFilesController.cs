@@ -233,6 +233,89 @@ public class ServerFilesController : ControllerBase
         }
     }
 
+    [HttpPost(MareFiles.ServerFiles_UploadMunged + "/{hash}")]
+    [RequestSizeLimit(200 * 1024 * 1024)]
+    public async Task<IActionResult> UploadFileMunged(string hash, CancellationToken requestAborted)
+    {
+        _logger.LogInformation("{user} uploading munged file {file}", MareUser, hash);
+        hash = hash.ToUpperInvariant();
+        var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+        if (existingFile != null) return Ok();
+
+        SemaphoreSlim fileLock;
+        lock (_fileUploadLocks)
+        {
+            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
+        }
+
+        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+
+        try
+        {
+            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            if (existingFileCheck2 != null)
+            {
+                return Ok();
+            }
+
+            // copy the request body to memory
+            using var compressedMungedStream = new MemoryStream();
+            await Request.Body.CopyToAsync(compressedMungedStream, requestAborted).ConfigureAwait(false);
+            var unmungedFile = compressedMungedStream.ToArray();
+            MungeBuffer(unmungedFile.AsSpan());
+
+            // decompress and copy the decompressed stream to memory
+            var data = LZ4Codec.Unwrap(unmungedFile);
+
+            // compute hash to verify
+            var hashString = BitConverter.ToString(SHA1.HashData(data))
+                .Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+            if (!string.Equals(hashString, hash, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Hash does not match file, computed: {hashString}, expected: {hash}");
+
+            // save file
+            var path = FilePathUtil.GetFilePath(_basePath, hash);
+            using var fileStream = new FileStream(path, FileMode.Create);
+            await fileStream.WriteAsync(unmungedFile.AsMemory()).ConfigureAwait(false);
+
+            // update on db
+            await _mareDbContext.Files.AddAsync(new FileCache()
+            {
+                Hash = hash,
+                UploadDate = DateTime.UtcNow,
+                UploaderUID = MareUser,
+                Size = compressedMungedStream.Length,
+                Uploaded = true
+            }).ConfigureAwait(false);
+            await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
+            _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, compressedMungedStream.Length);
+
+            _fileUploadLocks.TryRemove(hash, out _);
+
+            return Ok();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error during file upload");
+            return BadRequest();
+        }
+        finally
+        {
+            fileLock.Release();
+        }
+    }
+
+    private static void MungeBuffer(Span<byte> buffer)
+    {
+        for (int i = 0; i < buffer.Length; ++i)
+        {
+            buffer[i] ^= 42;
+        }
+    }
+
     [HttpPost(MareFiles.ServerFiles_UploadRaw + "/{hash}")]
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<IActionResult> UploadFileRaw(string hash, CancellationToken requestAborted)
