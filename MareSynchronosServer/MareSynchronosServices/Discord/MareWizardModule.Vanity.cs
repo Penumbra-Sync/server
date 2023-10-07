@@ -154,7 +154,7 @@ public partial class MareWizardModule
         using var db = GetDbContext();
         bool canAddVanityId = !db.Groups.Any(u => u.GID == modal.DesiredVanityGID || u.Alias == modal.DesiredVanityGID);
 
-        Regex rgx = new(@"^[_\-a-zA-Z0-9]{5,15}$", RegexOptions.ECMAScript);
+        Regex rgx = new(@"^[_\-a-zA-Z0-9]{5,20}$", RegexOptions.ECMAScript);
         if (!rgx.Match(desiredVanityUid).Success)
         {
             eb.WithColor(Color.Red);
