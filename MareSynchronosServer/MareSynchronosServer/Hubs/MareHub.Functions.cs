@@ -7,7 +7,6 @@ using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
-using static MareSynchronosServer.Services.UserPairCacheService;
 
 namespace MareSynchronosServer.Hubs;
 

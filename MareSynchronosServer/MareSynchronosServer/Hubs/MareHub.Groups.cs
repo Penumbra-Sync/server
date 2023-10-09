@@ -105,23 +105,16 @@ public partial class MareHub
         }
 
         // send messages
-        UserPermissions pairedPermissions = UserPermissions.Paired;
-        pairedPermissions.SetPaused(groupPreferredPermissions.IsPaused);
-        pairedPermissions.SetDisableAnimations(groupPreferredPermissions.DisableAnimations);
-        pairedPermissions.SetDisableSounds(groupPreferredPermissions.DisableSounds);
-        pairedPermissions.SetDisableVFX(groupPreferredPermissions.DisableVFX);
-        UserPermissions unpairedPermissions = pairedPermissions;
-        unpairedPermissions.SetPaired(false);
+        UserPermissions permissions = UserPermissions.NoneSet;
+        permissions.SetPaused(groupPreferredPermissions.IsPaused);
+        permissions.SetDisableAnimations(groupPreferredPermissions.DisableAnimations);
+        permissions.SetDisableSounds(groupPreferredPermissions.DisableSounds);
+        permissions.SetDisableVFX(groupPreferredPermissions.DisableVFX);
 
         // send apporpriate permission set to each user
-        await Clients.Users(affectedGroupPairs.Where(u =>
-            !allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)))
+        await Clients.Users(affectedGroupPairs
             .Select(k => k.Key))
-            .Client_UserUpdateOtherPairPermissions(new(new(UserUID), unpairedPermissions)).ConfigureAwait(false);
-        await Clients.Users(affectedGroupPairs.Where(u =>
-            allPairs.Any(e => string.Equals(e.Key, u.Key, StringComparison.Ordinal) && e.Value.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)))
-            .Select(k => k.Key))
-            .Client_UserUpdateOtherPairPermissions(new(new(UserUID), pairedPermissions)).ConfigureAwait(false);
+            .Client_UserUpdateOtherPairPermissions(new(new(UserUID), permissions)).ConfigureAwait(false);
 
         var self = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
@@ -545,14 +538,14 @@ public partial class MareHub
             }
 
             await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                pair.ToUserData(), ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false),
-                otherPermissionToSelf.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
+                pair.ToUserData(), ownPermissionsToOther.ToUserPermissions(setSticky: false),
+                otherPermissionToSelf.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
             await Clients.User(pair.GroupUserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                self.ToUserData(), otherPermissionToSelf.ToEnum(isPaired: true, setSticky: false),
-                ownPermissionsToOther.ToEnum(isPaired: true, setSticky: false))).ConfigureAwait(false);
+                self.ToUserData(), otherPermissionToSelf.ToUserPermissions(setSticky: false),
+                ownPermissionsToOther.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
 
             // if not paired prior and neither has the permissions set to paused, send online
-            if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.ContainsKey(pair.GroupUserUID) && !allUserPairs[pair.GroupUserUID].IsPaired))
+            if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.ContainsKey(pair.GroupUserUID) && !allUserPairs[pair.GroupUserUID].IsSynced))
                 && !otherPermissionToSelf.IsPaused && !ownPermissionsToOther.IsPaused)
             {
                 var groupUserIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);

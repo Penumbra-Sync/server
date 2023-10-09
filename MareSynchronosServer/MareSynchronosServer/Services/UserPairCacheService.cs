@@ -29,7 +29,7 @@ public class UserPairCacheService : IHostedService
 
     public async Task<Dictionary<string, UserInfo>> GetAllPairs(string uid)
     {
-        await WaitForProcessing().ConfigureAwait(false);
+        await WaitForProcessing(uid).ConfigureAwait(false);
 
         if (!_cache.ContainsKey(uid))
         {
@@ -42,9 +42,9 @@ public class UserPairCacheService : IHostedService
         return _cache[uid];
     }
 
-    public async Task<UserInfo> GetPairData(string uid, string otheruid)
+    public async Task<UserInfo?> GetPairData(string uid, string otheruid)
     {
-        await WaitForProcessing().ConfigureAwait(false);
+        await WaitForProcessing(uid, otheruid).ConfigureAwait(false);
 
         if (!_cache.TryGetValue(uid, out var cachedInfos))
         {
@@ -97,6 +97,7 @@ public class UserPairCacheService : IHostedService
             .ToDictionary(g => g.Key, g =>
             {
                 return new UserInfo(g.First().Alias,
+                    g.SingleOrDefault(p => string.IsNullOrEmpty(p.GID))?.Synced ?? false,
                     g.Max(p => p.Synced),
                     g.Select(p => string.IsNullOrEmpty(p.GID) ? Constants.IndividualKeyword : p.GID).ToList(),
                     g.First().OwnPermissions,
@@ -111,7 +112,9 @@ public class UserPairCacheService : IHostedService
         if (!pairs.Any()) return null;
 
         var groups = pairs.Select(g => g.GID).ToList();
-        return new UserInfo(pairs[0].Alias, pairs.Max(p => p.Synced),
+        return new UserInfo(pairs[0].Alias,
+            pairs.SingleOrDefault(p => string.IsNullOrEmpty(p.GID))?.Synced ?? false,
+            pairs.Max(p => p.Synced),
             pairs.Select(p => string.IsNullOrEmpty(p.GID) ? Constants.IndividualKeyword : p.GID).ToList(),
             pairs[0].OwnPermissions,
             pairs[0].OtherPermissions);
@@ -187,13 +190,21 @@ public class UserPairCacheService : IHostedService
         }
     }
 
-    private async Task WaitForProcessing()
+    private async Task WaitForProcessing(string uid)
     {
-        while (_lockSemaphore.CurrentCount == 0)
+        while (_staleUserData.Any(u => string.Equals(u.UID, uid, StringComparison.Ordinal)))
         {
             await Task.Delay(50).ConfigureAwait(false);
         }
     }
 
-    public record UserInfo(string Alias, bool IsPaired, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
+    private async Task WaitForProcessing(string uid, string otheruid)
+    {
+        while (_staleUserData.Any(u => string.Equals(u.UID, uid, StringComparison.Ordinal) && string.Equals(u.OtherUID, otheruid, StringComparison.Ordinal)))
+        {
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+    }
+
+    public record UserInfo(string Alias, bool IsPaired, bool IsSynced, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
 }

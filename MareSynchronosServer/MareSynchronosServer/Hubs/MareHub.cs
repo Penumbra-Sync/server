@@ -1,6 +1,7 @@
 ﻿using MareSynchronos.API.Data;
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Dto;
+using MareSynchronos.API.Dto.User;
 using MareSynchronos.API.SignalR;
 using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
