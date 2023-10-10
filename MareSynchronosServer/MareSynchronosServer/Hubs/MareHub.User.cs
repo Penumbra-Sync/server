@@ -72,12 +72,12 @@ public partial class MareHub
 
         var existingData = await _cacheService.GetPairData(UserUID, otherUser.UID).ConfigureAwait(false);
 
-        var existingPermissions = existingData.OwnPermissions;
-        if (existingPermissions == null || !existingPermissions.Sticky)
+        var permissions = existingData.OwnPermissions;
+        if (permissions == null || !permissions.Sticky)
         {
             var ownDefaultPermissions = await _dbContext.UserDefaultPreferredPermissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID).ConfigureAwait(false);
 
-            existingPermissions = new UserPermissionSet()
+            permissions = new UserPermissionSet()
             {
                 User = user,
                 OtherUser = otherUser,
@@ -88,7 +88,21 @@ public partial class MareHub
                 Sticky = ownDefaultPermissions.IndividualIsSticky
             };
 
-            await _dbContext.Permissions.AddAsync(existingPermissions).ConfigureAwait(false);
+            var existingDbPerms = await _dbContext.Permissions.SingleOrDefaultAsync(u => u.UserUID == UserUID && u.OtherUserUID == otherUser.UID).ConfigureAwait(false);
+            if (existingDbPerms == null)
+            {
+                await _dbContext.Permissions.AddAsync(permissions).ConfigureAwait(false);
+            }
+            else
+            {
+                existingDbPerms.DisableAnimations = permissions.DisableAnimations;
+                existingDbPerms.DisableSounds = permissions.DisableSounds;
+                existingDbPerms.DisableVFX = permissions.DisableVFX;
+                existingDbPerms.IsPaused = false;
+                existingDbPerms.Sticky = permissions.Sticky;
+
+                _dbContext.Permissions.Update(existingDbPerms);
+            }
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
@@ -100,7 +114,7 @@ public partial class MareHub
 
         var otherPermissions = existingData?.OtherPermissions ?? null;
 
-        var ownPerm = existingPermissions.ToUserPermissions(setSticky: true);
+        var ownPerm = permissions.ToUserPermissions(setSticky: true);
         var otherPerm = otherPermissions.ToUserPermissions();
 
         var userPairResponse = new UserPairDto(otherUser.ToUserData(),
@@ -115,7 +129,7 @@ public partial class MareHub
         // send push with update to other user if other user is online
         await Clients.User(otherUser.UID)
             .Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(user.ToUserData(),
-            existingPermissions.ToUserPermissions())).ConfigureAwait(false);
+            permissions.ToUserPermissions())).ConfigureAwait(false);
 
         await Clients.User(otherUser.UID)
             .Client_UpdateUserIndividualPairStatusDto(new(user.ToUserData(), IndividualPairStatus.Bidirectional))
@@ -297,7 +311,7 @@ public partial class MareHub
         await Clients.User(UserUID).Client_UserRemoveClientPair(dto).ConfigureAwait(false);
 
         // check if opposite entry exists
-        if (!pairData.IsPaired) return;
+        if (!pairData.IndividuallyPaired) return;
 
         // check if other user is online, if no then there is no need to do anything further
         var otherIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
@@ -407,11 +421,14 @@ public partial class MareHub
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
-        var otherEntry = OppositeEntry(dto.User.UID);
+        var permCopy = dto.Permissions;
+        permCopy.SetSticky(dto.Permissions.IsSticky() || setSticky);
 
-        await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(dto).ConfigureAwait(false);
+        await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(new UserPermissionsDto(dto.User, permCopy)).ConfigureAwait(false);
 
-        if (otherEntry != null)
+        var newPairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
+
+        if (pairData.IsSynced && !newPairData.IsSynced)
         {
             await Clients.User(dto.User.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID), dto.Permissions)).ConfigureAwait(false);
 

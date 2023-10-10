@@ -74,7 +74,8 @@ public partial class MareHub
         var (inGroup, groupPair) = await TryValidateUserInGroup(dto.Group.GID).ConfigureAwait(false);
         if (!inGroup) return;
 
-        var groupPreferredPermissions = await _dbContext.GroupPairPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        var groupPreferredPermissions = await _dbContext.GroupPairPreferredPermissions
+            .SingleAsync(u => u.UserUID == UserUID && u.GroupGID == dto.Group.GID).ConfigureAwait(false);
 
         var wasPaused = groupPreferredPermissions.IsPaused;
         groupPreferredPermissions.DisableSounds = dto.GroupPairPermissions.IsDisableSounds();
@@ -88,20 +89,23 @@ public partial class MareHub
             .ToDictionary(d => d.Key, d => d.Value, StringComparer.Ordinal);
 
         var affectedGroupPairs = allPairs.Where(u => u.Value.GIDs.Contains(dto.GID, StringComparer.Ordinal)).ToList();
-        await _dbContext.Permissions.Where(u => u.UserUID == UserUID
-            && affectedGroupPairs.Exists(c => c.Key == u.OtherUserUID))
-            .ForEachAsync(u =>
-            {
-                u.DisableSounds = groupPreferredPermissions.DisableSounds;
-                u.DisableAnimations = groupPreferredPermissions.DisableAnimations;
-                u.IsPaused = groupPreferredPermissions.IsPaused;
-                u.DisableVFX = groupPreferredPermissions.DisableVFX;
-            }).ConfigureAwait(false);
+        var groupUserUids = affectedGroupPairs.Select(g => g.Key).ToList();
+        var affectedPerms = await _dbContext.Permissions.Where(u => u.UserUID == UserUID
+            && groupUserUids.Any(c => c == u.OtherUserUID))
+            .ToListAsync().ConfigureAwait(false);
+
+        foreach (var perm in affectedPerms)
+        {
+            perm.DisableSounds = groupPreferredPermissions.DisableSounds;
+            perm.DisableAnimations = groupPreferredPermissions.DisableAnimations;
+            perm.IsPaused = groupPreferredPermissions.IsPaused;
+            perm.DisableVFX = groupPreferredPermissions.DisableVFX;
+        }
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         foreach (var item in affectedGroupPairs)
         {
-            _cacheService.MarkAsStale(item.Key, UserUID);
+            _cacheService.MarkAsStale(UserUID, item.Key);
         }
 
         // send messages
@@ -115,6 +119,12 @@ public partial class MareHub
         await Clients.Users(affectedGroupPairs
             .Select(k => k.Key))
             .Client_UserUpdateOtherPairPermissions(new(new(UserUID), permissions)).ConfigureAwait(false);
+
+        await Clients.User(UserUID).Client_GroupChangeUserPairPermissions(dto).ConfigureAwait(false);
+        foreach (var item in affectedGroupPairs.Select(k => k.Key))
+        {
+            await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(new(new(item), permissions)).ConfigureAwait(false);
+        }
 
         var self = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 

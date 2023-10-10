@@ -25,8 +25,8 @@ public static class Extensions
 
     public static IndividualPairStatus ToIndividualPairStatus(this UserInfo userInfo)
     {
-        if (userInfo.IsPaired) return IndividualPairStatus.Bidirectional;
-        if (!userInfo.IsPaired && userInfo.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)) return IndividualPairStatus.OneSided;
+        if (userInfo.IndividuallyPaired) return IndividualPairStatus.Bidirectional;
+        if (!userInfo.IndividuallyPaired && userInfo.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal)) return IndividualPairStatus.OneSided;
         return IndividualPairStatus.None;
     }
 

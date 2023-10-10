@@ -3,7 +3,6 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
-using static Grpc.Core.Metadata;
 
 namespace MareSynchronosServer.Services;
 
@@ -13,7 +12,6 @@ public class UserPairCacheService : IHostedService
     private readonly ILogger<UserPairCacheService> _logger;
     private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly ConcurrentQueue<(string? UID, string? OtherUID)> _staleUserData;
-    private readonly SemaphoreSlim _lockSemaphore = new(1);
     public UserPairCacheService(ILogger<UserPairCacheService> logger, IDbContextFactory<MareDbContext> dbContextFactory)
     {
         _logger = logger;
@@ -86,11 +84,6 @@ public class UserPairCacheService : IHostedService
 
     private async Task<Dictionary<string, UserInfo>> BuildFullCache(MareDbContext dbContext, string uid)
     {
-        while (_staleUserData.Any(u => string.Equals(u.UID, uid, StringComparison.Ordinal) || string.Equals(u.OtherUID, uid, StringComparison.Ordinal)))
-        {
-            await Task.Delay(100).ConfigureAwait(false);
-        }
-
         var pairs = await dbContext.GetAllPairsForUser(uid).ToListAsync().ConfigureAwait(false);
 
         return pairs.GroupBy(g => g.OtherUserUID, StringComparer.Ordinal)
@@ -130,8 +123,6 @@ public class UserPairCacheService : IHostedService
                 _logger.LogDebug("Processing Stale Entries");
                 try
                 {
-                    await _lockSemaphore.WaitAsync().ConfigureAwait(false);
-
                     using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
                     while (_staleUserData.TryPeek(out var staleUserPair))
                     {
@@ -160,18 +151,22 @@ public class UserPairCacheService : IHostedService
                         }
                         else
                         {
-                            _logger.LogDebug("Building Individual Cache for {user}:{user2}", staleUserPair.UID, staleUserPair.OtherUID);
-                            var userInfo = await BuildIndividualCache(dbContext, staleUserPair.UID, staleUserPair.OtherUID).ConfigureAwait(false);
-
-                            if (userInfo == null) _cache[staleUserPair.UID].Remove(staleUserPair.OtherUID);
-                            else _cache[staleUserPair.UID][staleUserPair.OtherUID] = userInfo;
-
-                            if (_cache.ContainsKey(staleUserPair.OtherUID))
+                            if (_cache.ContainsKey(staleUserPair.UID))
                             {
-                                _logger.LogDebug("Building Individual Cache for {user}:{user2}", staleUserPair.OtherUID, staleUserPair.UID);
-                                var otherUserInfo = await BuildIndividualCache(dbContext, staleUserPair.OtherUID, staleUserPair.UID).ConfigureAwait(false);
-                                if (otherUserInfo == null) _cache[staleUserPair.OtherUID].Remove(staleUserPair.UID);
-                                else _cache[staleUserPair.OtherUID][staleUserPair.UID] = otherUserInfo;
+                                _logger.LogDebug("Building Individual Cache for {user}:{user2}", staleUserPair.UID, staleUserPair.OtherUID);
+
+                                var userInfo = await BuildIndividualCache(dbContext, staleUserPair.UID, staleUserPair.OtherUID).ConfigureAwait(false);
+
+                                if (userInfo == null) _cache[staleUserPair.UID].Remove(staleUserPair.OtherUID);
+                                else _cache[staleUserPair.UID][staleUserPair.OtherUID] = userInfo;
+
+                                if (_cache.ContainsKey(staleUserPair.OtherUID))
+                                {
+                                    _logger.LogDebug("Building Individual Cache for {user}:{user2}", staleUserPair.OtherUID, staleUserPair.UID);
+                                    var otherUserInfo = await BuildIndividualCache(dbContext, staleUserPair.OtherUID, staleUserPair.UID).ConfigureAwait(false);
+                                    if (otherUserInfo == null) _cache[staleUserPair.OtherUID].Remove(staleUserPair.UID);
+                                    else _cache[staleUserPair.OtherUID][staleUserPair.UID] = otherUserInfo;
+                                }
                             }
                         }
 
@@ -181,10 +176,6 @@ public class UserPairCacheService : IHostedService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error during Stale entry processing");
-                }
-                finally
-                {
-                    _lockSemaphore.Release();
                 }
             }
         }
@@ -206,5 +197,5 @@ public class UserPairCacheService : IHostedService
         }
     }
 
-    public record UserInfo(string Alias, bool IsPaired, bool IsSynced, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
+    public record UserInfo(string Alias, bool IndividuallyPaired, bool IsSynced, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
 }
