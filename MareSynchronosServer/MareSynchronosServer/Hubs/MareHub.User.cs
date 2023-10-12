@@ -85,7 +85,7 @@ public partial class MareHub
                 DisableSounds = ownDefaultPermissions.DisableIndividualSounds,
                 DisableVFX = ownDefaultPermissions.DisableIndividualVFX,
                 IsPaused = false,
-                Sticky = ownDefaultPermissions.IndividualIsSticky
+                Sticky = true
             };
 
             var existingDbPerms = await _dbContext.Permissions.SingleOrDefaultAsync(u => u.UserUID == UserUID && u.OtherUserUID == otherUser.UID).ConfigureAwait(false);
@@ -99,7 +99,7 @@ public partial class MareHub
                 existingDbPerms.DisableSounds = permissions.DisableSounds;
                 existingDbPerms.DisableVFX = permissions.DisableVFX;
                 existingDbPerms.IsPaused = false;
-                existingDbPerms.Sticky = permissions.Sticky;
+                existingDbPerms.Sticky = true;
 
                 _dbContext.Permissions.Update(existingDbPerms);
             }

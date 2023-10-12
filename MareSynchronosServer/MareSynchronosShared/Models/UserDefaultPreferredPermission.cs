@@ -17,6 +17,6 @@ public class UserDefaultPreferredPermission
     public bool DisableGroupAnimations { get; set; } = false;
     public bool DisableGroupSounds { get; set; } = false;
     public bool DisableGroupVFX { get; set; } = false;
-    public bool IndividualIsSticky { get; set; } = true;
+    public bool IndividualIsSticky { get; set; } = false;
 }
 
