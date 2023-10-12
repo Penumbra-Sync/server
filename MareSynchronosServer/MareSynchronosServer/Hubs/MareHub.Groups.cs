@@ -392,7 +392,7 @@ public partial class MareHub
     {
         var aliasOrGid = dto.Group.GID.Trim();
 
-        _logger.LogCallInfo(MareHubLogger.Args(dto.Group));
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
 
         var group = await _dbContext.Groups.Include(g => g.Owner).AsNoTracking().SingleOrDefaultAsync(g => g.GID == aliasOrGid || g.Alias == aliasOrGid).ConfigureAwait(false);
         var groupGid = group?.GID ?? string.Empty;
@@ -421,7 +421,7 @@ public partial class MareHub
     {
         var aliasOrGid = dto.Group.GID.Trim();
 
-        _logger.LogCallInfo(MareHubLogger.Args(dto.Group));
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
 
         var group = await _dbContext.Groups.Include(g => g.Owner).AsNoTracking().SingleOrDefaultAsync(g => g.GID == aliasOrGid || g.Alias == aliasOrGid).ConfigureAwait(false);
         var groupGid = group?.GID ?? string.Empty;
@@ -471,6 +471,7 @@ public partial class MareHub
             };
 
             _dbContext.Add(newPerms);
+            preferredPermissions = newPerms;
         }
         else
         {
@@ -495,25 +496,51 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
 
+        _cacheService.MarkAsStale(UserUID, null);
         foreach (var pair in groupPairs)
         {
-            var perms = allUserPairs.TryGetValue(pair.GroupUserUID, out var userinfo);
+            _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
+        }
+
+        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false);
+
+        foreach (var pair in groupPairs)
+        {
+            var perms = userPairsAfterJoin.TryGetValue(pair.GroupUserUID, out var userinfo);
             // check if we have had prior permissions to that pair, if not add them
             var ownPermissionsToOther = userinfo?.OwnPermissions ?? null;
             if (ownPermissionsToOther == null)
             {
-                ownPermissionsToOther = new()
-                {
-                    UserUID = UserUID,
-                    OtherUserUID = pair.GroupUserUID,
-                    DisableAnimations = preferredPermissions.DisableAnimations,
-                    DisableSounds = preferredPermissions.DisableSounds,
-                    DisableVFX = preferredPermissions.DisableVFX,
-                    IsPaused = false,
-                    Sticky = false
-                };
+                var existingPermissionsOnDb = await _dbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == UserUID && p.OtherUserUID == pair.GroupUserUID).ConfigureAwait(false);
 
-                await _dbContext.Permissions.AddAsync(ownPermissionsToOther).ConfigureAwait(false);
+                if (existingPermissionsOnDb == null)
+                {
+                    ownPermissionsToOther = new()
+                    {
+                        UserUID = UserUID,
+                        OtherUserUID = pair.GroupUserUID,
+                        DisableAnimations = preferredPermissions.DisableAnimations,
+                        DisableSounds = preferredPermissions.DisableSounds,
+                        DisableVFX = preferredPermissions.DisableVFX,
+                        IsPaused = false,
+                        Sticky = false
+                    };
+
+                    await _dbContext.Permissions.AddAsync(ownPermissionsToOther).ConfigureAwait(false);
+                }
+                else
+                {
+                    existingPermissionsOnDb.DisableAnimations = preferredPermissions.DisableAnimations;
+                    existingPermissionsOnDb.DisableSounds = preferredPermissions.DisableSounds;
+                    existingPermissionsOnDb.DisableVFX = preferredPermissions.DisableVFX;
+                    existingPermissionsOnDb.IsPaused = false;
+                    existingPermissionsOnDb.Sticky = false;
+
+                    _dbContext.Update(existingPermissionsOnDb);
+
+                    ownPermissionsToOther = existingPermissionsOnDb;
+                }
+
             }
             else if (!ownPermissionsToOther.Sticky)
             {
@@ -548,7 +575,7 @@ public partial class MareHub
             }
 
             await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                pair.ToUserData(), ownPermissionsToOther.ToUserPermissions(setSticky: false),
+                pair.ToUserData(), ownPermissionsToOther.ToUserPermissions(setSticky: ownPermissionsToOther.Sticky),
                 otherPermissionToSelf.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
             await Clients.User(pair.GroupUserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
                 self.ToUserData(), otherPermissionToSelf.ToUserPermissions(setSticky: false),
@@ -565,13 +592,13 @@ public partial class MareHub
             }
         }
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
         _cacheService.MarkAsStale(UserUID, null);
         foreach (var pair in groupPairs)
         {
-            _cacheService.MarkAsStale(pair.GroupUserUID, UserUID);
+            _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
         }
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return true;
     }

@@ -126,27 +126,20 @@ public class UserPairCacheService : IHostedService
                     using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
                     while (_staleUserData.TryPeek(out var staleUserPair))
                     {
-                        // todo: check this spaghetti
                         if (staleUserPair.UID == null)
                         {
-                            foreach (var entry in _cache.Where(c => c.Value.ContainsKey(staleUserPair.OtherUID)).ToList())
+                            foreach (var entry in _cache.Where(c => c.Value.ContainsKey(staleUserPair.OtherUID)).Select(k => k.Key).Distinct(StringComparer.Ordinal).ToList())
                             {
-                                _logger.LogDebug("Building Full Cache for {user}", entry.Key);
-                                _cache[entry.Key] = await BuildFullCache(dbContext, entry.Key).ConfigureAwait(false);
+                                _logger.LogDebug("UID is null; Building Individual Cache for {user}:{user2}", staleUserPair.UID, entry);
+                                _staleUserData.Enqueue(new(staleUserPair.OtherUID, entry));
                             }
                         }
                         else if (staleUserPair.OtherUID == null)
                         {
-                            if (_cache.ContainsKey(staleUserPair.UID))
+                            foreach (var entry in _cache.Where(c => c.Value.ContainsKey(staleUserPair.UID)).Select(k => k.Key).Distinct(StringComparer.Ordinal).ToList())
                             {
-                                _logger.LogDebug("Building Full Cache for {user}", staleUserPair.UID);
-                                _cache[staleUserPair.UID] = await BuildFullCache(dbContext, staleUserPair.UID).ConfigureAwait(false);
-                            }
-
-                            foreach (var entry in _cache.Where(c => c.Value.ContainsKey(staleUserPair.UID)).ToList())
-                            {
-                                _logger.LogDebug("Building Full Cache for {user}", entry.Key);
-                                _cache[entry.Key] = await BuildFullCache(dbContext, entry.Key).ConfigureAwait(false);
+                                _logger.LogDebug("OtherUID is null; Building Individual Cache for {user}:{user2}", staleUserPair.UID, entry);
+                                _staleUserData.Enqueue(new(staleUserPair.UID, entry));
                             }
                         }
                         else

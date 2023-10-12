@@ -171,7 +171,7 @@ public partial class MareHub
     {
         uid ??= UserUID;
         var allUserPairs = await _cacheService.GetAllPairs(uid).ConfigureAwait(false);
-        if (!allUserPairs.TryGetValue(groupUserPair.GroupUserUID, out var _))
+        if (!allUserPairs.TryGetValue(groupUserPair.GroupUserUID, out var info) || !info.IsSynced)
         {
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(groupUserIdent))
@@ -236,6 +236,8 @@ public partial class MareHub
         }
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        _cacheService.MarkAsStale(userUid, null);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 

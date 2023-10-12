@@ -10,7 +10,8 @@
             "Microsoft.EntityFramework": "Warning",
             "MareSynchronosServer": "Debug",
             "MareSynchronosShared": "Debug",
-            "System.IO": "Information"
+            "System.IO": "Information",
+            "MareSynchronosServer.Services.SystemInfoService": "Warning"
         },
         "File": {
             "BasePath": "logs",
