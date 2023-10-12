@@ -14,6 +14,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentSecondary), Context.Interaction.User.Id);
+
         using var mareDb = GetDbContext();
         var primaryUID = (await mareDb.LodeStoneAuth.Include(u => u.User).SingleAsync(u => u.DiscordId == Context.User.Id).ConfigureAwait(false)).User.UID;
         var secondaryUids = await mareDb.Auth.CountAsync(p => p.PrimaryUserUID == primaryUID).ConfigureAwait(false);
@@ -35,6 +37,8 @@ public partial class MareWizardModule
     public async Task ComponentSecondaryCreate(string primaryUid)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{primary}", nameof(ComponentSecondaryCreate), Context.Interaction.User.Id, primaryUid);
 
         using var mareDb = GetDbContext();
         EmbedBuilder eb = new();

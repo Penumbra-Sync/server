@@ -6,6 +6,7 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32;
 using StackExchange.Redis;
 using System.Text.RegularExpressions;
 
@@ -39,6 +40,8 @@ public partial class MareWizardModule : InteractionModuleBase
     public async Task StartWizard(bool init = false)
     {
         if (!init && !(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}", nameof(StartWizard), Context.Interaction.User.Id);
 
         using var mareDb = GetDbContext();
         bool hasAccount = await mareDb.LodeStoneAuth.AnyAsync(u => u.DiscordId == Context.User.Id && u.StartedAt == null).ConfigureAwait(false);

@@ -14,6 +14,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentRelink), Context.Interaction.User.Id);
+
         EmbedBuilder eb = new();
         eb.WithTitle("Relink");
         eb.WithColor(Color.Blue);
@@ -32,6 +34,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentRelinkStart), Context.Interaction.User.Id);
+
         using var db = GetDbContext();
         db.LodeStoneAuth.RemoveRange(db.LodeStoneAuth.Where(u => u.DiscordId == Context.User.Id));
         _botServices.DiscordVerifiedUsers.TryRemove(Context.User.Id, out _);
@@ -45,6 +49,8 @@ public partial class MareWizardModule
     public async Task ModalRelink(LodestoneModal lodestoneModal)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{url}", nameof(ModalRelink), Context.Interaction.User.Id, lodestoneModal.LodestoneUrl);
 
         EmbedBuilder eb = new();
         eb.WithColor(Color.Purple);
@@ -60,6 +66,9 @@ public partial class MareWizardModule
     public async Task ComponentRelinkVerify(string verificationCode, string uid)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{uid}:{verificationCode}", nameof(ComponentRelinkVerify), Context.Interaction.User.Id, uid, verificationCode);
+
 
         _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id,
             async (_) => await HandleVerifyRelinkAsync(Context.User.Id, verificationCode).ConfigureAwait(false)));
@@ -79,6 +88,8 @@ public partial class MareWizardModule
     public async Task ComponentRelinkVerifyCheck(string verificationCode, string uid)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{uid}:{verificationCode}", nameof(ComponentRelinkVerifyCheck), Context.Interaction.User.Id, uid, verificationCode);
 
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();

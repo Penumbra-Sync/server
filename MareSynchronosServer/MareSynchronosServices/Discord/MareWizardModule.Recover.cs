@@ -14,6 +14,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentRecover), Context.Interaction.User.Id);
+
         using var mareDb = GetDbContext();
         EmbedBuilder eb = new();
         eb.WithColor(Color.Blue);
@@ -33,6 +35,8 @@ public partial class MareWizardModule
     public async Task SelectionRecovery(string uid)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionRecovery), Context.Interaction.User.Id, uid);
 
         using var mareDb = GetDbContext();
         EmbedBuilder eb = new();

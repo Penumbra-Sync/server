@@ -12,6 +12,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentUserinfo), Context.Interaction.User.Id);
+
         using var mareDb = GetDbContext();
         EmbedBuilder eb = new();
         eb.WithTitle("User Info");
@@ -31,6 +33,8 @@ public partial class MareWizardModule
     public async Task SelectionUserinfo(string uid)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionUserinfo), Context.Interaction.User.Id, uid);
 
         using var mareDb = GetDbContext();
         EmbedBuilder eb = new();

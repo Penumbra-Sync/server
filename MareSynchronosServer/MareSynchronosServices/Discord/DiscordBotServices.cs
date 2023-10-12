@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using Discord.Rest;
-using Discord.WebSocket;
 using MareSynchronosShared.Metrics;
 
 namespace MareSynchronosServices.Discord;
@@ -46,13 +45,12 @@ public class DiscordBotServices
         verificationTaskCts = new CancellationTokenSource();
         while (!verificationTaskCts.IsCancellationRequested)
         {
+            Logger.LogInformation("Processing Verification Queue, Entries: {entr}", VerificationQueue.Count);
             if (VerificationQueue.TryDequeue(out var queueitem))
             {
                 try
                 {
                     queueitem.Value.Invoke(_serviceProvider);
-
-                    Logger.LogInformation("Sent login information to user");
                 }
                 catch (Exception e)
                 {

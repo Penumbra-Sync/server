@@ -14,6 +14,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentRegister), Context.Interaction.User.Id);
+
         EmbedBuilder eb = new();
         eb.WithColor(Color.Blue);
         eb.WithTitle("Start Registration");
@@ -32,6 +34,8 @@ public partial class MareWizardModule
     public async Task ComponentRegisterStart()
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}", nameof(ComponentRegisterStart), Context.Interaction.User.Id);
 
         using var db = GetDbContext();
         var entry = await db.LodeStoneAuth.SingleOrDefaultAsync(u => u.DiscordId == Context.User.Id && u.StartedAt != null).ConfigureAwait(false);
@@ -52,6 +56,8 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
+        _logger.LogInformation("{method}:{userId}:{lodestone}", nameof(ModalRegister), Context.Interaction.User.Id, lodestoneModal.LodestoneUrl);
+
         EmbedBuilder eb = new();
         eb.WithColor(Color.Purple);
         var success = await HandleRegisterModalAsync(eb, lodestoneModal).ConfigureAwait(false);
@@ -66,6 +72,8 @@ public partial class MareWizardModule
     public async Task ComponentRegisterVerify(string verificationCode)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{verificationcode}", nameof(ComponentRegisterVerify), Context.Interaction.User.Id, verificationCode);
 
         _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id,
             async (_) => await HandleVerifyAsync(Context.User.Id, verificationCode).ConfigureAwait(false)));
@@ -85,6 +93,8 @@ public partial class MareWizardModule
     public async Task ComponentRegisterVerifyCheck(string verificationCode)
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        _logger.LogInformation("{method}:{userId}:{uid}", nameof(ComponentRegisterVerify), Context.Interaction.User.Id, verificationCode);
 
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
@@ -202,19 +212,27 @@ public partial class MareWizardModule
         if (_botServices.DiscordLodestoneMapping.ContainsKey(userid))
         {
             var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
-            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordLodestoneMapping[userid]}").ConfigureAwait(false);
+            var url = $"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordLodestoneMapping[userid]}";
+            var response = await req.GetAsync(url).ConfigureAwait(false);
+            _logger.LogInformation("Verifying {userid} with URL {url}", userid, url);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (content.Contains(authString))
                 {
+                    _logger.LogInformation("Verified {userid} from lodestone {lodestone}", userid, _botServices.DiscordLodestoneMapping[userid]);
                     _botServices.DiscordVerifiedUsers[userid] = true;
                     _botServices.DiscordLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
                 {
+                    _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}", userid, _botServices.DiscordLodestoneMapping[userid], authString);
                     _botServices.DiscordVerifiedUsers[userid] = false;
                 }
+            }
+            else
+            {
+                _logger.LogWarning("Could not verify {userid}, HttpStatusCode: {code}", userid, response.StatusCode);
             }
         }
     }
