@@ -45,7 +45,7 @@ public class DiscordBotServices
         verificationTaskCts = new CancellationTokenSource();
         while (!verificationTaskCts.IsCancellationRequested)
         {
-            Logger.LogInformation("Processing Verification Queue, Entries: {entr}", VerificationQueue.Count);
+            Logger.LogDebug("Processing Verification Queue, Entries: {entr}", VerificationQueue.Count);
             if (VerificationQueue.TryDequeue(out var queueitem))
             {
                 try

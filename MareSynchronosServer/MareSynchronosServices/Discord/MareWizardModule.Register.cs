@@ -94,7 +94,7 @@ public partial class MareWizardModule
     {
         if (!(await ValidateInteraction().ConfigureAwait(false))) return;
 
-        _logger.LogInformation("{method}:{userId}:{uid}", nameof(ComponentRegisterVerify), Context.Interaction.User.Id, verificationCode);
+        _logger.LogInformation("{method}:{userId}:{uid}", nameof(ComponentRegisterVerifyCheck), Context.Interaction.User.Id, verificationCode);
 
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
