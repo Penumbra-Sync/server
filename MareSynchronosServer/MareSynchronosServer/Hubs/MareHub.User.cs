@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using MareSynchronos.API.Data;
@@ -20,7 +19,6 @@ public partial class MareHub
 {
     private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
 
-    // TODO: needed, requires change
     [Authorize(Policy = "Identified")]
     public async Task UserAddPair(UserDto dto)
     {
@@ -142,7 +140,6 @@ public partial class MareHub
         }
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserDelete()
     {
@@ -158,7 +155,6 @@ public partial class MareHub
         await DeleteUser(userEntry).ConfigureAwait(false);
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task<List<OnlineUserIdentDto>> UserGetOnlinePairs()
     {
@@ -167,10 +163,11 @@ public partial class MareHub
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
         var pairs = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
 
+        await SendOnlineToAllPairedUsers().ConfigureAwait(false);
+
         return pairs.Select(p => new OnlineUserIdentDto(new UserData(p.Key), p.Value)).ToList();
     }
 
-    // todo: needed, requires adjustment for individual permissions, requires new dto
     [Authorize(Policy = "Identified")]
     public async Task<List<UserFullPairDto>> UserGetPairedClients()
     {
@@ -187,7 +184,6 @@ public partial class MareHub
         }).ToList();
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task<UserProfileDto> UserGetProfile(UserDto user)
     {
@@ -209,7 +205,6 @@ public partial class MareHub
         return new UserProfileDto(user.User, false, data.IsNSFW, data.Base64ProfileImage, data.UserDescription);
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserPushData(UserCharaDataMessageDto dto)
     {
@@ -286,7 +281,6 @@ public partial class MareHub
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipients.Count());
     }
 
-    // todo: verify this makes sense as written
     [Authorize(Policy = "Identified")]
     public async Task UserRemovePair(UserDto dto)
     {
@@ -331,9 +325,6 @@ public partial class MareHub
         // if the either had paused, do nothing
         if (callerHadPaused && otherHadPaused) return;
 
-        //var userGroups = await _dbContext.GroupPairs.Where(u => u.GroupUserUID == UserUID).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
-        //var otherUserGroups = await _dbContext.GroupPairs.Where(u => u.GroupUserUID == dto.User.UID).Select(g => g.GroupGID).ToListAsync().ConfigureAwait(false);
-        //bool anyGroupsInCommon = userGroups.Exists(u => otherUserGroups.Contains(u, StringComparer.OrdinalIgnoreCase));
         var currentPairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
 
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
@@ -344,7 +335,6 @@ public partial class MareHub
         }
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserReportProfile(UserProfileReportDto dto)
     {
@@ -387,7 +377,6 @@ public partial class MareHub
         await Clients.Users(dto.User.UID).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
     }
 
-    // todo: verify this makes sense as written
     [Authorize(Policy = "Identified")]
     public async Task UserSetPairPermissions(UserPermissionsDto dto)
     {
@@ -449,7 +438,6 @@ public partial class MareHub
         }
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Identified")]
     public async Task UserSetProfile(UserProfileDto dto)
     {
@@ -533,7 +521,6 @@ public partial class MareHub
         await Clients.Caller.Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
     }
 
-    // needed, no adjustment
     [Authorize(Policy = "Authenticated")]
     public async Task UserUpdateDefaultPermissions(DefaultPermissionsDto defaultPermissions)
     {

@@ -182,7 +182,6 @@ public partial class MareHub
         }
     }
 
-    // todo: rewrite this for new permissions I guess
     private async Task UserLeaveGroup(GroupDto dto, string userUid)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));

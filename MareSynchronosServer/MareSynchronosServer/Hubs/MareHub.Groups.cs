@@ -1,8 +1,6 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Enum;
+﻿using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
 using MareSynchronos.API.Dto.Group;
-using MareSynchronosServer.Services;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
@@ -15,7 +13,6 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    // needed, nothing to be done
     [Authorize(Policy = "Identified")]
     public async Task GroupBanUser(GroupPairDto dto, string reason)
     {
@@ -153,7 +150,6 @@ public partial class MareHub
         }
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task GroupChangeOwnership(GroupPairDto dto)
     {
@@ -183,7 +179,6 @@ public partial class MareHub
         await Clients.Users(groupPairs).Client_GroupSendInfo(new GroupInfoDto(group.ToGroupData(), newOwnerPair.GroupUser.ToUserData(), group.ToEnum())).ConfigureAwait(false);
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task<bool> GroupChangePassword(GroupPasswordDto dto)
     {
@@ -200,7 +195,6 @@ public partial class MareHub
         return true;
     }
 
-    // todo: needed, but need to change the all paired clients stuff
     [Authorize(Policy = "Identified")]
     public async Task GroupClear(GroupDto dto)
     {
@@ -226,7 +220,7 @@ public partial class MareHub
 
         foreach (var pair in notPinned)
         {
-            await Clients.Users(groupPairs.Where(p => p.IsPinned).Select(g => g.GroupUserUID))
+            await Clients.Users(groupPairs.Where(p => p.IsPinned || p.IsModerator).Select(g => g.GroupUserUID))
                 .Client_GroupPairLeft(new GroupPairDto(dto.Group, pair.GroupUser.ToUserData())).ConfigureAwait(false);
 
             var pairIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
@@ -239,7 +233,6 @@ public partial class MareHub
         }
     }
 
-    // todo: check if it works
     [Authorize(Policy = "Identified")]
     public async Task<GroupJoinDto> GroupCreate()
     {
@@ -307,7 +300,6 @@ public partial class MareHub
         return new GroupJoinDto(newGroup.ToGroupData(), passwd, initialPrefPermissions.ToEnum());
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task<List<string>> GroupCreateTempInvite(GroupDto dto, int amount)
     {
@@ -347,7 +339,6 @@ public partial class MareHub
         return inviteCodes;
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task GroupDelete(GroupDto dto)
     {
@@ -367,7 +358,6 @@ public partial class MareHub
         await SendGroupDeletedToAll(groupPairs).ConfigureAwait(false);
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task<List<BannedGroupUserDto>> GroupGetBannedUsers(GroupDto dto)
     {
@@ -415,7 +405,6 @@ public partial class MareHub
         return new GroupJoinInfoDto(group.ToGroupData(), group.Owner.ToUserData(), group.ToEnum(), true);
     }
 
-    // todo: needed, need to split, also requires changes for permissions
     [Authorize(Policy = "Identified")]
     public async Task<bool> GroupJoinFinalize(GroupJoinDto dto)
     {
@@ -645,7 +634,6 @@ public partial class MareHub
         }
     }
 
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task GroupSetUserInfo(GroupPairUserInfoDto dto)
     {
@@ -681,7 +669,6 @@ public partial class MareHub
         await Clients.Users(groupPairs).Client_GroupPairChangeUserInfo(new GroupPairUserInfoDto(dto.Group, dto.User, userPair.ToEnum())).ConfigureAwait(false);
     }
 
-    // todo: check if changes work out
     [Authorize(Policy = "Identified")]
     public async Task<List<GroupFullInfoDto>> GroupsGetAll()
     {
@@ -700,8 +687,6 @@ public partial class MareHub
                 .ToDictionary(i => i.GroupUserUID, i => i.ToEnum(), StringComparer.Ordinal))).ToList();
     }
 
-
-    // needed, no changes
     [Authorize(Policy = "Identified")]
     public async Task GroupUnbanUser(GroupPairDto dto)
     {

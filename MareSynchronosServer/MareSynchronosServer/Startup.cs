@@ -24,7 +24,6 @@ using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using MareSynchronosServer.Controllers;
 using MareSynchronosShared.RequirementHandlers;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace MareSynchronosServer;
 
