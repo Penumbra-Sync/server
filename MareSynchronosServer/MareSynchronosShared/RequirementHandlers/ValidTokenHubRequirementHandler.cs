@@ -9,13 +9,13 @@ public class ValidTokenRequirementHandler : AuthorizationHandler<ValidTokenRequi
 {
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, ValidTokenRequirement requirement)
     {
-        var expirationClaimValue = context.User.Claims.Single(r => string.Equals(r.Type, MareClaimTypes.Expires, StringComparison.Ordinal))?.Value;
+        var expirationClaimValue = context.User.Claims.SingleOrDefault(r => string.Equals(r.Type, MareClaimTypes.Expires, StringComparison.Ordinal));
         if (expirationClaimValue == null)
         {
             context.Fail();
         }
 
-        DateTime expirationDate = new(long.Parse(expirationClaimValue, CultureInfo.InvariantCulture), DateTimeKind.Utc);
+        DateTime expirationDate = new(long.Parse(expirationClaimValue.Value, CultureInfo.InvariantCulture), DateTimeKind.Utc);
         if (expirationDate < DateTime.UtcNow)
         {
             context.Fail();
@@ -31,13 +31,13 @@ public class ValidTokenHubRequirementHandler : AuthorizationHandler<ValidTokenRe
 {
     protected override Task HandleRequirementAsync(AuthorizationHandlerContext context, ValidTokenRequirement requirement, HubInvocationContext resource)
     {
-        var expirationClaimValue = context.User.Claims.Single(r => string.Equals(r.Type, MareClaimTypes.Expires, StringComparison.Ordinal))?.Value;
+        var expirationClaimValue = context.User.Claims.SingleOrDefault(r => string.Equals(r.Type, MareClaimTypes.Expires, StringComparison.Ordinal));
         if (expirationClaimValue == null)
         {
             context.Fail();
         }
 
-        DateTime expirationDate = new(long.Parse(expirationClaimValue, CultureInfo.InvariantCulture), DateTimeKind.Utc);
+        DateTime expirationDate = new(long.Parse(expirationClaimValue.Value, CultureInfo.InvariantCulture), DateTimeKind.Utc);
         if (expirationDate < DateTime.UtcNow)
         {
             context.Fail();
