@@ -53,20 +53,17 @@ public partial class MareWizardModule
 
         var dbUser = await db.Users.SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
 
-        var auth = await db.Auth.Include(u => u.PrimaryUser).SingleOrDefaultAsync(u => u.UserUID == dbUser.UID).ConfigureAwait(false);
         var groups = await db.Groups.Where(g => g.OwnerUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var groupsJoined = await db.GroupPairs.Where(g => g.GroupUserUID == dbUser.UID).ToListAsync().ConfigureAwait(false);
         var identity = await _connectionMultiplexer.GetDatabase().StringGetAsync("UID:" + dbUser.UID).ConfigureAwait(false);
 
-        eb.WithDescription("This is the user info for your selected UID. You can check other UIDs or go back using the menu below." + Environment.NewLine
-            + "If you want to verify your secret key is valid, go to https://emn178.github.io/online-tools/sha256.html and copy your secret key into there and compare it to the Hashed Secret Key provided below.");
+        eb.WithDescription("This is the user info for your selected UID. You can check other UIDs or go back using the menu below.");
         if (!string.IsNullOrEmpty(dbUser.Alias))
         {
             eb.AddField("Vanity UID", dbUser.Alias);
         }
         eb.AddField("Last Online (UTC)", dbUser.LastLoggedIn.ToString("U"));
         eb.AddField("Currently online ", !string.IsNullOrEmpty(identity));
-        eb.AddField("Hashed Secret Key", auth.HashedKey);
         eb.AddField("Joined Syncshells", groupsJoined.Count);
         eb.AddField("Owned Syncshells", groups.Count);
         foreach (var group in groups)
@@ -78,8 +75,6 @@ public partial class MareWizardModule
             }
             eb.AddField("Owned Syncshell " + group.GID + " User Count", syncShellUserCount);
         }
-
-        eb.AddField("Currently online", !string.IsNullOrEmpty(identity));
     }
 
 }
