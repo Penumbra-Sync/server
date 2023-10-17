@@ -113,7 +113,7 @@ public class UserPairCacheService : IHostedService
 
     private async Task<UserInfo?> BuildIndividualCache(MareDbContext dbContext, string uid, string otheruid)
     {
-        var pairs = await dbContext.GetAllPairsForUser(uid).Where(u => u.OtherUserUID == otheruid).ToListAsync().ConfigureAwait(false);
+        var pairs = (await dbContext.GetAllPairsForUser(uid).ToListAsync().ConfigureAwait(false)).Where(u => string.Equals(u.OtherUserUID, otheruid, StringComparison.Ordinal)).ToList();
 
         if (!pairs.Any()) return null;
 
