@@ -13,12 +13,14 @@ public class ValidTokenRequirementHandler : AuthorizationHandler<ValidTokenRequi
         if (expirationClaimValue == null)
         {
             context.Fail();
+            return Task.CompletedTask;
         }
 
         DateTime expirationDate = new(long.Parse(expirationClaimValue.Value, CultureInfo.InvariantCulture), DateTimeKind.Utc);
         if (expirationDate < DateTime.UtcNow)
         {
             context.Fail();
+            return Task.CompletedTask;
         }
 
         context.Succeed(requirement);
@@ -35,12 +37,14 @@ public class ValidTokenHubRequirementHandler : AuthorizationHandler<ValidTokenRe
         if (expirationClaimValue == null)
         {
             context.Fail();
+            return Task.CompletedTask;
         }
 
         DateTime expirationDate = new(long.Parse(expirationClaimValue.Value, CultureInfo.InvariantCulture), DateTimeKind.Utc);
         if (expirationDate < DateTime.UtcNow)
         {
             context.Fail();
+            return Task.CompletedTask;
         }
 
         context.Succeed(requirement);
