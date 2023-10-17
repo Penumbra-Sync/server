@@ -91,7 +91,7 @@ public class Startup
                 o.TokenValidationParameters = new()
                 {
                     ValidateIssuer = false,
-                    ValidateLifetime = false,
+                    ValidateLifetime = true,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt)))),

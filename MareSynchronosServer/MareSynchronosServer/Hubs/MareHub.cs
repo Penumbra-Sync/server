@@ -7,10 +7,12 @@ using MareSynchronosServer.Utils;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.Hubs;
@@ -28,13 +30,14 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
     private readonly IRedisDatabase _redis;
+    private readonly UserPairCacheService _cacheService;
     private readonly Uri _fileServerAddress;
     private readonly Version _expectedClientVersion;
 
     public MareHub(MareMetrics mareMetrics,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IRedisDatabase redisDb)
+        IRedisDatabase redisDb, UserPairCacheService cacheService)
     {
         _mareMetrics = mareMetrics;
         _systemInfoService = systemInfoService;
@@ -46,6 +49,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _expectedClientVersion = configuration.GetValueOrDefault(nameof(ServerConfiguration.ExpectedClientVersion), new Version(0, 0, 0));
         _contextAccessor = contextAccessor;
         _redis = redisDb;
+        _cacheService = cacheService;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
@@ -64,7 +68,18 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
-        await SendOnlineToAllPairedUsers().ConfigureAwait(false);
+
+        var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleOrDefaultAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        if (defaultPermissions == null)
+        {
+            defaultPermissions = new UserDefaultPreferredPermission()
+            {
+                UserUID = UserUID,
+            };
+
+            _dbContext.UserDefaultPreferredPermissions.Add(defaultPermissions);
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
 
         return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {
@@ -78,7 +93,17 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 ShardName = _shardName,
                 MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
                 MaxGroupUserCount = _maxGroupUserCount,
-                FileServerAddress = _fileServerAddress
+                FileServerAddress = _fileServerAddress,
+            },
+            DefaultPreferredPermissions = new DefaultPermissionsDto()
+            {
+                DisableGroupAnimations = defaultPermissions.DisableGroupAnimations,
+                DisableGroupSounds = defaultPermissions.DisableGroupSounds,
+                DisableGroupVFX = defaultPermissions.DisableGroupVFX,
+                DisableIndividualAnimations = defaultPermissions.DisableIndividualAnimations,
+                DisableIndividualSounds = defaultPermissions.DisableIndividualSounds,
+                DisableIndividualVFX = defaultPermissions.DisableIndividualVFX,
+                IndividualIsSticky = defaultPermissions.IndividualIsSticky,
             },
         };
     }
@@ -119,11 +144,13 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
 
             await RemoveUserFromRedis().ConfigureAwait(false);
+            _cacheService.ClearCache(UserUID);
 
             await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 
             _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
             await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         }
         catch { }
 

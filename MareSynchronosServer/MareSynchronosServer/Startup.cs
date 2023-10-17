@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.Authorization;
 using AspNetCoreRateLimit;
 using MareSynchronosShared.Data;
-using MareSynchronosShared.Protos;
-using Grpc.Net.Client.Configuration;
 using MareSynchronosShared.Metrics;
 using MareSynchronosServer.Services;
 using MareSynchronosShared.Utils;
@@ -92,7 +90,9 @@ public class Startup
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
+        services.AddSingleton<UserPairCacheService>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
+        services.AddHostedService(p => p.GetService<UserPairCacheService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 
@@ -133,6 +133,7 @@ public class Startup
                 .WithCompression(MessagePackCompression.Lz4Block)
                 .WithResolver(resolver);
         });
+
 
         // configure redis for SignalR
         var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
@@ -185,6 +186,8 @@ public class Startup
     {
         services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, ValidTokenRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, ValidTokenHubRequirementHandler>();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IConfigurationService<MareConfigurationAuthBase>>((options, config) =>
@@ -192,7 +195,7 @@ public class Startup
                 options.TokenValidationParameters = new()
                 {
                     ValidateIssuer = false,
-                    ValidateLifetime = false,
+                    ValidateLifetime = true,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(config.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt)))),
@@ -215,18 +218,24 @@ public class Startup
             {
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new ValidTokenRequirement());
             });
             options.AddPolicy("Identified", policy =>
             {
                 policy.AddRequirements(new UserRequirement(UserRequirements.Identified));
+                policy.AddRequirements(new ValidTokenRequirement());
+
             });
             options.AddPolicy("Admin", policy =>
             {
                 policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Administrator));
+                policy.AddRequirements(new ValidTokenRequirement());
+
             });
             options.AddPolicy("Moderator", policy =>
             {
                 policy.AddRequirements(new UserRequirement(UserRequirements.Identified | UserRequirements.Moderator | UserRequirements.Administrator));
+                policy.AddRequirements(new ValidTokenRequirement());
             });
             options.AddPolicy("Internal", new AuthorizationPolicyBuilder().RequireClaim(MareClaimTypes.Internal, "true").Build());
         });
@@ -243,6 +252,15 @@ public class Startup
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
         }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
+        services.AddDbContextFactory<MareDbContext>(options =>
+        {
+            options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
+            {
+                builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+                builder.MigrationsAssembly("MareSynchronosShared");
+            }).UseSnakeCaseNamingConvention();
+            options.EnableThreadSafetyChecks(false);
+        });
     }
 
     private static void ConfigureMetrics(IServiceCollection services)
@@ -267,8 +285,8 @@ public class Startup
             MetricsAPI.GaugeAvailableWorkerThreads,
             MetricsAPI.GaugeGroups,
             MetricsAPI.GaugeGroupPairs,
-            MetricsAPI.GaugeGroupPairsPaused,
             MetricsAPI.GaugeUsersRegistered,
+            MetricsAPI.GaugeAuthenticationCacheEntries,
         }));
     }
 

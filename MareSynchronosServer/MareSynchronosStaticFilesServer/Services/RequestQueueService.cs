@@ -201,7 +201,7 @@ public class RequestQueueService : IHostedService
                         _userQueueRequests[i] = null;
                     }
 
-                    if (!_queue.Any()) return;
+                    if (!_queue.Any() && !_priorityQueue.Any()) return;
 
                     if (_userQueueRequests[i] == null)
                     {

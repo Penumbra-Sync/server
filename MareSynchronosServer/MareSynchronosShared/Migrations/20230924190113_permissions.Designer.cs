@@ -3,6 +3,7 @@ using System;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20230924190113_permissions")]
+    partial class permissions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -432,8 +435,7 @@ namespace MareSynchronosServer.Migrations
             modelBuilder.Entity("MareSynchronosShared.Models.UserDefaultPreferredPermission", b =>
                 {
                     b.Property<string>("UserUID")
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasColumnType("text")
                         .HasColumnName("user_uid");
 
                     b.Property<bool>("DisableGroupAnimations")
@@ -464,77 +466,17 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("individual_is_sticky");
 
+                    b.Property<string>("UserUID1")
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("user_uid1");
+
                     b.HasKey("UserUID")
                         .HasName("pk_user_default_preferred_permissions");
 
-                    b.HasIndex("UserUID")
-                        .HasDatabaseName("ix_user_default_preferred_permissions_user_uid");
+                    b.HasIndex("UserUID1")
+                        .HasDatabaseName("ix_user_default_preferred_permissions_user_uid1");
 
                     b.ToTable("user_default_preferred_permissions", (string)null);
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.UserPermissionQuery", b =>
-                {
-                    b.Property<string>("Alias")
-                        .HasColumnType("text")
-                        .HasColumnName("alias");
-
-                    b.Property<string>("GID")
-                        .HasColumnType("text")
-                        .HasColumnName("gid");
-
-                    b.Property<string>("OtherUserUID")
-                        .HasColumnType("text")
-                        .HasColumnName("other_user_uid");
-
-                    b.Property<bool>("OtherpermDisableAnimations")
-                        .HasColumnType("boolean")
-                        .HasColumnName("otherperm_disable_animations");
-
-                    b.Property<bool>("OtherpermDisableSounds")
-                        .HasColumnType("boolean")
-                        .HasColumnName("otherperm_disable_sounds");
-
-                    b.Property<bool>("OtherpermDisableVFX")
-                        .HasColumnType("boolean")
-                        .HasColumnName("otherperm_disable_vfx");
-
-                    b.Property<bool>("OtherpermIsPaused")
-                        .HasColumnType("boolean")
-                        .HasColumnName("otherperm_is_paused");
-
-                    b.Property<bool>("OwnPermSticky")
-                        .HasColumnType("boolean")
-                        .HasColumnName("own_perm_sticky");
-
-                    b.Property<bool>("OwnpermDisableAnimations")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ownperm_disable_animations");
-
-                    b.Property<bool>("OwnpermDisableSounds")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ownperm_disable_sounds");
-
-                    b.Property<bool>("OwnpermDisableVFX")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ownperm_disable_vfx");
-
-                    b.Property<bool>("OwnpermIsPaused")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ownperm_is_paused");
-
-                    b.Property<bool>("Synced")
-                        .HasColumnType("boolean")
-                        .HasColumnName("synced");
-
-                    b.Property<string>("UserUID")
-                        .HasColumnType("text")
-                        .HasColumnName("user_uid");
-
-                    b.ToTable("user_permission_query", null, t =>
-                        {
-                            t.ExcludeFromMigrations();
-                        });
                 });
 
             modelBuilder.Entity("MareSynchronosShared.Models.UserPermissionSet", b =>
@@ -802,10 +744,8 @@ namespace MareSynchronosServer.Migrations
                 {
                     b.HasOne("MareSynchronosShared.Models.User", "User")
                         .WithMany()
-                        .HasForeignKey("UserUID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_user_default_preferred_permissions_users_user_uid");
+                        .HasForeignKey("UserUID1")
+                        .HasConstraintName("fk_user_default_preferred_permissions_users_user_temp_id13");
 
                     b.Navigation("User");
                 });

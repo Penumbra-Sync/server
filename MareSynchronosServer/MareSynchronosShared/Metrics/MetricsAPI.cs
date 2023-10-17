@@ -19,9 +19,9 @@ public class MetricsAPI
     public const string CounterAuthenticationCacheHits = "mare_auth_requests_cachehit";
     public const string CounterAuthenticationFailures = "mare_auth_requests_fail";
     public const string CounterAuthenticationSuccesses = "mare_auth_requests_success";
+    public const string GaugeAuthenticationCacheEntries = "mare_auth_cache";
     public const string GaugeGroups = "mare_groups";
     public const string GaugeGroupPairs = "mare_groups_pairs";
-    public const string GaugeGroupPairsPaused = "mare_groups_pairs_paused";
     public const string GaugeFilesUniquePastHour = "mare_files_unique_past_hour";
     public const string GaugeFilesUniquePastHourSize = "mare_files_unique_past_hour_size";
     public const string GaugeFilesUniquePastDay = "mare_files_unique_past_day";
