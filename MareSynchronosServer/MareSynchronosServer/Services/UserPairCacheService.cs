@@ -47,14 +47,30 @@ public class UserPairCacheService : IHostedService
         if (!_cache.TryGetValue(uid, out var cachedInfos))
         {
             _logger.LogDebug("Building full cache: Did not find PairData for {uid}:{otheruid}", uid, otheruid);
-            _cache[uid] = cachedInfos = await BuildFullCache(dbContext, uid).ConfigureAwait(false);
+            try
+            {
+                _cache[uid] = cachedInfos = await BuildFullCache(dbContext, uid).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during full PairCache calculation of {uid}:{otheruid}", uid, otheruid);
+                return null;
+            }
         }
 
         if (!cachedInfos.TryGetValue(otheruid, out var info))
         {
             _logger.LogDebug("Building individual cache: Did not find PairData for {uid}:{otheruid}", uid, otheruid);
-            info = await BuildIndividualCache(dbContext, uid, otheruid).ConfigureAwait(false);
-            _cache[uid][otheruid] = info;
+            try
+            {
+                info = await BuildIndividualCache(dbContext, uid, otheruid).ConfigureAwait(false);
+                _cache[uid][otheruid] = info;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during individual PairCache calculation of {uid}:{otheruid}", uid, otheruid);
+                return null;
+            }
         }
 
         return info;
