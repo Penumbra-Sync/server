@@ -81,7 +81,7 @@ public partial class MareHub
         groupPreferredPermissions.DisableVFX = dto.GroupPairPermissions.IsDisableVFX();
 
         // set the permissions for every group pair that is not sticky
-        var allPairs = (await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false))
+        var allPairs = (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
             .Where(u => !u.Value.OwnPermissions.Sticky)
             .ToDictionary(d => d.Key, d => d.Value, StringComparer.Ordinal);
 
@@ -431,7 +431,7 @@ public partial class MareHub
             return false;
 
         // get all pairs before we join
-        var allUserPairs = (await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false))
+        var allUserPairs = (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
             .ToDictionary(u => u.Key, u => u.Value, StringComparer.Ordinal);
 
         if (oneTimeInvite != null)
@@ -491,7 +491,7 @@ public partial class MareHub
             _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
         }
 
-        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false);
+        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false);
 
         foreach (var pair in groupPairs)
         {

@@ -25,7 +25,7 @@ public class UserPairCacheService : IHostedService
         _cache.TryRemove(uid, out _);
     }
 
-    public async Task<Dictionary<string, UserInfo>> GetAllPairs(string uid)
+    public async Task<Dictionary<string, UserInfo>> GetAllPairs(string uid, MareDbContext dbContext)
     {
         await WaitForProcessing(uid).ConfigureAwait(false);
 
@@ -33,7 +33,6 @@ public class UserPairCacheService : IHostedService
         {
             _logger.LogDebug("Building full cache: Did not find PairData for {uid}", uid);
 
-            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
             _cache[uid] = await BuildFullCache(dbContext, uid).ConfigureAwait(false);
         }
 

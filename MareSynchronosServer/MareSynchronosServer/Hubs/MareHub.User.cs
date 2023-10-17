@@ -171,7 +171,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo();
 
-        var pairs = await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false);
+        var pairs = await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false);
         return pairs.Select(p =>
         {
             return new UserFullPairDto(new UserData(p.Key, p.Value.Alias),
@@ -263,7 +263,7 @@ public partial class MareHub
             + string.Join(Environment.NewLine, invalidFileSwapPaths.Select(p => "Invalid FileSwap Path: " + p)));
         }
 
-        var allPairs = await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false);
+        var allPairs = await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false);
         allPairs.Where(p => !p.Value.OwnPermissions.IsPaused && p.Value.OtherPermissions != null && !p.Value.OtherPermissions.IsPaused).ToList();
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);

@@ -81,7 +81,7 @@ public partial class MareHub
     {
         uid ??= UserUID;
 
-        return (await _cacheService.GetAllPairs(UserUID).ConfigureAwait(false))
+        return (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
             .Where(u => !u.Value.OwnPermissions.IsPaused && u.Value.OtherPermissions != null && !u.Value.OtherPermissions.IsPaused)
             .Select(u => u.Key).ToList();
     }
@@ -175,7 +175,7 @@ public partial class MareHub
     private async Task UserGroupLeave(GroupPair groupUserPair, string userIdent, string? uid = null)
     {
         uid ??= UserUID;
-        var allUserPairs = await _cacheService.GetAllPairs(uid).ConfigureAwait(false);
+        var allUserPairs = await _cacheService.GetAllPairs(uid, _dbContext).ConfigureAwait(false);
         if (!allUserPairs.TryGetValue(groupUserPair.GroupUserUID, out var info) || !info.IsSynced)
         {
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
