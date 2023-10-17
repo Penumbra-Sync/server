@@ -258,7 +258,6 @@ public class Startup
             {
                 builder.MigrationsHistoryTable("_efmigrationshistory", "public");
                 builder.MigrationsAssembly("MareSynchronosShared");
-                builder.CommandTimeout(5 * 60);
             }).UseSnakeCaseNamingConvention();
             options.EnableThreadSafetyChecks(false);
         });

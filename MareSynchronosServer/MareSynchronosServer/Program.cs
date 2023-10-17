@@ -21,7 +21,9 @@ public class Program
 
             if (options.IsMain)
             {
+                context.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
                 context.Database.Migrate();
+                context.Database.SetCommandTimeout(TimeSpan.FromSeconds(30));
                 context.SaveChanges();
 
                 // clean up residuals
