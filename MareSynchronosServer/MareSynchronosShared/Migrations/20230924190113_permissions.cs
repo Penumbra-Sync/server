@@ -237,7 +237,6 @@ namespace MareSynchronosServer.Migrations
                 principalTable: "users",
                 principalColumn: "uid");
 
-            // also todo: make this function work
             migrationBuilder.Sql(@"create function get_all_pairs_for_user(req_uid text)
 returns table(
 	user_uid varchar(10)
