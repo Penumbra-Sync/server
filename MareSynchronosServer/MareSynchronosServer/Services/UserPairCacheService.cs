@@ -134,10 +134,11 @@ public class UserPairCacheService : IHostedService
             if (_staleUserData.Any())
             {
                 _logger.LogDebug("Processing Stale Entries");
-                try
+
+                using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+                while (_staleUserData.TryDequeue(out var staleUserPair))
                 {
-                    using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
-                    while (_staleUserData.TryPeek(out var staleUserPair))
+                    try
                     {
                         if (staleUserPair.UID == null)
                         {
@@ -175,14 +176,13 @@ public class UserPairCacheService : IHostedService
                                 }
                             }
                         }
-
-                        _staleUserData.TryDequeue(out _);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error during Stale entry processing");
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error during Stale entry processing");
-                }
+
             }
         }
     }
