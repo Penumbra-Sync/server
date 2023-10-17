@@ -70,7 +70,7 @@ public partial class MareHub
 
         var existingData = await _cacheService.GetPairData(UserUID, otherUser.UID).ConfigureAwait(false);
 
-        var permissions = existingData.OwnPermissions;
+        var permissions = existingData?.OwnPermissions;
         if (permissions == null || !permissions.Sticky)
         {
             var ownDefaultPermissions = await _dbContext.UserDefaultPreferredPermissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID).ConfigureAwait(false);
