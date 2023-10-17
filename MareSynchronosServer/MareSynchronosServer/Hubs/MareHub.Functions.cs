@@ -16,7 +16,6 @@ public partial class MareHub
 
     public string UserUID => Context.User?.Claims?.SingleOrDefault(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value ?? throw new Exception("No UID in Claims");
 
-    // TODO: add the whole permissions stuff
     private async Task DeleteUser(User user)
     {
         var ownPairData = await _dbContext.ClientPairs.Where(u => u.User.UID == user.UID).ToListAsync().ConfigureAwait(false);
@@ -27,6 +26,7 @@ public partial class MareHub
         var defaultpermissions = await _dbContext.UserDefaultPreferredPermissions.SingleOrDefaultAsync(u => u.UserUID == user.UID).ConfigureAwait(false);
         var groupPermissions = await _dbContext.GroupPairPreferredPermissions.Where(u => u.UserUID == user.UID).ToListAsync().ConfigureAwait(false);
         var individualPermissions = await _dbContext.Permissions.Where(u => u.UserUID == user.UID || u.OtherUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+        var bannedEntries = await _dbContext.GroupBans.Where(u => u.BannedUserUID == user.UID).ToListAsync().ConfigureAwait(false);
 
         if (lodestone != null)
         {
@@ -57,8 +57,13 @@ public partial class MareHub
             await UserLeaveGroup(new GroupDto(new GroupData(pair.GroupGID)), user.UID).ConfigureAwait(false);
         }
 
+        if (defaultpermissions != null)
+        {
+            _dbContext.UserDefaultPreferredPermissions.Remove(defaultpermissions);
+        }
         _dbContext.GroupPairPreferredPermissions.RemoveRange(groupPermissions);
         _dbContext.Permissions.RemoveRange(individualPermissions);
+        _dbContext.GroupBans.RemoveRange(bannedEntries);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
