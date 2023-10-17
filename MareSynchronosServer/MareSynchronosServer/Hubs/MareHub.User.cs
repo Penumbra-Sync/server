@@ -64,11 +64,9 @@ public partial class MareHub
             User = user,
         };
         await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _cacheService.MarkAsStale(UserUID, otherUser.UID);
-
-        var existingData = await _cacheService.GetPairData(UserUID, otherUser.UID).ConfigureAwait(false);
+        var existingData = await _cacheService.GetPairData(UserUID, otherUser.UID, _dbContext).ConfigureAwait(false);
 
         var permissions = existingData?.OwnPermissions;
         if (permissions == null || !permissions.Sticky)
@@ -101,9 +99,9 @@ public partial class MareHub
 
                 _dbContext.Permissions.Update(existingDbPerms);
             }
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         _cacheService.MarkAsStale(UserUID, otherUser.UID);
 
         // get the opposite entry of the client pair
@@ -293,7 +291,7 @@ public partial class MareHub
             await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (callerPair == null) return;
 
-        var pairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
+        var pairData = await _cacheService.GetPairData(UserUID, dto.User.UID, _dbContext).ConfigureAwait(false);
 
         // delete from database, send update info to users pair list
         _dbContext.ClientPairs.Remove(callerPair);
@@ -325,7 +323,7 @@ public partial class MareHub
         // if the either had paused, do nothing
         if (callerHadPaused && otherHadPaused) return;
 
-        var currentPairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
+        var currentPairData = await _cacheService.GetPairData(UserUID, dto.User.UID, _dbContext).ConfigureAwait(false);
 
         // if neither user had paused each other and either is not in an unpaused group with each other, change state to offline
         if (!currentPairData?.IsSynced ?? true)
@@ -386,7 +384,7 @@ public partial class MareHub
         UserPermissionSet prevPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (prevPermissions == null) return; // you always should have permissions to another user
 
-        var oldPairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
+        var oldPairData = await _cacheService.GetPairData(UserUID, dto.User.UID, _dbContext).ConfigureAwait(false);
         bool setSticky = false;
         if (!oldPairData.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal))
         {
@@ -416,7 +414,7 @@ public partial class MareHub
         await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(new UserPermissionsDto(dto.User, permCopy)).ConfigureAwait(false);
         await Clients.User(dto.User.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID), dto.Permissions)).ConfigureAwait(false);
 
-        var newPairData = await _cacheService.GetPairData(UserUID, dto.User.UID).ConfigureAwait(false);
+        var newPairData = await _cacheService.GetPairData(UserUID, dto.User.UID, _dbContext).ConfigureAwait(false);
 
         if (newPairData.OwnPermissions.IsPaused != oldPairData.OwnPermissions.IsPaused)
         {

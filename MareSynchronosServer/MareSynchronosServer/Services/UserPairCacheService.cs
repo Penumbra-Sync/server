@@ -40,21 +40,19 @@ public class UserPairCacheService : IHostedService
         return _cache[uid];
     }
 
-    public async Task<UserInfo?> GetPairData(string uid, string otheruid)
+    public async Task<UserInfo?> GetPairData(string uid, string otheruid, MareDbContext dbContext)
     {
         await WaitForProcessing(uid, otheruid).ConfigureAwait(false);
 
         if (!_cache.TryGetValue(uid, out var cachedInfos))
         {
             _logger.LogDebug("Building full cache: Did not find PairData for {uid}:{otheruid}", uid, otheruid);
-            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
             _cache[uid] = cachedInfos = await BuildFullCache(dbContext, uid).ConfigureAwait(false);
         }
 
         if (!cachedInfos.TryGetValue(otheruid, out var info))
         {
             _logger.LogDebug("Building individual cache: Did not find PairData for {uid}:{otheruid}", uid, otheruid);
-            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
             info = await BuildIndividualCache(dbContext, uid, otheruid).ConfigureAwait(false);
             _cache[uid][otheruid] = info;
         }
