@@ -98,8 +98,8 @@ namespace MareSynchronosServer.Migrations
 	                true,
 	                user1.is_paused as is_paused,
 	                user1.disable_animations as disable_animations,
-	                user1.disable_sounds as disable_sounds,
-	                user1.disable_vfx as disable_vfx
+	                user1.disable_vfx as disable_vfx,
+	                user1.disable_sounds as disable_sounds
 	                from client_pairs as user1;");
 
             migrationBuilder.Sql(@"insert into user_permission_sets 
@@ -107,8 +107,8 @@ namespace MareSynchronosServer.Migrations
 		                false,
 		                bool_and(gp.is_paused),
 		                bool_and(g.disable_animations or gp.disable_animations),
-		                bool_and(g.disable_sounds or gp.disable_sounds),
-		                bool_and(g.disable_vfx or gp.disable_vfx)
+		                bool_and(g.disable_vfx or gp.disable_vfx),
+		                bool_and(g.disable_sounds or gp.disable_sounds)
 		                from group_pairs gp 
 		                left join group_pairs gp2 on gp2.group_gid = gp.group_gid 
 		                left join groups g on g.gid = gp2.group_gid 
