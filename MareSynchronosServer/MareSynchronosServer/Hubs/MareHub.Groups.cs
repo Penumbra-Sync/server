@@ -542,19 +542,26 @@ public partial class MareHub
             var otherPermissionToSelf = userinfo?.OtherPermissions ?? null;
             if (otherPermissionToSelf == null)
             {
-                var otherPreferred = await _dbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
-                otherPermissionToSelf = new()
-                {
-                    UserUID = pair.GroupUserUID,
-                    OtherUserUID = UserUID,
-                    DisableAnimations = otherPreferred.DisableAnimations,
-                    DisableSounds = otherPreferred.DisableSounds,
-                    DisableVFX = otherPreferred.DisableVFX,
-                    IsPaused = otherPreferred.IsPaused,
-                    Sticky = false
-                };
+                var existingPermissionsOnDb = await _dbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == pair.GroupUserUID && p.OtherUserUID == UserUID).ConfigureAwait(false);
 
-                await _dbContext.AddAsync(otherPermissionToSelf).ConfigureAwait(false);
+                if (existingPermissionsOnDb == null)
+                {
+                    var otherPreferred = await _dbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
+                    otherPermissionToSelf = new()
+                    {
+                        UserUID = pair.GroupUserUID,
+                        OtherUserUID = UserUID,
+                        DisableAnimations = otherPreferred.DisableAnimations,
+                        DisableSounds = otherPreferred.DisableSounds,
+                        DisableVFX = otherPreferred.DisableVFX,
+                        IsPaused = otherPreferred.IsPaused,
+                        Sticky = false
+                    };
+
+                    await _dbContext.AddAsync(otherPermissionToSelf).ConfigureAwait(false);
+                }
+
+                otherPermissionToSelf = existingPermissionsOnDb;
             }
 
             await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
