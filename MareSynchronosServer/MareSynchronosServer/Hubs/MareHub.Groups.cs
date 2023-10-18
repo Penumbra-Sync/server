@@ -212,11 +212,6 @@ public partial class MareHub
         var notPinned = groupPairs.Where(g => !g.IsPinned && !g.IsModerator).ToList();
 
         _dbContext.GroupPairs.RemoveRange(notPinned);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        foreach (var user in notPinned)
-        {
-            _cacheService.MarkAsStale(user.GroupUserUID, null);
-        }
 
         foreach (var pair in notPinned)
         {
@@ -230,6 +225,12 @@ public partial class MareHub
             {
                 await UserGroupLeave(groupUserPair, pairIdent, pair.GroupUserUID).ConfigureAwait(false);
             }
+        }
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        foreach (var user in notPinned)
+        {
+            _cacheService.MarkAsStale(user.GroupUserUID, null);
         }
     }
 
@@ -472,7 +473,6 @@ public partial class MareHub
         }
 
         await _dbContext.GroupPairs.AddAsync(newPair).ConfigureAwait(false);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(aliasOrGid, "Success"));
 
@@ -485,13 +485,7 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
 
-        _cacheService.MarkAsStale(UserUID, null);
-        foreach (var pair in groupPairs)
-        {
-            _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
-        }
-
-        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false);
+        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID, _dbContext, true).ConfigureAwait(false);
 
         foreach (var pair in groupPairs)
         {
@@ -581,13 +575,12 @@ public partial class MareHub
             }
         }
 
-        _cacheService.MarkAsStale(UserUID, null);
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         foreach (var pair in groupPairs)
         {
             _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
         }
-
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return true;
     }
@@ -613,25 +606,27 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
         _dbContext.GroupPairs.Remove(groupPair);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        _cacheService.MarkAsStale(dto.User.UID, null);
-        foreach (var user in await _dbContext.GroupPairs.Where(u => u.GroupGID == dto.GID).ToListAsync().ConfigureAwait(false))
-        {
-            _cacheService.MarkAsStale(user.GroupUserUID, null);
-        }
 
         var groupPairs = _dbContext.GroupPairs.Where(p => p.GroupGID == group.GID).AsNoTracking().ToList();
         await Clients.Users(groupPairs.Select(p => p.GroupUserUID)).Client_GroupPairLeft(dto).ConfigureAwait(false);
 
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+
         var userIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
-        if (userIdent == null) return;
+        if (userIdent == null)
+        {
+            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            return;
+        }
 
         await Clients.User(dto.User.UID).Client_GroupDelete(new GroupDto(dto.Group)).ConfigureAwait(false);
 
         foreach (var groupUserPair in groupPairs)
         {
             await UserGroupLeave(groupUserPair, userIdent, dto.User.UID).ConfigureAwait(false);
+            _cacheService.MarkAsStale(dto.User.UID, groupUserPair.GroupUserUID);
         }
+
     }
 
     [Authorize(Policy = "Identified")]

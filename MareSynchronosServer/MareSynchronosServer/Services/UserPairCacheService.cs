@@ -25,8 +25,14 @@ public class UserPairCacheService : IHostedService
         _cache.TryRemove(uid, out _);
     }
 
-    public async Task<Dictionary<string, UserInfo>> GetAllPairs(string uid, MareDbContext dbContext)
+    public async Task<Dictionary<string, UserInfo>> GetAllPairs(string uid, MareDbContext dbContext, bool ignoreCache = false)
     {
+        if (ignoreCache)
+        {
+            _cache[uid] = await BuildFullCache(dbContext, uid).ConfigureAwait(false);
+            return _cache[uid];
+        }
+
         await WaitForProcessing(uid).ConfigureAwait(false);
 
         if (!_cache.ContainsKey(uid))
@@ -99,7 +105,7 @@ public class UserPairCacheService : IHostedService
     {
         var pairs = await dbContext.GetAllPairsForUser(uid).ToListAsync().ConfigureAwait(false);
 
-        return pairs.GroupBy(g => g.OtherUserUID, StringComparer.Ordinal)
+        var pairsDict = pairs.GroupBy(g => g.OtherUserUID, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g =>
             {
                 return new UserInfo(g.First().Alias,
@@ -109,6 +115,8 @@ public class UserPairCacheService : IHostedService
                     g.First().OwnPermissions,
                     g.First().OtherPermissions);
             }, StringComparer.OrdinalIgnoreCase);
+
+        return pairsDict.Where(p => p.Value.OwnPermissions != null).ToDictionary(u => u.Key, u => u.Value, StringComparer.Ordinal);
     }
 
     private async Task<UserInfo?> BuildIndividualCache(MareDbContext dbContext, string uid, string otheruid)
@@ -118,12 +126,14 @@ public class UserPairCacheService : IHostedService
         if (!pairs.Any()) return null;
 
         var groups = pairs.Select(g => g.GID).ToList();
-        return new UserInfo(pairs[0].Alias,
+        var userInfo = new UserInfo(pairs[0].Alias,
             pairs.SingleOrDefault(p => string.IsNullOrEmpty(p.GID))?.Synced ?? false,
             pairs.Max(p => p.Synced),
             pairs.Select(p => string.IsNullOrEmpty(p.GID) ? Constants.IndividualKeyword : p.GID).ToList(),
             pairs[0].OwnPermissions,
             pairs[0].OtherPermissions);
+
+        return userInfo.OwnPermissions == null ? null : userInfo;
     }
 
     private async Task ProcessStaleEntries()

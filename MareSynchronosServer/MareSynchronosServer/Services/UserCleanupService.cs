@@ -175,8 +175,6 @@ public class UserCleanupService : IHostedService
             }
 
             dbContext.GroupPairs.Remove(userGroupPair);
-
-            await dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
         _logger.LogInformation("User purged: {uid}", user.UID);

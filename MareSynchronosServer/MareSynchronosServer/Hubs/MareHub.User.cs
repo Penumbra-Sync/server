@@ -171,7 +171,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo();
 
-        var pairs = await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false);
+        var pairs = await _cacheService.GetAllPairs(UserUID, _dbContext, true).ConfigureAwait(false);
         return pairs.Select(p =>
         {
             return new UserFullPairDto(new UserData(p.Key, p.Value.Alias),

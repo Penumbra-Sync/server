@@ -44,7 +44,6 @@ public partial class MareHub
         }
 
         _dbContext.ClientPairs.RemoveRange(ownPairData);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         var otherPairData = await _dbContext.ClientPairs.Include(u => u.User)
             .Where(u => u.OtherUser.UID == user.UID).AsNoTracking().ToListAsync().ConfigureAwait(false);
         foreach (var pair in otherPairData)
@@ -64,7 +63,6 @@ public partial class MareHub
         _dbContext.GroupPairPreferredPermissions.RemoveRange(groupPermissions);
         _dbContext.Permissions.RemoveRange(individualPermissions);
         _dbContext.GroupBans.RemoveRange(bannedEntries);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUsersRegisteredDeleted, 1);
 
@@ -240,7 +238,6 @@ public partial class MareHub
         }
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
         _cacheService.MarkAsStale(userUid, null);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
