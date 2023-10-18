@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -44,12 +45,15 @@ public class ServerTokenGenerator
             {
                 new Claim(MareClaimTypes.Uid, _configuration.CurrentValue.ShardName),
                 new Claim(MareClaimTypes.Internal, "true"),
+                new Claim(MareClaimTypes.Expires, DateTime.Now.AddYears(1).Ticks.ToString(CultureInfo.InvariantCulture))
             }),
             SigningCredentials = new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256Signature),
+            Expires = DateTime.Now.AddYears(1)
         };
 
         var handler = new JwtSecurityTokenHandler();
-        var rawData = handler.CreateJwtSecurityToken(token).RawData;
+        var jwt = handler.CreateJwtSecurityToken(token);
+        var rawData = jwt.RawData;
 
         _tokenDictionary[signingKey] = rawData;
 
