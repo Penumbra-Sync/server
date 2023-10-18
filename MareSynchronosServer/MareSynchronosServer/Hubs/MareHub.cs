@@ -63,9 +63,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         await Clients.Caller.Client_UpdateSystemInfo(_systemInfoService.SystemInfoDto).ConfigureAwait(false);
 
-        var dbUser = _dbContext.Users.SingleOrDefault(f => f.UID == UserUID);
+        var dbUser = await _dbContext.Users.SingleAsync(f => f.UID == UserUID).ConfigureAwait(false);
         dbUser.LastLoggedIn = DateTime.UtcNow;
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
 
@@ -78,8 +77,9 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
             };
 
             _dbContext.UserDefaultPreferredPermissions.Add(defaultPermissions);
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
+
+        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {

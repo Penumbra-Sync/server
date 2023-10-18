@@ -57,15 +57,15 @@ public class SecretKeyAuthenticatorService
         using var context = scope.ServiceProvider.GetService<MareDbContext>();
         var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
         var isBanned = authReply?.IsBanned ?? false;
-        var primaryUid = authReply.PrimaryUserUID ?? authReply.UserUID;
+        var primaryUid = authReply.PrimaryUserUID ?? authReply?.UserUID;
 
-        if (authReply.PrimaryUserUID != null)
+        if (authReply?.PrimaryUserUID != null)
         {
             var primaryUser = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.UserUID == authReply.PrimaryUserUID).ConfigureAwait(false);
             isBanned = isBanned || primaryUser.IsBanned;
         }
 
-        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, authReply.PrimaryUserUID ?? authReply.UserUID, TempBan: false, isBanned);
+        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, authReply?.PrimaryUserUID ?? authReply?.UserUID, TempBan: false, isBanned);
 
         if (reply.Success)
         {
