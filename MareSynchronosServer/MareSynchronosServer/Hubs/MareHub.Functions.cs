@@ -251,30 +251,49 @@ public partial class MareHub
 
     private async Task<UserInfo?> GetPairInfo(string uid, string otheruid)
     {
-        var query = _dbContext.ClientPairs.Where(u => u.UserUID == uid && u.OtherUserUID == otheruid)
-            .Join(_dbContext.ClientPairs.Where(u => u.UserUID == otheruid && u.OtherUserUID == uid),
-            user => user.OtherUserUID, user => user.UserUID, (user, otheruser) =>
-            new
-            {
-                UserUID = user.UserUID,
-                OtherUserUID = user.OtherUserUID,
-                Gid = string.Empty,
-                Synced = otheruser != null
-            });
+        var clientPairs = from cp in _dbContext.ClientPairs.Where(u => u.UserUID == uid && u.OtherUserUID == otheruid)
+                          join cp2 in _dbContext.ClientPairs.Where(u => u.OtherUserUID == uid && u.UserUID == otheruid)
+                          on new
+                          {
+                              UserUID = cp.UserUID,
+                              OtherUserUID = cp.OtherUserUID
+                          }
+                          equals new
+                          {
+                              UserUID = cp2.OtherUserUID,
+                              OtherUserUID = cp2.UserUID
+                          } into joined
+                          from c in joined.DefaultIfEmpty()
+                          where cp.UserUID == uid
+                          select new
+                          {
+                              UserUID = cp.UserUID,
+                              OtherUserUID = cp.OtherUserUID,
+                              Gid = string.Empty,
+                              Synced = c != null
+                          };
 
-        var query2 = _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
-            .Join(_dbContext.GroupPairs.Where(u => u.GroupUserUID == otheruid),
-            ownPair => ownPair.GroupGID, otherPair => otherPair.GroupGID,
-            (ownPair, otherPair) =>
-            new
-            {
-                UserUID = ownPair.GroupUserUID,
-                OtherUserUID = otherPair.GroupUserUID,
-                Gid = Convert.ToString(ownPair.GroupGID),
-                Synced = true,
-            });
 
-        var result = from user in query.Union(query2)
+        var groupPairs = from gp in _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
+                         join gp2 in _dbContext.GroupPairs.Where(u => u.GroupUserUID == otheruid)
+                         on new
+                         {
+                             GID = gp.GroupGID
+                         }
+                         equals new
+                         {
+                             GID = gp2.GroupGID
+                         }
+                         where gp.GroupUserUID == uid
+                         select new
+                         {
+                             UserUID = gp.GroupUserUID,
+                             OtherUserUID = gp2.GroupUserUID,
+                             Gid = Convert.ToString(gp2.GroupGID),
+                             Synced = true
+                         };
+
+        var result = from user in clientPairs.Concat(groupPairs)
                      join u in _dbContext.Users on user.OtherUserUID equals u.UID
                      join o in _dbContext.Permissions.Where(u => u.UserUID == uid)
                         on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
@@ -286,6 +305,9 @@ public partial class MareHub
                         equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
+                     where user.UserUID == uid
+                        && u.UID == user.OtherUserUID
+                        && ownperm.UserUID == uid
                      select new
                      {
                          UserUID = user.UserUID,
@@ -312,32 +334,49 @@ public partial class MareHub
 
     private async Task<Dictionary<string, UserInfo>> GetAllPairInfo(string uid)
     {
-        var query = _dbContext.ClientPairs.Where(u => u.UserUID == uid)
-            .Join(_dbContext.ClientPairs.Where(u => u.OtherUserUID == uid),
-            user => user.OtherUserUID,
-            user => user.UserUID,
-            (user, otheruser) =>
-            new
-            {
-                UserUID = user.UserUID,
-                OtherUserUID = user.OtherUserUID,
-                Gid = string.Empty,
-                Synced = otheruser != null
-            });
+        var clientPairs = from cp in _dbContext.ClientPairs.Where(u => u.UserUID == uid)
+                          join cp2 in _dbContext.ClientPairs.Where(u => u.OtherUserUID == uid)
+                          on new
+                          {
+                              UserUID = cp.UserUID,
+                              OtherUserUID = cp.OtherUserUID
+                          }
+                          equals new
+                          {
+                              UserUID = cp2.OtherUserUID,
+                              OtherUserUID = cp2.UserUID
+                          } into joined
+                          from c in joined.DefaultIfEmpty()
+                          where cp.UserUID == uid
+                          select new
+                          {
+                              UserUID = cp.UserUID,
+                              OtherUserUID = cp.OtherUserUID,
+                              Gid = string.Empty,
+                              Synced = c != null
+                          };
 
-        var query2 = _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
-            .Join(_dbContext.GroupPairs.Where(u => u.GroupUserUID != uid),
-            ownPair => ownPair.GroupGID, otherPair => otherPair.GroupGID,
-            (ownPair, otherPair) =>
-            new
-            {
-                UserUID = ownPair.GroupUserUID,
-                OtherUserUID = otherPair.GroupUserUID,
-                Gid = Convert.ToString(ownPair.GroupGID),
-                Synced = true,
-            });
 
-        var result = from user in query.Concat(query2)
+        var groupPairs = from gp in _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
+                         join gp2 in _dbContext.GroupPairs.Where(u => u.GroupUserUID != uid)
+                         on new
+                         {
+                             GID = gp.GroupGID
+                         }
+                         equals new
+                         {
+                             GID = gp2.GroupGID
+                         }
+                         where gp.GroupUserUID == uid
+                         select new
+                         {
+                             UserUID = gp.GroupUserUID,
+                             OtherUserUID = gp2.GroupUserUID,
+                             Gid = Convert.ToString(gp2.GroupGID),
+                             Synced = true
+                         };
+
+        var result = from user in clientPairs.Concat(groupPairs)
                      join u in _dbContext.Users on user.OtherUserUID equals u.UID
                      join o in _dbContext.Permissions.Where(u => u.UserUID == uid)
                         on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
@@ -349,6 +388,9 @@ public partial class MareHub
                         equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
+                     where user.UserUID == uid
+                        && u.UID == user.OtherUserUID
+                        && ownperm.UserUID == uid
                      select new
                      {
                          UserUID = user.UserUID,
