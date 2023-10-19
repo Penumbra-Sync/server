@@ -7,6 +7,7 @@ using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
+using MareSynchronosShared.Data;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -70,16 +71,13 @@ public partial class MareHub
         _dbContext.Users.Remove(user);
         _dbContext.Auth.Remove(auth);
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        _cacheService.ClearCache(user.UID);
-        _cacheService.MarkAsStale(null, user.UID);
     }
 
     private async Task<List<string>> GetAllPairedUnpausedUsers(string? uid = null)
     {
         uid ??= UserUID;
 
-        return (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
+        return (await GetAllPairInfo(UserUID).ConfigureAwait(false))
             .Where(u => !u.Value.OwnPermissions.IsPaused && u.Value.OtherPermissions != null && !u.Value.OtherPermissions.IsPaused)
             .Select(u => u.Key).ToList();
     }
@@ -173,7 +171,7 @@ public partial class MareHub
     private async Task UserGroupLeave(GroupPair groupUserPair, string userIdent, string? uid = null)
     {
         uid ??= UserUID;
-        var allUserPairs = await _cacheService.GetAllPairs(uid, _dbContext).ConfigureAwait(false);
+        var allUserPairs = await GetAllPairInfo(uid).ConfigureAwait(false);
         if (!allUserPairs.TryGetValue(groupUserPair.GroupUserUID, out var info) || !info.IsSynced)
         {
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
@@ -238,7 +236,6 @@ public partial class MareHub
         }
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        _cacheService.MarkAsStale(userUid, null);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
@@ -252,6 +249,126 @@ public partial class MareHub
         }
     }
 
-    public record UserQueryPermissionEntry(UserQueryEntry OtherUser, UserPermissionSet OwnPermissions, UserPermissionSet? OtherPermissions);
-    public record UserQueryEntry(string UID, bool IsPaired, string GID, string Alias);
+    private async Task<UserInfo?> GetPairInfo(string uid, string otheruid)
+    {
+        var query = _dbContext.ClientPairs.Where(u => u.UserUID == uid && u.OtherUserUID == otheruid)
+            .Join(_dbContext.ClientPairs.Where(u => u.UserUID == otheruid && u.OtherUserUID == uid),
+            user => user.OtherUserUID, user => user.UserUID, (user, otheruser) =>
+            new
+            {
+                UserUID = user.UserUID,
+                OtherUserUID = user.OtherUserUID,
+                Gid = string.Empty,
+                Synced = otheruser != null
+            });
+
+        var query2 = _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
+            .Join(_dbContext.GroupPairs.Where(u => u.GroupUserUID == otheruid),
+            ownPair => ownPair.GroupGID, otherPair => otherPair.GroupGID,
+            (ownPair, otherPair) =>
+            new
+            {
+                UserUID = ownPair.GroupUserUID,
+                OtherUserUID = otherPair.GroupUserUID,
+                Gid = ownPair.GroupGID,
+                Synced = true,
+            });
+
+        var result = from user in query.Union(query2)
+                     join u in _dbContext.Users on user.OtherUserUID equals u.UID
+                     join o in _dbContext.Permissions
+                        on new { user.UserUID, user.OtherUserUID }
+                        equals new { o.UserUID, o.OtherUserUID }
+                        into ownperms
+                     from ownperm in ownperms.DefaultIfEmpty()
+                     join p in _dbContext.Permissions
+                        on new { UserUID = user.OtherUserUID, OtherUserUID = user.UserUID }
+                        equals new { p.UserUID, p.OtherUserUID }
+                        into otherperms
+                     from otherperm in otherperms.DefaultIfEmpty()
+                     select new
+                     {
+                         UserUID = user.UserUID,
+                         OtherUserUID = user.OtherUserUID,
+                         OtherUserAlias = u.Alias,
+                         GID = user.Gid,
+                         Synced = user.Synced,
+                         OwnPermissions = ownperm,
+                         OtherPermissions = otherperm
+                     };
+
+        var resultList = await result.AsNoTracking().ToListAsync().ConfigureAwait(false);
+
+        if (!resultList.Any()) return null;
+
+        var groups = resultList.Select(g => g.GID).ToList();
+        return new UserInfo(resultList[0].OtherUserAlias,
+            resultList.SingleOrDefault(p => string.IsNullOrEmpty(p.GID))?.Synced ?? false,
+            resultList.Max(p => p.Synced),
+            resultList.Select(p => string.IsNullOrEmpty(p.GID) ? Constants.IndividualKeyword : p.GID).ToList(),
+            resultList[0].OwnPermissions,
+            resultList[0].OtherPermissions);
+    }
+
+    private async Task<Dictionary<string, UserInfo>> GetAllPairInfo(string uid)
+    {
+        var query = _dbContext.ClientPairs.Where(u => u.UserUID == uid)
+            .Join(_dbContext.ClientPairs.Where(u => u.OtherUserUID == uid),
+            user => user.OtherUserUID, user => user.UserUID, (user, otheruser) =>
+            new
+            {
+                UserUID = Convert.ToString(user.UserUID),
+                OtherUserUID = Convert.ToString(user.OtherUserUID),
+                Gid = string.Empty,
+                Synced = otheruser != null
+            });
+
+        var query2 = _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
+            .Join(_dbContext.GroupPairs.Where(u => u.GroupUserUID != uid),
+            ownPair => ownPair.GroupGID, otherPair => otherPair.GroupGID,
+            (ownPair, otherPair) =>
+            new
+            {
+                UserUID = Convert.ToString(ownPair.GroupUserUID),
+                OtherUserUID = Convert.ToString(otherPair.GroupUserUID),
+                Gid = Convert.ToString(ownPair.GroupGID),
+                Synced = true,
+            });
+
+        var result = from user in query.Union(query2)
+                     join u in _dbContext.Users on user.OtherUserUID equals Convert.ToString(u.UID)
+                     join o in _dbContext.Permissions
+                        on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
+                        equals new { UserUID = Convert.ToString(o.UserUID), OtherUserUID = Convert.ToString(o.OtherUserUID) }
+                        into ownperms
+                     from ownperm in ownperms.DefaultIfEmpty()
+                     join p in _dbContext.Permissions
+                        on new { UserUID = user.OtherUserUID, OtherUserUID = user.UserUID }
+                        equals new { UserUID = Convert.ToString(p.UserUID), OtherUserUID = Convert.ToString(p.OtherUserUID) }
+                        into otherperms
+                     from otherperm in otherperms.DefaultIfEmpty()
+                     select new
+                     {
+                         UserUID = user.UserUID,
+                         OtherUserUID = user.OtherUserUID,
+                         OtherUserAlias = u.Alias,
+                         GID = user.Gid,
+                         Synced = user.Synced,
+                         OwnPermissions = ownperm,
+                         OtherPermissions = otherperm
+                     };
+
+        var resultList = await result.AsNoTracking().ToListAsync().ConfigureAwait(false);
+        return resultList.GroupBy(g => g.OtherUserUID, StringComparer.Ordinal).ToDictionary(g => g.Key, g =>
+        {
+            return new UserInfo(g.First().OtherUserAlias,
+                g.SingleOrDefault(p => string.IsNullOrEmpty(p.GID))?.Synced ?? false,
+                g.Max(p => p.Synced),
+                g.Select(p => string.IsNullOrEmpty(p.GID) ? Constants.IndividualKeyword : p.GID).ToList(),
+                g.First().OwnPermissions,
+                g.First().OtherPermissions);
+        }, StringComparer.Ordinal);
+    }
+
+    public record UserInfo(string Alias, bool IndividuallyPaired, bool IsSynced, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
 }

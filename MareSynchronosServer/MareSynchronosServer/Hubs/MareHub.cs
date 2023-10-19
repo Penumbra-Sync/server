@@ -30,14 +30,13 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxJoinedGroupsByUser;
     private readonly int _maxGroupUserCount;
     private readonly IRedisDatabase _redis;
-    private readonly UserPairCacheService _cacheService;
     private readonly Uri _fileServerAddress;
     private readonly Version _expectedClientVersion;
 
     public MareHub(MareMetrics mareMetrics,
         MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IRedisDatabase redisDb, UserPairCacheService cacheService)
+        IRedisDatabase redisDb)
     {
         _mareMetrics = mareMetrics;
         _systemInfoService = systemInfoService;
@@ -49,7 +48,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _expectedClientVersion = configuration.GetValueOrDefault(nameof(ServerConfiguration.ExpectedClientVersion), new Version(0, 0, 0));
         _contextAccessor = contextAccessor;
         _redis = redisDb;
-        _cacheService = cacheService;
         _logger = new MareHubLogger(this, logger);
         _dbContext = mareDbContext;
     }
@@ -144,7 +142,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
 
             await RemoveUserFromRedis().ConfigureAwait(false);
-            _cacheService.ClearCache(UserUID);
 
             await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 

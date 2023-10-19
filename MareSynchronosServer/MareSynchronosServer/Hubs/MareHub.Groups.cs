@@ -81,7 +81,7 @@ public partial class MareHub
         groupPreferredPermissions.DisableVFX = dto.GroupPairPermissions.IsDisableVFX();
 
         // set the permissions for every group pair that is not sticky
-        var allPairs = (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
+        var allPairs = (await GetAllPairInfo(UserUID).ConfigureAwait(false))
             .Where(u => !u.Value.OwnPermissions.Sticky)
             .ToDictionary(d => d.Key, d => d.Value, StringComparer.Ordinal);
 
@@ -99,11 +99,6 @@ public partial class MareHub
             perm.DisableVFX = groupPreferredPermissions.DisableVFX;
         }
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        foreach (var item in affectedGroupPairs)
-        {
-            _cacheService.MarkAsStale(UserUID, item.Key);
-        }
 
         // send messages
         UserPermissions permissions = UserPermissions.NoneSet;
@@ -228,10 +223,6 @@ public partial class MareHub
         }
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-        foreach (var user in notPinned)
-        {
-            _cacheService.MarkAsStale(user.GroupUserUID, null);
-        }
     }
 
     [Authorize(Policy = "Identified")]
@@ -432,8 +423,7 @@ public partial class MareHub
             return false;
 
         // get all pairs before we join
-        var allUserPairs = (await _cacheService.GetAllPairs(UserUID, _dbContext).ConfigureAwait(false))
-            .ToDictionary(u => u.Key, u => u.Value, StringComparer.Ordinal);
+        var allUserPairs = (await GetAllPairInfo(UserUID).ConfigureAwait(false));
 
         if (oneTimeInvite != null)
         {
@@ -485,7 +475,7 @@ public partial class MareHub
 
         var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
 
-        var userPairsAfterJoin = await _cacheService.GetAllPairs(UserUID, _dbContext, true).ConfigureAwait(false);
+        var userPairsAfterJoin = await GetAllPairInfo(UserUID).ConfigureAwait(false);
 
         foreach (var pair in groupPairs)
         {
@@ -584,11 +574,6 @@ public partial class MareHub
 
         await _dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        foreach (var pair in groupPairs)
-        {
-            _cacheService.MarkAsStale(UserUID, pair.GroupUserUID);
-        }
-
         return true;
     }
 
@@ -631,7 +616,6 @@ public partial class MareHub
         foreach (var groupUserPair in groupPairs)
         {
             await UserGroupLeave(groupUserPair, userIdent, dto.User.UID).ConfigureAwait(false);
-            _cacheService.MarkAsStale(dto.User.UID, groupUserPair.GroupUserUID);
         }
 
     }

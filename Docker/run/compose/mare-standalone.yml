@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:latest
+    command: ["postgres", "-c", "log_statement=all"]
     restart: always
     ports:
       - 5432:5432/tcp

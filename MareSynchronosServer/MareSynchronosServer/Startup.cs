@@ -90,9 +90,7 @@ public class Startup
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
-        services.AddSingleton<UserPairCacheService>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
-        services.AddHostedService(p => p.GetService<UserPairCacheService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 

@@ -2,7 +2,7 @@
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
 using MareSynchronosShared.Models;
-using static MareSynchronosServer.Services.UserPairCacheService;
+using static MareSynchronosServer.Hubs.MareHub;
 
 namespace MareSynchronosServer.Utils;
 
