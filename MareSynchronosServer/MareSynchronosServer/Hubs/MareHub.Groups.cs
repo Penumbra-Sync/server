@@ -473,7 +473,8 @@ public partial class MareHub
 
         var self = _dbContext.Users.Single(u => u.UID == UserUID);
 
-        var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
+        var groupPairs = await _dbContext.GroupPairs.Include(p => p.GroupUser)
+            .Where(p => p.GroupGID == group.GID && p.GroupUserUID != UserUID).ToListAsync().ConfigureAwait(false);
 
         var userPairsAfterJoin = await GetAllPairInfo(UserUID).ConfigureAwait(false);
 
@@ -537,7 +538,7 @@ public partial class MareHub
                 if (existingPermissionsOnDb == null)
                 {
                     var otherPreferred = await _dbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
-                    otherPermissionToSelf = new()
+                    existingPermissionsOnDb = new()
                     {
                         UserUID = pair.GroupUserUID,
                         OtherUserUID = UserUID,
@@ -548,7 +549,7 @@ public partial class MareHub
                         Sticky = false
                     };
 
-                    await _dbContext.AddAsync(otherPermissionToSelf).ConfigureAwait(false);
+                    await _dbContext.AddAsync(existingPermissionsOnDb).ConfigureAwait(false);
                 }
 
                 otherPermissionToSelf = existingPermissionsOnDb;
@@ -562,13 +563,15 @@ public partial class MareHub
                 ownPermissionsToOther.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
 
             // if not paired prior and neither has the permissions set to paused, send online
-            if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.ContainsKey(pair.GroupUserUID) && !allUserPairs[pair.GroupUserUID].IsSynced))
+            if ((!allUserPairs.ContainsKey(pair.GroupUserUID) || (allUserPairs.TryGetValue(pair.GroupUserUID, out var info) && !info.IsSynced))
                 && !otherPermissionToSelf.IsPaused && !ownPermissionsToOther.IsPaused)
             {
                 var groupUserIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
-
-                await Clients.User(UserUID).Client_UserSendOnline(new(pair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
-                await Clients.User(pair.GroupUserUID).Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(groupUserIdent))
+                {
+                    await Clients.User(UserUID).Client_UserSendOnline(new(pair.ToUserData(), groupUserIdent)).ConfigureAwait(false);
+                    await Clients.User(pair.GroupUserUID).Client_UserSendOnline(new(self.ToUserData(), UserCharaIdent)).ConfigureAwait(false);
+                }
             }
         }
 
