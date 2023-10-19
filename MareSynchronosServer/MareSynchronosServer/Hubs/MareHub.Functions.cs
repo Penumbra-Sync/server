@@ -270,7 +270,7 @@ public partial class MareHub
             {
                 UserUID = ownPair.GroupUserUID,
                 OtherUserUID = otherPair.GroupUserUID,
-                Gid = ownPair.GroupGID,
+                Gid = Convert.ToString(ownPair.GroupGID),
                 Synced = true,
             });
 
@@ -317,8 +317,8 @@ public partial class MareHub
             user => user.OtherUserUID, user => user.UserUID, (user, otheruser) =>
             new
             {
-                UserUID = Convert.ToString(user.UserUID),
-                OtherUserUID = Convert.ToString(user.OtherUserUID),
+                UserUID = user.UserUID,
+                OtherUserUID = user.OtherUserUID,
                 Gid = string.Empty,
                 Synced = otheruser != null
             });
@@ -329,22 +329,22 @@ public partial class MareHub
             (ownPair, otherPair) =>
             new
             {
-                UserUID = Convert.ToString(ownPair.GroupUserUID),
-                OtherUserUID = Convert.ToString(otherPair.GroupUserUID),
+                UserUID = ownPair.GroupUserUID,
+                OtherUserUID = otherPair.GroupUserUID,
                 Gid = Convert.ToString(ownPair.GroupGID),
                 Synced = true,
             });
 
         var result = from user in query.Union(query2)
-                     join u in _dbContext.Users on user.OtherUserUID equals Convert.ToString(u.UID)
+                     join u in _dbContext.Users on user.OtherUserUID equals u.UID
                      join o in _dbContext.Permissions
                         on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
-                        equals new { UserUID = Convert.ToString(o.UserUID), OtherUserUID = Convert.ToString(o.OtherUserUID) }
+                        equals new { UserUID = o.UserUID, OtherUserUID = o.OtherUserUID }
                         into ownperms
                      from ownperm in ownperms.DefaultIfEmpty()
                      join p in _dbContext.Permissions
                         on new { UserUID = user.OtherUserUID, OtherUserUID = user.UserUID }
-                        equals new { UserUID = Convert.ToString(p.UserUID), OtherUserUID = Convert.ToString(p.OtherUserUID) }
+                        equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
                      select new
