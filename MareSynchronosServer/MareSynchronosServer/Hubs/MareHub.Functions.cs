@@ -276,14 +276,14 @@ public partial class MareHub
 
         var result = from user in query.Union(query2)
                      join u in _dbContext.Users on user.OtherUserUID equals u.UID
-                     join o in _dbContext.Permissions
-                        on new { user.UserUID, user.OtherUserUID }
-                        equals new { o.UserUID, o.OtherUserUID }
+                     join o in _dbContext.Permissions.Where(u => u.UserUID == uid)
+                        on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
+                        equals new { UserUID = o.UserUID, OtherUserUID = o.OtherUserUID }
                         into ownperms
                      from ownperm in ownperms.DefaultIfEmpty()
-                     join p in _dbContext.Permissions
+                     join p in _dbContext.Permissions.Where(u => u.OtherUserUID == uid)
                         on new { UserUID = user.OtherUserUID, OtherUserUID = user.UserUID }
-                        equals new { p.UserUID, p.OtherUserUID }
+                        equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
                      select new
@@ -314,7 +314,9 @@ public partial class MareHub
     {
         var query = _dbContext.ClientPairs.Where(u => u.UserUID == uid)
             .Join(_dbContext.ClientPairs.Where(u => u.OtherUserUID == uid),
-            user => user.OtherUserUID, user => user.UserUID, (user, otheruser) =>
+            user => user.OtherUserUID,
+            user => user.UserUID,
+            (user, otheruser) =>
             new
             {
                 UserUID = user.UserUID,
@@ -335,14 +337,14 @@ public partial class MareHub
                 Synced = true,
             });
 
-        var result = from user in query.Union(query2)
+        var result = from user in query.Concat(query2)
                      join u in _dbContext.Users on user.OtherUserUID equals u.UID
-                     join o in _dbContext.Permissions
+                     join o in _dbContext.Permissions.Where(u => u.UserUID == uid)
                         on new { UserUID = user.UserUID, OtherUserUID = user.OtherUserUID }
                         equals new { UserUID = o.UserUID, OtherUserUID = o.OtherUserUID }
                         into ownperms
                      from ownperm in ownperms.DefaultIfEmpty()
-                     join p in _dbContext.Permissions
+                     join p in _dbContext.Permissions.Where(u => u.OtherUserUID == uid)
                         on new { UserUID = user.OtherUserUID, OtherUserUID = user.UserUID }
                         equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
