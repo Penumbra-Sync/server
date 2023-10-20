@@ -14,6 +14,8 @@ using StackExchange.Redis;
 
 namespace MareSynchronosServices.Discord;
 
+// todo: remove all this crap at some point
+
 public class LodestoneModal : IModal
 {
     public string Title => "Verify with Lodestone";
@@ -168,7 +170,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
+                //_botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         }
         catch (Exception ex)
@@ -205,7 +207,7 @@ public class MareModule : InteractionModuleBase
             else
             {
                 await DeferAsync(ephemeral: true).ConfigureAwait(false);
-                _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
+                //_botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id, async (sp) => await HandleVerifyRelinkAsync((SocketSlashCommand)Context.Interaction, sp)));
             }
         }
         catch (Exception ex)

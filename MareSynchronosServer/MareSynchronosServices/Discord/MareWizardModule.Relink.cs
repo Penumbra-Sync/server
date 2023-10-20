@@ -70,8 +70,8 @@ public partial class MareWizardModule
         _logger.LogInformation("{method}:{userId}:{uid}:{verificationCode}", nameof(ComponentRelinkVerify), Context.Interaction.User.Id, uid, verificationCode);
 
 
-        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<IServiceProvider>>(Context.User.Id,
-            async (_) => await HandleVerifyRelinkAsync(Context.User.Id, verificationCode).ConfigureAwait(false)));
+        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<DiscordBotServices>>(Context.User.Id,
+            async (services) => await HandleVerifyRelinkAsync(Context.User.Id, verificationCode, services).ConfigureAwait(false)));
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
         eb.WithColor(Color.Purple);
@@ -200,26 +200,26 @@ public partial class MareWizardModule
         return (true, lodestoneAuth, expectedUser.User.UID);
     }
 
-    private async Task HandleVerifyRelinkAsync(ulong userid, string authString)
+    private async Task HandleVerifyRelinkAsync(ulong userid, string authString, DiscordBotServices services)
     {
         var req = new HttpClient();
 
-        _botServices.DiscordVerifiedUsers.Remove(userid, out _);
-        if (_botServices.DiscordRelinkLodestoneMapping.ContainsKey(userid))
+        services.DiscordVerifiedUsers.Remove(userid, out _);
+        if (services.DiscordRelinkLodestoneMapping.ContainsKey(userid))
         {
-            var randomServer = _botServices.LodestoneServers[random.Next(_botServices.LodestoneServers.Length)];
-            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{_botServices.DiscordRelinkLodestoneMapping[userid]}").ConfigureAwait(false);
+            var randomServer = services.LodestoneServers[random.Next(services.LodestoneServers.Length)];
+            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordRelinkLodestoneMapping[userid]}").ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
             {
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (content.Contains(authString))
                 {
-                    _botServices.DiscordVerifiedUsers[userid] = true;
-                    _botServices.DiscordRelinkLodestoneMapping.TryRemove(userid, out _);
+                    services.DiscordVerifiedUsers[userid] = true;
+                    services.DiscordRelinkLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
                 {
-                    _botServices.DiscordVerifiedUsers[userid] = false;
+                    services.DiscordVerifiedUsers[userid] = false;
                 }
             }
         }

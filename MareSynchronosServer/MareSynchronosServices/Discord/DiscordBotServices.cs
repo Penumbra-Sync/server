@@ -17,16 +17,15 @@ public class DiscordBotServices
     private readonly IServiceProvider _serviceProvider;
     private CancellationTokenSource verificationTaskCts;
 
-    public DiscordBotServices(IServiceProvider serviceProvider, ILogger<DiscordBotServices> logger, MareMetrics metrics)
+    public DiscordBotServices(ILogger<DiscordBotServices> logger, MareMetrics metrics)
     {
-        _serviceProvider = serviceProvider;
         Logger = logger;
         Metrics = metrics;
     }
 
     public ILogger<DiscordBotServices> Logger { get; init; }
     public MareMetrics Metrics { get; init; }
-    public ConcurrentQueue<KeyValuePair<ulong, Action<IServiceProvider>>> VerificationQueue { get; } = new();
+    public ConcurrentQueue<KeyValuePair<ulong, Action<DiscordBotServices>>> VerificationQueue { get; } = new();
 
     public Task Start()
     {
@@ -46,15 +45,20 @@ public class DiscordBotServices
         while (!verificationTaskCts.IsCancellationRequested)
         {
             Logger.LogDebug("Processing Verification Queue, Entries: {entr}", VerificationQueue.Count);
-            if (VerificationQueue.TryDequeue(out var queueitem))
+            if (VerificationQueue.TryPeek(out var queueitem))
             {
                 try
                 {
-                    queueitem.Value.Invoke(_serviceProvider);
+                    queueitem.Value.Invoke(this);
+                    Logger.LogInformation("Processed Verification for {key}", queueitem.Key);
                 }
                 catch (Exception e)
                 {
                     Logger.LogError(e, "Error during queue work");
+                }
+                finally
+                {
+                    VerificationQueue.TryDequeue(out _);
                 }
             }
 
