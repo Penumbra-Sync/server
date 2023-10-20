@@ -221,8 +221,8 @@ public partial class MareWizardModule
                 if (content.Contains(authString))
                 {
                     services.DiscordVerifiedUsers[userid] = true;
-                    services.DiscordLodestoneMapping.TryRemove(userid, out _);
                     _logger.LogInformation("Verified {userid} from lodestone {lodestone}", userid, services.DiscordLodestoneMapping[userid]);
+                    services.DiscordLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
                 {
