@@ -373,66 +373,6 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task UserSetPairPermissions(UserPermissionsDto dto)
-    {
-        _logger.LogCallInfo(MareHubLogger.Args(dto));
-
-        if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal)) return;
-        UserPermissionSet prevPermissions = await _dbContext.Permissions.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
-        if (prevPermissions == null) return; // you always should have permissions to another user
-
-        var oldPairData = await GetPairInfo(UserUID, dto.User.UID).ConfigureAwait(false);
-        bool setSticky = false;
-        if (!oldPairData.GIDs.Contains(Constants.IndividualKeyword, StringComparer.Ordinal))
-        {
-            if (!oldPairData.OwnPermissions.Sticky && !dto.Permissions.IsSticky())
-            {
-                var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
-                setSticky = defaultPermissions.IndividualIsSticky;
-            }
-        }
-
-        var pauseChange = prevPermissions.IsPaused != dto.Permissions.IsPaused();
-
-        prevPermissions.IsPaused = dto.Permissions.IsPaused();
-        prevPermissions.DisableAnimations = dto.Permissions.IsDisableAnimations();
-        prevPermissions.DisableSounds = dto.Permissions.IsDisableSounds();
-        prevPermissions.DisableVFX = dto.Permissions.IsDisableVFX();
-        prevPermissions.Sticky = dto.Permissions.IsSticky() || setSticky;
-        _dbContext.Update(prevPermissions);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
-
-        var permCopy = dto.Permissions;
-        permCopy.SetSticky(dto.Permissions.IsSticky() || setSticky);
-
-        await Clients.User(UserUID).Client_UserUpdateSelfPairPermissions(new UserPermissionsDto(dto.User, permCopy)).ConfigureAwait(false);
-        await Clients.User(dto.User.UID).Client_UserUpdateOtherPairPermissions(new UserPermissionsDto(new UserData(UserUID), dto.Permissions)).ConfigureAwait(false);
-
-        var newPairData = await GetPairInfo(UserUID, dto.User.UID).ConfigureAwait(false);
-
-        if (newPairData.OwnPermissions.IsPaused != oldPairData.OwnPermissions.IsPaused)
-        {
-            var otherCharaIdent = await GetUserIdent(dto.User.UID).ConfigureAwait(false);
-            var otherPermissions = newPairData.OtherPermissions;
-
-            if (UserCharaIdent == null || otherCharaIdent == null || (otherPermissions?.IsPaused ?? true)) return;
-
-            if (newPairData.OwnPermissions.IsPaused)
-            {
-                await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
-                await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
-            }
-            else
-            {
-                await Clients.User(UserUID).Client_UserSendOnline(new(dto.User, otherCharaIdent)).ConfigureAwait(false);
-                await Clients.User(dto.User.UID).Client_UserSendOnline(new(new(UserUID), UserCharaIdent)).ConfigureAwait(false);
-            }
-        }
-    }
-
-    [Authorize(Policy = "Identified")]
     public async Task UserSetProfile(UserProfileDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
@@ -513,27 +453,6 @@ public partial class MareHub
 
         await Clients.Users(pairs.Select(p => p.Key)).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
         await Clients.Caller.Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
-    }
-
-    [Authorize(Policy = "Authenticated")]
-    public async Task UserUpdateDefaultPermissions(DefaultPermissionsDto defaultPermissions)
-    {
-        _logger.LogCallInfo(MareHubLogger.Args(defaultPermissions));
-
-        var permissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
-
-        permissions.DisableGroupAnimations = defaultPermissions.DisableGroupAnimations;
-        permissions.DisableGroupSounds = defaultPermissions.DisableGroupSounds;
-        permissions.DisableGroupVFX = defaultPermissions.DisableGroupVFX;
-        permissions.DisableIndividualAnimations = defaultPermissions.DisableIndividualAnimations;
-        permissions.DisableIndividualSounds = defaultPermissions.DisableIndividualSounds;
-        permissions.DisableIndividualVFX = defaultPermissions.DisableIndividualVFX;
-        permissions.IndividualIsSticky = defaultPermissions.IndividualIsSticky;
-
-        _dbContext.Update(permissions);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        await Clients.Caller.Client_UserUpdateDefaultPermissions(defaultPermissions).ConfigureAwait(false);
     }
 
     [GeneratedRegex(@"^([a-z0-9_ '+&,\.\-\{\}]+\/)+([a-z0-9_ '+&,\.\-\{\}]+\.[a-z]{3,4})$", RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.ECMAScript)]
