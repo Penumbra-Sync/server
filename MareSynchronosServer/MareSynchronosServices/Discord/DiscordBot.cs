@@ -204,9 +204,9 @@ internal class DiscordBot : IHostedService
         await _interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
 
         await CreateOrUpdateModal(guild).ConfigureAwait(false);
+        _ = UpdateVanityRoles(guild);
         _ = RemoveUsersNotInVanityRole();
         _ = ProcessReportsQueue();
-        _ = UpdateVanityRoles(guild);
     }
 
     private async Task UpdateVanityRoles(RestGuild guild)
@@ -395,9 +395,7 @@ internal class DiscordBot : IHostedService
         _vanityUpdateCts = new();
         var token = _vanityUpdateCts.Token;
         var guild = (await _discordClient.Rest.GetGuildsAsync()).First();
-        var commands = await guild.GetApplicationCommandsAsync();
         var appId = await _discordClient.GetApplicationInfoAsync().ConfigureAwait(false);
-        var vanityCommandId = commands.First(c => c.ApplicationId == appId.Id && c.Name == "setvanityuid").Id;
 
         while (!token.IsCancellationRequested)
         {
@@ -406,31 +404,9 @@ internal class DiscordBot : IHostedService
                 _logger.LogInformation($"Cleaning up Vanity UIDs");
                 _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
                 var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id);
-                var vanityCommand = await restGuild.GetSlashCommandAsync(vanityCommandId).ConfigureAwait(false);
-                GuildApplicationCommandPermission commandPermissions = null;
-                try
-                {
-                    _logger.LogInformation($"Getting command permissions");
-                    commandPermissions = await vanityCommand.GetCommandPermission().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error getting command permissions");
-                    throw new Exception("Can't get command permissions");
-                }
 
-                _logger.LogInformation($"Getting allowed role ids from permissions");
-                List<ulong> allowedRoleIds = new();
-                try
-                {
-                    allowedRoleIds = (from perm in commandPermissions.Permissions where perm.TargetType == ApplicationCommandPermissionTarget.Role where perm.Permission select perm.TargetId).ToList();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error resolving permissions to roles");
-                }
-
-                _logger.LogInformation($"Found allowed role ids: {string.Join(", ", allowedRoleIds)}");
+                ulong[] allowedRoleIds = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), Array.Empty<ulong>());
+                _logger.LogInformation($"Allowed role ids: {string.Join(", ", allowedRoleIds)}");
 
                 if (allowedRoleIds.Any())
                 {
