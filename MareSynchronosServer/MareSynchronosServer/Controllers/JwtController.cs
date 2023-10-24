@@ -21,17 +21,20 @@ namespace MareSynchronosServer.Controllers;
 [Route(MareAuth.Auth)]
 public class JwtController : Controller
 {
+    private readonly ILogger<JwtController> _logger;
     private readonly IHttpContextAccessor _accessor;
     private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
     private readonly MareDbContext _mareDbContext;
     private readonly IRedisDatabase _redis;
     private readonly SecretKeyAuthenticatorService _secretKeyAuthenticatorService;
 
-    public JwtController(IHttpContextAccessor accessor, MareDbContext mareDbContext,
+    public JwtController(ILogger<JwtController> logger,
+        IHttpContextAccessor accessor, MareDbContext mareDbContext,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<MareConfigurationAuthBase> configuration,
         IRedisDatabase redisDb)
     {
+        _logger = logger;
         _accessor = accessor;
         _redis = redisDb;
         _mareDbContext = mareDbContext;
@@ -50,51 +53,83 @@ public class JwtController : Controller
     [HttpGet("renewToken")]
     public async Task<IActionResult> RenewToken()
     {
-        var uid = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.Uid, StringComparison.Ordinal))!.Value;
-        var ident = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))!.Value;
-
-        if (await _mareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.IsBanned))
+        try
         {
-            await EnsureBan(uid, ident);
+            var uid = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.Uid, StringComparison.Ordinal))!.Value;
+            var ident = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))!.Value;
 
-            return Unauthorized("You are permanently banned.");
+            if (await _mareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.IsBanned))
+            {
+                await EnsureBan(uid, ident);
+
+                return Unauthorized("You are permanently banned.");
+            }
+
+            if (await IsIdentBanned(uid, ident))
+            {
+                return Unauthorized("Your character is banned from using the service.");
+            }
+
+            _logger.LogInformation("RenewToken:SUCCESS:{id}:{ident}", uid, ident);
+            return CreateJwtFromId(uid, ident);
         }
-
-        if (await IsIdentBanned(uid, ident))
+        catch (Exception ex)
         {
-            return Unauthorized("Your character is banned from using the service.");
+            _logger.LogError(ex, "RenewToken:FAILURE");
+            return Unauthorized("Unknown error while renewing authentication token");
         }
-
-        return CreateJwtFromId(uid, ident);
     }
 
     private async Task<IActionResult> AuthenticateInternal(string auth, string charaIdent)
     {
-        if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
-        if (string.IsNullOrEmpty(charaIdent)) return BadRequest("No CharaIdent");
-
-        var ip = _accessor.GetIpAddress();
-
-        var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
-
-        if (await IsIdentBanned(authResult.Uid, charaIdent))
+        try
         {
-            return Unauthorized("Your character is banned from using the service.");
-        }
+            if (string.IsNullOrEmpty(auth)) return BadRequest("No Authkey");
+            if (string.IsNullOrEmpty(charaIdent)) return BadRequest("No CharaIdent");
 
-        if (!authResult.Success && !authResult.TempBan) return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
-        if (!authResult.Success && authResult.TempBan) return Unauthorized("You are temporarily banned. Try connecting again in 5 minutes.");
-        if (authResult.Permaban)
+            var ip = _accessor.GetIpAddress();
+
+            var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
+
+            if (await IsIdentBanned(authResult.Uid, charaIdent))
+            {
+                _logger.LogWarning("Authenticate:IDENTBAN:{id}:{ident}", authResult.Uid, charaIdent);
+                return Unauthorized("Your character is banned from using the service.");
+            }
+
+            if (!authResult.Success && !authResult.TempBan)
+            {
+                _logger.LogWarning("Authenticate:INVALID:{id}:{ident}", authResult?.Uid ?? "NOUID", charaIdent);
+                return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
+            }
+            if (!authResult.Success && authResult.TempBan)
+            {
+                _logger.LogWarning("Authenticate:TEMPBAN:{id}:{ident}", authResult.Uid ?? "NOUID", charaIdent);
+                return Unauthorized("You are temporarily banned. Try connecting again in 5 minutes.");
+            }
+            if (authResult.Permaban)
+            {
+                await EnsureBan(authResult.Uid, charaIdent);
+
+                _logger.LogWarning("Authenticate:UIDBAN:{id}:{ident}", authResult.Uid, charaIdent);
+                return Unauthorized("You are permanently banned.");
+            }
+
+            var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
+            if (!string.IsNullOrEmpty(existingIdent))
+            {
+                _logger.LogWarning("Authenticate:DUPLICATE:{id}:{ident}", authResult.Uid, charaIdent);
+                return Unauthorized("Already logged in to this account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
+            }
+
+            _logger.LogInformation("Authenticate:SUCCESS:{id}:{ident}", authResult.Uid, charaIdent);
+            return CreateJwtFromId(authResult.Uid, charaIdent);
+        }
+        catch (Exception ex)
         {
-            await EnsureBan(authResult.Uid, charaIdent);
-
-            return Unauthorized("You are permanently banned.");
+            _logger.LogWarning(ex, "Authenticate:UNKNOWN");
+            return Unauthorized("Unknown internal server error during authentication");
         }
-
-        var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
-        if (!string.IsNullOrEmpty(existingIdent)) return Unauthorized("Already logged in to this account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
-
-        return CreateJwtFromId(authResult.Uid, charaIdent);
     }
 
     private JwtSecurityToken CreateJwt(IEnumerable<Claim> authClaims)
