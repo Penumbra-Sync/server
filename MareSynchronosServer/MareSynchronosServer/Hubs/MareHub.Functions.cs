@@ -7,7 +7,6 @@ using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
-using MareSynchronosShared.Data;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -251,8 +250,8 @@ public partial class MareHub
 
     private async Task<UserInfo?> GetPairInfo(string uid, string otheruid)
     {
-        var clientPairs = from cp in _dbContext.ClientPairs.Where(u => u.UserUID == uid && u.OtherUserUID == otheruid)
-                          join cp2 in _dbContext.ClientPairs.Where(u => u.OtherUserUID == uid && u.UserUID == otheruid)
+        var clientPairs = from cp in _dbContext.ClientPairs
+                          join cp2 in _dbContext.ClientPairs
                           on new
                           {
                               UserUID = cp.UserUID,
@@ -264,7 +263,7 @@ public partial class MareHub
                               OtherUserUID = cp2.UserUID
                           } into joined
                           from c in joined.DefaultIfEmpty()
-                          where cp.UserUID == uid
+                          where cp.UserUID == uid && cp.OtherUserUID == otheruid
                           select new
                           {
                               UserUID = cp.UserUID,
@@ -274,8 +273,8 @@ public partial class MareHub
                           };
 
 
-        var groupPairs = from gp in _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
-                         join gp2 in _dbContext.GroupPairs.Where(u => u.GroupUserUID == otheruid)
+        var groupPairs = from gp in _dbContext.GroupPairs
+                         join gp2 in _dbContext.GroupPairs
                          on new
                          {
                              GID = gp.GroupGID
@@ -284,7 +283,7 @@ public partial class MareHub
                          {
                              GID = gp2.GroupGID
                          }
-                         where gp.GroupUserUID == uid
+                         where gp.GroupUserUID == uid && gp2.GroupUserUID == otheruid
                          select new
                          {
                              UserUID = gp.GroupUserUID,
@@ -306,8 +305,7 @@ public partial class MareHub
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
                      where user.UserUID == uid
-                        && u.UID == user.OtherUserUID
-                        && ownperm.UserUID == uid
+                        && user.OtherUserUID == otheruid
                      select new
                      {
                          UserUID = user.UserUID,
@@ -334,8 +332,8 @@ public partial class MareHub
 
     private async Task<Dictionary<string, UserInfo>> GetAllPairInfo(string uid)
     {
-        var clientPairs = from cp in _dbContext.ClientPairs.Where(u => u.UserUID == uid)
-                          join cp2 in _dbContext.ClientPairs.Where(u => u.OtherUserUID == uid)
+        var clientPairs = from cp in _dbContext.ClientPairs
+                          join cp2 in _dbContext.ClientPairs
                           on new
                           {
                               UserUID = cp.UserUID,
@@ -357,8 +355,8 @@ public partial class MareHub
                           };
 
 
-        var groupPairs = from gp in _dbContext.GroupPairs.Where(u => u.GroupUserUID == uid)
-                         join gp2 in _dbContext.GroupPairs.Where(u => u.GroupUserUID != uid)
+        var groupPairs = from gp in _dbContext.GroupPairs
+                         join gp2 in _dbContext.GroupPairs
                          on new
                          {
                              GID = gp.GroupGID
@@ -367,7 +365,7 @@ public partial class MareHub
                          {
                              GID = gp2.GroupGID
                          }
-                         where gp.GroupUserUID == uid
+                         where gp.GroupUserUID == uid && gp2.GroupUserUID != uid
                          select new
                          {
                              UserUID = gp.GroupUserUID,
@@ -388,9 +386,6 @@ public partial class MareHub
                         equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
-                     where user.UserUID == uid
-                        && u.UID == user.OtherUserUID
-                        && ownperm.UserUID == uid
                      select new
                      {
                          UserUID = user.UserUID,
