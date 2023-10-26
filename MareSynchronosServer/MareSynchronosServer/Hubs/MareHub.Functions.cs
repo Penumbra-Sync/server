@@ -304,8 +304,6 @@ public partial class MareHub
                         equals new { UserUID = p.UserUID, OtherUserUID = p.OtherUserUID }
                         into otherperms
                      from otherperm in otherperms.DefaultIfEmpty()
-                     where user.UserUID == uid
-                        && user.OtherUserUID == otheruid
                      select new
                      {
                          UserUID = user.UserUID,
