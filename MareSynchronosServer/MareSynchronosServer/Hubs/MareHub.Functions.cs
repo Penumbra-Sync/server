@@ -77,7 +77,8 @@ public partial class MareHub
         uid ??= UserUID;
 
         return (await GetAllPairInfo(UserUID).ConfigureAwait(false))
-            .Where(u => !u.Value.OwnPermissions.IsPaused && u.Value.OtherPermissions != null && !u.Value.OtherPermissions.IsPaused)
+            .Where(u => u.Value.IsSynced && !u.Value.OwnPermissions.IsPaused
+                && u.Value.OtherPermissions != null && !u.Value.OtherPermissions.IsPaused)
             .Select(u => u.Key).ToList();
     }
 
