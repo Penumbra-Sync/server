@@ -49,8 +49,6 @@ public class MareDbContext : DbContext
     public DbSet<GroupPairPreferredPermission> GroupPairPreferredPermissions { get; set; }
     public DbSet<UserDefaultPreferredPermission> UserDefaultPreferredPermissions { get; set; }
 
-    public IQueryable<UserPermissionQuery> GetAllPairsForUser(string uid) => FromExpression(() => GetAllPairsForUser(uid));
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Auth>().ToTable("auth");
@@ -86,6 +84,7 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<UserPermissionSet>().HasKey(u => new { u.UserUID, u.OtherUserUID });
         modelBuilder.Entity<UserPermissionSet>().HasIndex(c => c.UserUID);
         modelBuilder.Entity<UserPermissionSet>().HasIndex(c => c.OtherUserUID);
+        modelBuilder.Entity<UserPermissionSet>().HasIndex(c => new { c.UserUID, c.OtherUserUID, c.IsPaused });
         modelBuilder.Entity<GroupPairPreferredPermission>().ToTable("group_pair_preferred_permissions");
         modelBuilder.Entity<GroupPairPreferredPermission>().HasKey(u => new { u.UserUID, u.GroupGID });
         modelBuilder.Entity<GroupPairPreferredPermission>().HasIndex(c => c.UserUID);
@@ -94,9 +93,5 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<UserDefaultPreferredPermission>().HasKey(u => u.UserUID);
         modelBuilder.Entity<UserDefaultPreferredPermission>().HasIndex(u => u.UserUID);
         modelBuilder.Entity<UserDefaultPreferredPermission>().HasOne(u => u.User);
-        modelBuilder.HasDbFunction(typeof(MareDbContext).GetMethod(nameof(GetAllPairsForUser), new[] { typeof(string) }))
-            .HasName("get_all_pairs_for_user");
-        modelBuilder.Entity<UserPermissionQuery>().HasNoKey();
-        modelBuilder.Entity<UserPermissionQuery>().ToTable("user_permission_query", t => t.ExcludeFromMigrations());
     }
 }
