@@ -77,9 +77,7 @@ public partial class MareHub
     {
         uid ??= UserUID;
 
-        return (await GetBasicPairInfo(UserUID).ConfigureAwait(false))
-            .Where(u => u.Value.IsSynced && !u.Value.IsPaused)
-            .Select(u => u.Key).ToList();
+        return (await GetSyncedUnpausedOnlinePairs(UserUID).ConfigureAwait(false));
     }
 
     private async Task<Dictionary<string, string>> GetOnlineUsers(List<string> uids)
@@ -419,7 +417,7 @@ public partial class MareHub
         }, StringComparer.Ordinal);
     }
 
-    private async Task<Dictionary<string, BasicUserInfo>> GetBasicPairInfo(string uid)
+    private async Task<List<string>> GetSyncedUnpausedOnlinePairs(string uid)
     {
         var clientPairs = from cp in _dbContext.ClientPairs.AsNoTracking().Where(u => u.UserUID == uid)
                           join cp2 in _dbContext.ClientPairs.AsNoTracking().Where(u => u.OtherUserUID == uid)
@@ -434,12 +432,11 @@ public partial class MareHub
                               OtherUserUID = cp2.UserUID
                           } into joined
                           from c in joined.DefaultIfEmpty()
-                          where cp.UserUID == uid
+                          where cp.UserUID == uid && c.UserUID != null
                           select new
                           {
                               UserUID = cp.UserUID,
                               OtherUserUID = cp.OtherUserUID,
-                              Synced = c != null
                           };
 
 
@@ -457,7 +454,6 @@ public partial class MareHub
                          {
                              UserUID = gp.GroupUserUID,
                              OtherUserUID = gp2.GroupUserUID,
-                             Synced = true
                          };
 
         var allPairs = clientPairs.Concat(groupPairs);
@@ -476,20 +472,11 @@ public partial class MareHub
                      where user.UserUID == uid
                         && ownperm.UserUID == user.UserUID && ownperm.OtherUserUID == user.OtherUserUID
                         && otherperm.OtherUserUID == user.UserUID && otherperm.UserUID == user.OtherUserUID
-                     select new
-                     {
-                         OtherUserUID = user.OtherUserUID,
-                         Synced = user.Synced,
-                         IsPaused = ownperm.IsPaused || otherperm == null ? true : otherperm.IsPaused
-                     };
+                        && !ownperm.IsPaused && (otherperm == null ? false : !otherperm.IsPaused)
+                     select user.OtherUserUID;
 
-        var resultList = await result.AsNoTracking().ToListAsync().ConfigureAwait(false);
-        return resultList.GroupBy(g => g.OtherUserUID, StringComparer.Ordinal).ToDictionary(g => g.Key, g =>
-        {
-            return new BasicUserInfo(g.Max(p => p.Synced), g.First().IsPaused);
-        }, StringComparer.Ordinal);
+        return await result.Distinct().AsNoTracking().ToListAsync().ConfigureAwait(false);
     }
 
     public record UserInfo(string Alias, bool IndividuallyPaired, bool IsSynced, List<string> GIDs, UserPermissionSet? OwnPermissions, UserPermissionSet? OtherPermissions);
-    public record BasicUserInfo(bool IsSynced, bool IsPaused);
 }
