@@ -261,9 +261,6 @@ public partial class MareHub
             + string.Join(Environment.NewLine, invalidFileSwapPaths.Select(p => "Invalid FileSwap Path: " + p)));
         }
 
-        var allPairs = await GetAllPairInfo(UserUID).ConfigureAwait(false);
-        allPairs.Where(p => !p.Value.OwnPermissions.IsPaused && p.Value.OtherPermissions != null && !p.Value.OtherPermissions.IsPaused).ToList();
-
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
         var idents = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
 
