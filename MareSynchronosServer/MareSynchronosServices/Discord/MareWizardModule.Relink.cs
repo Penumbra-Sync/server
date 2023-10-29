@@ -70,8 +70,8 @@ public partial class MareWizardModule
         _logger.LogInformation("{method}:{userId}:{uid}:{verificationCode}", nameof(ComponentRelinkVerify), Context.Interaction.User.Id, uid, verificationCode);
 
 
-        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<DiscordBotServices>>(Context.User.Id,
-            async (services) => await HandleVerifyRelinkAsync(Context.User.Id, verificationCode, services).ConfigureAwait(false)));
+        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Func<DiscordBotServices, Task>>(Context.User.Id,
+            (services) => HandleVerifyRelinkAsync(Context.User.Id, verificationCode, services)));
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
         eb.WithColor(Color.Purple);

@@ -25,7 +25,7 @@ public class DiscordBotServices
 
     public ILogger<DiscordBotServices> Logger { get; init; }
     public MareMetrics Metrics { get; init; }
-    public ConcurrentQueue<KeyValuePair<ulong, Action<DiscordBotServices>>> VerificationQueue { get; } = new();
+    public ConcurrentQueue<KeyValuePair<ulong, Func<DiscordBotServices, Task>>> VerificationQueue { get; } = new();
 
     public Task Start()
     {
@@ -49,7 +49,7 @@ public class DiscordBotServices
             {
                 try
                 {
-                    queueitem.Value.Invoke(this);
+                    await queueitem.Value.Invoke(this).ConfigureAwait(false);
                     Logger.LogInformation("Processed Verification for {key}", queueitem.Key);
                 }
                 catch (Exception e)

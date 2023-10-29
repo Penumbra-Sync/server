@@ -75,8 +75,8 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}:{verificationcode}", nameof(ComponentRegisterVerify), Context.Interaction.User.Id, verificationCode);
 
-        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Action<DiscordBotServices>>(Context.User.Id,
-            async (service) => await HandleVerifyAsync(Context.User.Id, verificationCode, service).ConfigureAwait(false)));
+        _botServices.VerificationQueue.Enqueue(new KeyValuePair<ulong, Func<DiscordBotServices, Task>>(Context.User.Id,
+            (service) => HandleVerifyAsync(Context.User.Id, verificationCode, service)));
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
         eb.WithColor(Color.Purple);
