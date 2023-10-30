@@ -308,7 +308,7 @@ public partial class MareHub
                      where user.UserUID == uid
                         && u.UID == user.OtherUserUID
                         && ownperm.UserUID == user.UserUID && ownperm.OtherUserUID == user.OtherUserUID
-                        && otherperm.OtherUserUID == user.UserUID && otherperm.UserUID == user.OtherUserUID
+                        && (otherperm == null || (otherperm.OtherUserUID == user.UserUID && otherperm.UserUID == user.OtherUserUID))
                      select new
                      {
                          UserUID = user.UserUID,
@@ -393,7 +393,7 @@ public partial class MareHub
                      where user.UserUID == uid
                         && u.UID == user.OtherUserUID
                         && ownperm.UserUID == user.UserUID && ownperm.OtherUserUID == user.OtherUserUID
-                        && otherperm.OtherUserUID == user.UserUID && otherperm.UserUID == user.OtherUserUID
+                        && (otherperm == null || (otherperm.OtherUserUID == user.UserUID && otherperm.UserUID == user.OtherUserUID))
                      select new
                      {
                          UserUID = user.UserUID,
