@@ -90,7 +90,9 @@ public class Startup
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
+        services.AddSingleton<OnlineSyncedPairCacheService>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
+        services.AddHostedService(provider => provider.GetService<OnlineSyncedPairCacheService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 
@@ -273,6 +275,10 @@ public class Startup
             MetricsAPI.CounterAuthenticationFailures,
             MetricsAPI.CounterAuthenticationRequests,
             MetricsAPI.CounterAuthenticationSuccesses,
+            MetricsAPI.CounterUserPairCacheHit,
+            MetricsAPI.CounterUserPairCacheMiss,
+            MetricsAPI.CounterUserPairCacheNewEntries,
+            MetricsAPI.CounterUserPairCacheUpdatedEntries,
         }, new List<string>
         {
             MetricsAPI.GaugeAuthorizedConnections,
@@ -285,6 +291,7 @@ public class Startup
             MetricsAPI.GaugeGroupPairs,
             MetricsAPI.GaugeUsersRegistered,
             MetricsAPI.GaugeAuthenticationCacheEntries,
+            MetricsAPI.GaugeUserPairCacheEntries,
         }));
     }
 

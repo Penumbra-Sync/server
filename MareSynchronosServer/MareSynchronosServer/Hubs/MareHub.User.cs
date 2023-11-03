@@ -261,17 +261,25 @@ public partial class MareHub
             + string.Join(Environment.NewLine, invalidFileSwapPaths.Select(p => "Invalid FileSwap Path: " + p)));
         }
 
-        var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
-        var idents = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
+        var recipientUids = dto.Recipients.Select(r => r.UID).ToList();
+        bool allCached = await _onlineSyncedPairCacheService.AreAllPlayersCached(UserUID,
+            recipientUids, Context.ConnectionAborted).ConfigureAwait(false);
 
-        var recipients = allPairedUsers.Where(f => dto.Recipients.Select(r => r.UID).Contains(f, StringComparer.Ordinal)).ToList();
+        if (!allCached)
+        {
+            var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
-        _logger.LogCallInfo(MareHubLogger.Args(idents.Count, recipients.Count()));
+            recipientUids = allPairedUsers.Where(f => recipientUids.Contains(f, StringComparer.Ordinal)).ToList();
 
-        await Clients.Users(recipients).Client_UserReceiveCharacterData(new OnlineUserCharaDataDto(new UserData(UserUID), dto.CharaData)).ConfigureAwait(false);
+            await _onlineSyncedPairCacheService.CachePlayers(UserUID, recipientUids, Context.ConnectionAborted).ConfigureAwait(false);
+        }
+
+        _logger.LogCallInfo(MareHubLogger.Args(recipientUids.Count));
+
+        await Clients.Users(recipientUids).Client_UserReceiveCharacterData(new OnlineUserCharaDataDto(new UserData(UserUID), dto.CharaData)).ConfigureAwait(false);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
-        _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipients.Count());
+        _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipientUids.Count);
     }
 
     [Authorize(Policy = "Identified")]

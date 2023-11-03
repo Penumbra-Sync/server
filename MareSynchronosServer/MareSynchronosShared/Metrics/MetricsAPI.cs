@@ -33,4 +33,10 @@ public class MetricsAPI
     public const string GaugeDownloadQueue = "mare_download_queue";
     public const string CounterFileRequests = "mare_files_requests";
     public const string CounterFileRequestSize = "mare_files_request_size";
+    public const string CounterUserPairCacheHit = "mare_pairscache_hit";
+    public const string CounterUserPairCacheMiss = "mare_pairscache_miss";
+    public const string GaugeUserPairCacheUsers = "mare_pairscache_users";
+    public const string GaugeUserPairCacheEntries = "mare_pairscache_entries";
+    public const string CounterUserPairCacheNewEntries = "mare_pairscache_new_entries";
+    public const string CounterUserPairCacheUpdatedEntries = "mare_pairscache_updated_entries";
 }
