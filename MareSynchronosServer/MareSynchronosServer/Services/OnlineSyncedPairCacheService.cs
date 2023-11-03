@@ -46,7 +46,10 @@ public class OnlineSyncedPairCacheService : IHostedService
             if (ct.IsCancellationRequested)
                 return false;
             if (!_lastSeenCache.TryGetValue(sender, out var senderCache))
+            {
+                _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheMiss);
                 return false;
+            }
 
             lock (senderCache)
             {
