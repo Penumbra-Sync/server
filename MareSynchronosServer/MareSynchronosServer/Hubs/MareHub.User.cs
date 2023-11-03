@@ -271,7 +271,7 @@ public partial class MareHub
 
             recipientUids = allPairedUsers.Where(f => recipientUids.Contains(f, StringComparer.Ordinal)).ToList();
 
-            await _onlineSyncedPairCacheService.CachePlayers(UserUID, recipientUids, Context.ConnectionAborted).ConfigureAwait(false);
+            await _onlineSyncedPairCacheService.CachePlayers(UserUID, allPairedUsers, Context.ConnectionAborted).ConfigureAwait(false);
         }
 
         _logger.LogCallInfo(MareHubLogger.Args(recipientUids.Count));
