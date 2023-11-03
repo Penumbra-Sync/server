@@ -292,6 +292,7 @@ public class Startup
             MetricsAPI.GaugeUsersRegistered,
             MetricsAPI.GaugeAuthenticationCacheEntries,
             MetricsAPI.GaugeUserPairCacheEntries,
+            MetricsAPI.GaugeUserPairCacheUsers,
         }));
     }
 
