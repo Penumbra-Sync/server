@@ -1,15 +1,14 @@
 ﻿using MareSynchronosShared.Metrics;
-using System.Collections.Concurrent;
 
 namespace MareSynchronosServer.Services;
 
 public class OnlineSyncedPairCacheService : IHostedService
 {
     private const int CleanupCount = 1;
-    private const int CacheCount = 500;
+    private const int CacheCount = 1000;
     private Task? _cleanUpTask;
     private readonly CancellationTokenSource _runnerCts = new();
-    private readonly ConcurrentDictionary<string, Dictionary<string, DateTime>> _lastSeenCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, DateTime>> _lastSeenCache = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _cleanupSemaphore = new(CleanupCount);
     private readonly SemaphoreSlim _cacheSemaphore = new(CacheCount);
     private readonly SemaphoreSlim _cacheAdditionSemaphore = new(1);
@@ -120,9 +119,9 @@ public class OnlineSyncedPairCacheService : IHostedService
     {
         while (!ct.IsCancellationRequested)
         {
-            await Task.Delay(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(60), ct).ConfigureAwait(false);
 
-            _logger.LogInformation("Cleaning up stale entries");
+            _logger.LogInformation("Cleaning up stale entries: spin up");
 
             try
             {
@@ -144,33 +143,37 @@ public class OnlineSyncedPairCacheService : IHostedService
         {
             int entriesRemoved = 0;
             int playersRemoved = 0;
-            foreach (var playerCache in _lastSeenCache.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal))
-            {
-                foreach (var cacheEntry in playerCache.Value.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal))
+            _logger.LogInformation("Cleaning up stale entries: start");
+            Parallel.ForEach(_lastSeenCache.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal),
+                playerCache =>
                 {
-                    if (cacheEntry.Value < DateTime.UtcNow)
+                    ct.ThrowIfCancellationRequested();
+
+                    foreach (var cacheEntry in playerCache.Value.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal))
                     {
-                        entriesRemoved++;
-                        playerCache.Value.Remove(cacheEntry.Key);
+                        if (cacheEntry.Value < DateTime.UtcNow)
+                        {
+                            Interlocked.Increment(ref entriesRemoved);
+                            playerCache.Value.Remove(cacheEntry.Key);
+                        }
                     }
-                }
 
-                ct.ThrowIfCancellationRequested();
+                    ct.ThrowIfCancellationRequested();
 
-                if (!playerCache.Value.Any())
-                {
-                    playersRemoved++;
-                    _lastSeenCache.Remove(playerCache.Key, out _);
-                }
-            }
+                    if (!playerCache.Value.Any())
+                    {
+                        Interlocked.Increment(ref playersRemoved);
+                        _lastSeenCache.Remove(playerCache.Key, out _);
+                    }
+                });
 
-            _logger.LogInformation("Cleaning up complete, removed {entries} individual entries and {players} players", entriesRemoved, playersRemoved);
+            _logger.LogInformation("Cleaning up stale entries: complete; removed {entries} individual entries and {players} players", entriesRemoved, playersRemoved);
             _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUserPairCacheEntries, _lastSeenCache.Values.SelectMany(k => k.Keys).Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUserPairCacheUsers, _lastSeenCache.Keys.Count());
+            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUserPairCacheUsers, _lastSeenCache.Keys.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Cleanup failed");
+            _logger.LogWarning(ex, "Cleaning up stale entries: failed");
         }
     }
 }
