@@ -17,7 +17,7 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(defaultPermissions));
 
-        var permissions = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        var permissions = await DbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
 
         permissions.DisableGroupAnimations = defaultPermissions.DisableGroupAnimations;
         permissions.DisableGroupSounds = defaultPermissions.DisableGroupSounds;
@@ -27,8 +27,8 @@ public partial class MareHub
         permissions.DisableIndividualVFX = defaultPermissions.DisableIndividualVFX;
         permissions.IndividualIsSticky = defaultPermissions.IndividualIsSticky;
 
-        _dbContext.Update(permissions);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        DbContext.Update(permissions);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         await Clients.Caller.Client_UserUpdateDefaultPermissions(defaultPermissions).ConfigureAwait(false);
     }
@@ -46,7 +46,7 @@ public partial class MareHub
 
         // get all current pairs in any form
         var allUsers = await GetAllPairInfo(UserUID).ConfigureAwait(false);
-        var ownDefaultPerms = await _dbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        var ownDefaultPerms = await DbContext.UserDefaultPreferredPermissions.SingleAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
 
         foreach (var user in dto.AffectedUsers)
         {
@@ -59,14 +59,14 @@ public partial class MareHub
             }
 
             var pauseChange = pairData.OwnPermissions.IsPaused != newPerm.IsPaused();
-            var prevPermissions = await _dbContext.Permissions.SingleAsync(u => u.UserUID == UserUID && u.OtherUserUID == user.Key).ConfigureAwait(false);
+            var prevPermissions = await DbContext.Permissions.SingleAsync(u => u.UserUID == UserUID && u.OtherUserUID == user.Key).ConfigureAwait(false);
 
             prevPermissions.IsPaused = newPerm.IsPaused();
             prevPermissions.DisableAnimations = newPerm.IsDisableAnimations();
             prevPermissions.DisableSounds = newPerm.IsDisableSounds();
             prevPermissions.DisableVFX = newPerm.IsDisableVFX();
             prevPermissions.Sticky = newPerm.IsSticky() || setSticky;
-            _dbContext.Update(prevPermissions);
+            DbContext.Update(prevPermissions);
 
             // send updated data to pair
             var permCopy = newPerm;
@@ -104,7 +104,7 @@ public partial class MareHub
             var (inGroup, groupPair) = await TryValidateUserInGroup(group.Key).ConfigureAwait(false);
             if (!inGroup) continue;
 
-            var groupPreferredPermissions = await _dbContext.GroupPairPreferredPermissions
+            var groupPreferredPermissions = await DbContext.GroupPairPreferredPermissions
                 .SingleAsync(u => u.UserUID == UserUID && u.GroupGID == group.Key).ConfigureAwait(false);
 
             var wasPaused = groupPreferredPermissions.IsPaused;
@@ -116,7 +116,7 @@ public partial class MareHub
             var nonStickyPairs = allUsers.Where(u => !u.Value.OwnPermissions.Sticky).ToList();
             var affectedGroupPairs = nonStickyPairs.Where(u => u.Value.GIDs.Contains(group.Key, StringComparer.Ordinal)).ToList();
             var groupUserUids = affectedGroupPairs.Select(g => g.Key).ToList();
-            var affectedPerms = await _dbContext.Permissions.Where(u => u.UserUID == UserUID
+            var affectedPerms = await DbContext.Permissions.Where(u => u.UserUID == UserUID
                 && groupUserUids.Any(c => c == u.OtherUserUID))
                 .ToListAsync().ConfigureAwait(false);
 
@@ -167,6 +167,6 @@ public partial class MareHub
             }
         }
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 }

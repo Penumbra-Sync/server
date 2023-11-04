@@ -29,7 +29,7 @@ public partial class MareHub
         if (string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(dto.User.UID)) return;
 
         // grab other user, check if it exists and if a pair already exists
-        var otherUser = await _dbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
+        var otherUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == uid || u.Alias == uid).ConfigureAwait(false);
         if (otherUser == null)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Warning, $"Cannot pair with {dto.User.UID}, UID does not exist").ConfigureAwait(false);
@@ -43,7 +43,7 @@ public partial class MareHub
         }
 
         var existingEntry =
-            await _dbContext.ClientPairs.AsNoTracking()
+            await DbContext.ClientPairs.AsNoTracking()
                 .FirstOrDefaultAsync(p =>
                     p.User.UID == UserUID && p.OtherUserUID == otherUser.UID).ConfigureAwait(false);
 
@@ -54,7 +54,7 @@ public partial class MareHub
         }
 
         // grab self create new client pair and save
-        var user = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
+        var user = await DbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
@@ -63,14 +63,14 @@ public partial class MareHub
             OtherUser = otherUser,
             User = user,
         };
-        await _dbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
+        await DbContext.ClientPairs.AddAsync(wl).ConfigureAwait(false);
 
         var existingData = await GetPairInfo(UserUID, otherUser.UID).ConfigureAwait(false);
 
         var permissions = existingData?.OwnPermissions;
         if (permissions == null || !permissions.Sticky)
         {
-            var ownDefaultPermissions = await _dbContext.UserDefaultPreferredPermissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID).ConfigureAwait(false);
+            var ownDefaultPermissions = await DbContext.UserDefaultPreferredPermissions.AsNoTracking().SingleOrDefaultAsync(f => f.UserUID == UserUID).ConfigureAwait(false);
 
             permissions = new UserPermissionSet()
             {
@@ -83,10 +83,10 @@ public partial class MareHub
                 Sticky = true
             };
 
-            var existingDbPerms = await _dbContext.Permissions.SingleOrDefaultAsync(u => u.UserUID == UserUID && u.OtherUserUID == otherUser.UID).ConfigureAwait(false);
+            var existingDbPerms = await DbContext.Permissions.SingleOrDefaultAsync(u => u.UserUID == UserUID && u.OtherUserUID == otherUser.UID).ConfigureAwait(false);
             if (existingDbPerms == null)
             {
-                await _dbContext.Permissions.AddAsync(permissions).ConfigureAwait(false);
+                await DbContext.Permissions.AddAsync(permissions).ConfigureAwait(false);
             }
             else
             {
@@ -96,11 +96,11 @@ public partial class MareHub
                 existingDbPerms.IsPaused = false;
                 existingDbPerms.Sticky = true;
 
-                _dbContext.Permissions.Update(existingDbPerms);
+                DbContext.Permissions.Update(existingDbPerms);
             }
         }
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         // get the opposite entry of the client pair
         var otherEntry = OppositeEntry(otherUser.UID);
@@ -141,8 +141,8 @@ public partial class MareHub
     {
         _logger.LogCallInfo();
 
-        var userEntry = await _dbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
-        var secondaryUsers = await _dbContext.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == UserUID).Select(c => c.User).ToListAsync().ConfigureAwait(false);
+        var userEntry = await DbContext.Users.SingleAsync(u => u.UID == UserUID).ConfigureAwait(false);
+        var secondaryUsers = await DbContext.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == UserUID).Select(c => c.User).ToListAsync().ConfigureAwait(false);
         foreach (var user in secondaryUsers)
         {
             await DeleteUser(user).ConfigureAwait(false);
@@ -192,7 +192,7 @@ public partial class MareHub
             return new UserProfileDto(user.User, false, null, null, "Due to the pause status you cannot access this users profile.");
         }
 
-        var data = await _dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == user.User.UID).ConfigureAwait(false);
+        var data = await DbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == user.User.UID).ConfigureAwait(false);
         if (data == null) return new UserProfileDto(user.User, false, null, null, null);
 
         if (data.FlaggedForReport) return new UserProfileDto(user.User, true, null, null, "This profile is flagged for report and pending evaluation");
@@ -291,14 +291,14 @@ public partial class MareHub
 
         // check if client pair even exists
         ClientPair callerPair =
-            await _dbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
+            await DbContext.ClientPairs.SingleOrDefaultAsync(w => w.UserUID == UserUID && w.OtherUserUID == dto.User.UID).ConfigureAwait(false);
         if (callerPair == null) return;
 
         var pairData = await GetPairInfo(UserUID, dto.User.UID).ConfigureAwait(false);
 
         // delete from database, send update info to users pair list
-        _dbContext.ClientPairs.Remove(callerPair);
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        DbContext.ClientPairs.Remove(callerPair);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
 
@@ -340,14 +340,14 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
 
-        UserProfileDataReport report = await _dbContext.UserProfileReports.SingleOrDefaultAsync(u => u.ReportedUserUID == dto.User.UID && u.ReportingUserUID == UserUID).ConfigureAwait(false);
+        UserProfileDataReport report = await DbContext.UserProfileReports.SingleOrDefaultAsync(u => u.ReportedUserUID == dto.User.UID && u.ReportingUserUID == UserUID).ConfigureAwait(false);
         if (report != null)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "You already reported this profile and it's pending validation").ConfigureAwait(false);
             return;
         }
 
-        UserProfileData profile = await _dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
+        UserProfileData profile = await DbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
         if (profile == null)
         {
             await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "This user has no profile").ConfigureAwait(false);
@@ -364,9 +364,9 @@ public partial class MareHub
 
         profile.FlaggedForReport = true;
 
-        await _dbContext.UserProfileReports.AddAsync(reportToAdd).ConfigureAwait(false);
+        await DbContext.UserProfileReports.AddAsync(reportToAdd).ConfigureAwait(false);
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         await Clients.User(dto.User.UID).Client_ReceiveServerMessage(MessageSeverity.Warning, "Your Mare profile has been reported and disabled for admin validation").ConfigureAwait(false);
 
@@ -384,7 +384,7 @@ public partial class MareHub
 
         if (!string.Equals(dto.User.UID, UserUID, StringComparison.Ordinal)) throw new HubException("Cannot modify profile data for anyone but yourself");
 
-        var existingData = await _dbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
+        var existingData = await DbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
 
         if (existingData?.FlaggedForReport ?? false)
         {
@@ -448,10 +448,10 @@ public partial class MareHub
                 IsNSFW = dto.IsNSFW ?? false
             };
 
-            await _dbContext.UserProfileData.AddAsync(userProfileData).ConfigureAwait(false);
+            await DbContext.UserProfileData.AddAsync(userProfileData).ConfigureAwait(false);
         }
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         var allPairedUsers = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
         var pairs = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
@@ -470,5 +470,5 @@ public partial class MareHub
     private static partial Regex UrlRegex();
 
     private ClientPair OppositeEntry(string otherUID) =>
-                                    _dbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == UserUID);
+                                    DbContext.ClientPairs.AsNoTracking().SingleOrDefault(w => w.User.UID == otherUID && w.OtherUser.UID == UserUID);
 }

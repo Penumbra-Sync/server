@@ -24,7 +24,6 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
     private readonly MareHubLogger _logger;
-    private readonly MareDbContext _dbContext;
     private readonly string _shardName;
     private readonly int _maxExistingGroupsByUser;
     private readonly int _maxJoinedGroupsByUser;
@@ -33,9 +32,11 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly OnlineSyncedPairCacheService _onlineSyncedPairCacheService;
     private readonly Uri _fileServerAddress;
     private readonly Version _expectedClientVersion;
+    private readonly Lazy<MareDbContext> _dbContextLazy;
+    private MareDbContext DbContext => _dbContextLazy.Value;
 
     public MareHub(MareMetrics mareMetrics,
-        MareDbContext mareDbContext, ILogger<MareHub> logger, SystemInfoService systemInfoService,
+        IDbContextFactory<MareDbContext> mareDbContextFactory, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
         IRedisDatabase redisDb, OnlineSyncedPairCacheService onlineSyncedPairCacheService)
     {
@@ -51,7 +52,17 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _redis = redisDb;
         _onlineSyncedPairCacheService = onlineSyncedPairCacheService;
         _logger = new MareHubLogger(this, logger);
-        _dbContext = mareDbContext;
+        _dbContextLazy = new Lazy<MareDbContext>(() => mareDbContextFactory.CreateDbContext());
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            if (_dbContextLazy.IsValueCreated) DbContext.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 
     [Authorize(Policy = "Identified")]
@@ -63,12 +74,12 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         await Clients.Caller.Client_UpdateSystemInfo(_systemInfoService.SystemInfoDto).ConfigureAwait(false);
 
-        var dbUser = await _dbContext.Users.SingleAsync(f => f.UID == UserUID).ConfigureAwait(false);
+        var dbUser = await DbContext.Users.SingleAsync(f => f.UID == UserUID).ConfigureAwait(false);
         dbUser.LastLoggedIn = DateTime.UtcNow;
 
         await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Information, "Welcome to Mare Synchronos \"" + _shardName + "\", Current Online Users: " + _systemInfoService.SystemInfoDto.OnlineUsers).ConfigureAwait(false);
 
-        var defaultPermissions = await _dbContext.UserDefaultPreferredPermissions.SingleOrDefaultAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
+        var defaultPermissions = await DbContext.UserDefaultPreferredPermissions.SingleOrDefaultAsync(u => u.UserUID == UserUID).ConfigureAwait(false);
         if (defaultPermissions == null)
         {
             defaultPermissions = new UserDefaultPreferredPermission()
@@ -76,10 +87,10 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 UserUID = UserUID,
             };
 
-            _dbContext.UserDefaultPreferredPermissions.Add(defaultPermissions);
+            DbContext.UserDefaultPreferredPermissions.Add(defaultPermissions);
         }
 
-        await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return new ConnectionDto(new UserData(dbUser.UID, string.IsNullOrWhiteSpace(dbUser.Alias) ? null : dbUser.Alias))
         {
@@ -124,7 +135,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         try
         {
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
-
+            await _onlineSyncedPairCacheService.InitPlayer(UserUID).ConfigureAwait(false);
             await UpdateUserOnRedis().ConfigureAwait(false);
         }
         catch { }
@@ -139,6 +150,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
         try
         {
+            await _onlineSyncedPairCacheService.DisposePlayer(UserUID).ConfigureAwait(false);
+
             _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
             if (exception != null)
                 _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
@@ -147,8 +160,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
 
             await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 
-            _dbContext.RemoveRange(_dbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
-            await _dbContext.SaveChangesAsync().ConfigureAwait(false);
+            DbContext.RemoveRange(DbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
+            await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         }
         catch { }

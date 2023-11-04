@@ -2,178 +2,144 @@
 
 namespace MareSynchronosServer.Services;
 
-public class OnlineSyncedPairCacheService : IHostedService
+public class OnlineSyncedPairCacheService
 {
-    private const int CleanupCount = 1;
-    private const int CacheCount = 1000;
-    private Task? _cleanUpTask;
-    private readonly CancellationTokenSource _runnerCts = new();
-    private readonly Dictionary<string, Dictionary<string, DateTime>> _lastSeenCache = new(StringComparer.Ordinal);
-    private readonly SemaphoreSlim _cleanupSemaphore = new(CleanupCount);
-    private readonly SemaphoreSlim _cacheSemaphore = new(CacheCount);
-    private readonly SemaphoreSlim _cacheAdditionSemaphore = new(1);
+    private readonly Dictionary<string, PairCache> _lastSeenCache = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _cacheModificationSemaphore = new(1);
     private readonly ILogger<OnlineSyncedPairCacheService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly MareMetrics _mareMetrics;
 
-    public OnlineSyncedPairCacheService(ILogger<OnlineSyncedPairCacheService> logger, MareMetrics mareMetrics)
+    public OnlineSyncedPairCacheService(ILogger<OnlineSyncedPairCacheService> logger, ILoggerFactory loggerFactory, MareMetrics mareMetrics)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _mareMetrics = mareMetrics;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task InitPlayer(string user)
     {
-        _cleanUpTask = CleanUp(_runnerCts.Token);
-        return Task.CompletedTask;
+        if (_lastSeenCache.ContainsKey(user)) return;
+
+        await _cacheModificationSemaphore.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _logger.LogDebug("Initializing {user}", user);
+            _lastSeenCache[user] = new(_loggerFactory.CreateLogger<PairCache>(), user, _mareMetrics);
+        }
+        finally
+        {
+            _cacheModificationSemaphore.Release();
+        }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public async Task DisposePlayer(string user)
     {
-        _runnerCts.Cancel();
-        await _cleanUpTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!_lastSeenCache.ContainsKey(user)) return;
+
+        await _cacheModificationSemaphore.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _logger.LogDebug("Disposing {user}", user);
+            _lastSeenCache.Remove(user, out var pairCache);
+            pairCache?.Dispose();
+        }
+        finally
+        {
+            _cacheModificationSemaphore.Release();
+        }
     }
 
     public async Task<bool> AreAllPlayersCached(string sender, List<string> uids, CancellationToken ct)
     {
-        while (_cleanupSemaphore.CurrentCount == 0)
-            await Task.Delay(250, ct).ConfigureAwait(false);
+        if (!_lastSeenCache.ContainsKey(sender)) await InitPlayer(sender).ConfigureAwait(false);
 
-        await _cacheSemaphore.WaitAsync(ct).ConfigureAwait(false);
-
-        try
-        {
-            if (ct.IsCancellationRequested)
-                return false;
-            if (!_lastSeenCache.TryGetValue(sender, out var senderCache))
-            {
-                _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheMiss);
-                return false;
-            }
-
-            lock (senderCache)
-            {
-                var cachedUIDs = senderCache.Keys.ToList();
-                var allCached = uids.TrueForAll(u => cachedUIDs.Contains(u, StringComparer.OrdinalIgnoreCase));
-
-                _logger.LogDebug("AreAllPlayersCached:{uid}:{count}:{result}", sender, uids.Count, allCached);
-
-                if (allCached) _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheHit);
-                else _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheMiss);
-
-                return allCached;
-            }
-        }
-        finally
-        {
-            _cacheSemaphore.Release();
-        }
+        _lastSeenCache.TryGetValue(sender, out var pairCache);
+        return await pairCache.AreAllPlayersCached(uids, ct).ConfigureAwait(false);
     }
 
     public async Task CachePlayers(string sender, List<string> uids, CancellationToken ct)
     {
-        while (_cleanupSemaphore.CurrentCount == 0)
-            await Task.Delay(250, ct).ConfigureAwait(false);
+        if (!_lastSeenCache.ContainsKey(sender)) await InitPlayer(sender).ConfigureAwait(false);
 
-        await _cacheSemaphore.WaitAsync(ct).ConfigureAwait(false);
-
-        try
-        {
-            if (ct.IsCancellationRequested) return;
-            if (!_lastSeenCache.TryGetValue(sender, out var senderCache))
-            {
-                await _cacheAdditionSemaphore.WaitAsync(ct).ConfigureAwait(false);
-                try
-                {
-                    if (!_lastSeenCache.ContainsKey(sender))
-                    {
-                        _lastSeenCache[sender] = senderCache = new(StringComparer.Ordinal);
-                        _mareMetrics.IncGauge(MetricsAPI.GaugeUserPairCacheEntries);
-                    }
-                }
-                finally
-                {
-                    _cacheAdditionSemaphore.Release();
-                }
-            }
-
-            lock (senderCache)
-            {
-                var lastSeen = DateTime.UtcNow.AddMinutes(60);
-                _logger.LogDebug("CacheOnlinePlayers:{uid}:{count}", sender, uids.Count);
-                var newEntries = uids.Count(u => !senderCache.ContainsKey(u));
-
-                _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheNewEntries, newEntries);
-                _mareMetrics.IncCounter(MetricsAPI.CounterUserPairCacheUpdatedEntries, uids.Count - newEntries);
-
-                _mareMetrics.IncGauge(MetricsAPI.GaugeUserPairCacheEntries, newEntries);
-                uids.ForEach(u => senderCache[u] = lastSeen);
-            }
-        }
-        finally
-        {
-            _cacheSemaphore.Release();
-        }
+        _lastSeenCache.TryGetValue(sender, out var pairCache);
+        await pairCache.CachePlayers(uids, ct).ConfigureAwait(false);
     }
 
-    private async Task CleanUp(CancellationToken ct)
+    private sealed class PairCache : IDisposable
     {
-        while (!ct.IsCancellationRequested)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(60), ct).ConfigureAwait(false);
+        private readonly ILogger<PairCache> _logger;
+        private readonly string _owner;
+        private readonly MareMetrics _metrics;
+        private readonly Dictionary<string, DateTime> _lastSeenCache = new(StringComparer.Ordinal);
+        private readonly SemaphoreSlim _lock = new(1);
 
-            _logger.LogInformation("Cleaning up stale entries: spin up");
+        public PairCache(ILogger<PairCache> logger, string owner, MareMetrics metrics)
+        {
+            metrics.IncGauge(MetricsAPI.GaugeUserPairCacheUsers);
+            _logger = logger;
+            _owner = owner;
+            _metrics = metrics;
+        }
+
+        public async Task<bool> AreAllPlayersCached(List<string> uids, CancellationToken ct)
+        {
+            await _lock.WaitAsync(ct).ConfigureAwait(false);
 
             try
             {
-                await _cleanupSemaphore.WaitAsync(ct).ConfigureAwait(false);
-                while (_cacheSemaphore.CurrentCount != CacheCount)
-                    await Task.Delay(25, ct).ConfigureAwait(false);
-                CleanUpCache(ct);
+                var allCached = uids.TrueForAll(u => _lastSeenCache.TryGetValue(u, out var expiry) && expiry > DateTime.UtcNow);
+
+                _logger.LogDebug("AreAllPlayersCached:{uid}:{count}:{result}", _owner, uids.Count, allCached);
+
+                if (allCached) _metrics.IncCounter(MetricsAPI.CounterUserPairCacheHit);
+                else _metrics.IncCounter(MetricsAPI.CounterUserPairCacheMiss);
+
+                return allCached;
             }
             finally
             {
-                _cleanupSemaphore.Release();
+                _lock.Release();
             }
         }
-    }
 
-    private void CleanUpCache(CancellationToken ct)
-    {
-        try
+        public async Task CachePlayers(List<string> uids, CancellationToken ct)
         {
-            int entriesRemoved = 0;
-            int playersRemoved = 0;
-            _logger.LogInformation("Cleaning up stale entries: start");
-            Parallel.ForEach(_lastSeenCache.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal),
-                playerCache =>
+            await _lock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var lastSeen = DateTime.UtcNow.AddMinutes(60);
+                _logger.LogDebug("CacheOnlinePlayers:{uid}:{count}", _owner, uids.Count);
+                var newEntries = uids.Count(u => !_lastSeenCache.ContainsKey(u));
+
+                _metrics.IncCounter(MetricsAPI.CounterUserPairCacheNewEntries, newEntries);
+                _metrics.IncCounter(MetricsAPI.CounterUserPairCacheUpdatedEntries, uids.Count - newEntries);
+
+                _metrics.IncGauge(MetricsAPI.GaugeUserPairCacheEntries, newEntries);
+                uids.ForEach(u => _lastSeenCache[u] = lastSeen);
+
+                // clean up old entries
+                var outdatedEntries = _lastSeenCache.Where(u => u.Value < DateTime.UtcNow).Select(k => k.Key).ToList();
+                if (outdatedEntries.Any())
                 {
-                    ct.ThrowIfCancellationRequested();
-
-                    foreach (var cacheEntry in playerCache.Value.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal))
+                    _metrics.DecGauge(MetricsAPI.GaugeUserPairCacheEntries, outdatedEntries.Count);
+                    foreach (var entry in outdatedEntries)
                     {
-                        if (cacheEntry.Value < DateTime.UtcNow)
-                        {
-                            Interlocked.Increment(ref entriesRemoved);
-                            playerCache.Value.Remove(cacheEntry.Key);
-                        }
+                        _lastSeenCache.Remove(entry);
                     }
-
-                    ct.ThrowIfCancellationRequested();
-
-                    if (!playerCache.Value.Any())
-                    {
-                        Interlocked.Increment(ref playersRemoved);
-                        _lastSeenCache.Remove(playerCache.Key, out _);
-                    }
-                });
-
-            _logger.LogInformation("Cleaning up stale entries: complete; removed {entries} individual entries and {players} players", entriesRemoved, playersRemoved);
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUserPairCacheEntries, _lastSeenCache.Values.SelectMany(k => k.Keys).Count());
-            _mareMetrics.SetGaugeTo(MetricsAPI.GaugeUserPairCacheUsers, _lastSeenCache.Keys.Count);
+                }
+            }
+            finally
+            {
+                _lock.Release();
+            }
         }
-        catch (Exception ex)
+
+        public void Dispose()
         {
-            _logger.LogWarning(ex, "Cleaning up stale entries: failed");
+            _metrics.DecGauge(MetricsAPI.GaugeUserPairCacheUsers);
+            _metrics.DecGauge(MetricsAPI.GaugeUserPairCacheEntries, _lastSeenCache.Count);
+            _lock.Dispose();
         }
     }
 }

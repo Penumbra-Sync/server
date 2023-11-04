@@ -92,7 +92,6 @@ public class Startup
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<OnlineSyncedPairCacheService>();
         services.AddHostedService(provider => provider.GetService<SystemInfoService>());
-        services.AddHostedService(provider => provider.GetService<OnlineSyncedPairCacheService>());
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 
