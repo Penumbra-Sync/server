@@ -104,9 +104,11 @@ public partial class MareHub
             var pairIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
+            var pairInfo = await GetAllPairInfo(pair.GroupUserUID).ConfigureAwait(false);
+
             foreach (var groupUserPair in groupUsers.Where(g => !string.Equals(g.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
             {
-                await UserGroupLeave(groupUserPair, pairIdent, pair.GroupUserUID).ConfigureAwait(false);
+                await UserGroupLeave(groupUserPair, pairIdent, pairInfo, pair.GroupUserUID).ConfigureAwait(false);
             }
         }
     }
@@ -166,10 +168,9 @@ public partial class MareHub
         await _redis.AddAsync("UID:" + UserUID, UserCharaIdent, TimeSpan.FromSeconds(60), StackExchange.Redis.When.Always, StackExchange.Redis.CommandFlags.FireAndForget).ConfigureAwait(false);
     }
 
-    private async Task UserGroupLeave(GroupPair groupUserPair, string userIdent, string? uid = null)
+    private async Task UserGroupLeave(GroupPair groupUserPair, string userIdent, Dictionary<string, UserInfo> allUserPairs, string? uid = null)
     {
         uid ??= UserUID;
-        var allUserPairs = await GetAllPairInfo(uid).ConfigureAwait(false);
         if (!allUserPairs.TryGetValue(groupUserPair.GroupUserUID, out var info) || !info.IsSynced)
         {
             var groupUserIdent = await GetUserIdent(groupUserPair.GroupUserUID).ConfigureAwait(false);
@@ -241,9 +242,11 @@ public partial class MareHub
 
         var ident = await GetUserIdent(userUid).ConfigureAwait(false);
 
+        var pairs = await GetAllPairInfo(userUid).ConfigureAwait(false);
+
         foreach (var groupUserPair in groupPairsWithoutSelf)
         {
-            await UserGroupLeave(groupUserPair, ident, userUid).ConfigureAwait(false);
+            await UserGroupLeave(groupUserPair, ident, pairs, userUid).ConfigureAwait(false);
         }
     }
 

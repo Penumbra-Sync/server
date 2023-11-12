@@ -117,12 +117,11 @@ public partial class MareHub
         if (!hasRights) return;
 
         var groupPairs = await DbContext.GroupPairs.Include(p => p.GroupUser).Where(p => p.GroupGID == dto.Group.GID).ToListAsync().ConfigureAwait(false);
+        var notPinned = groupPairs.Where(g => !g.IsPinned && !g.IsModerator).ToList();
 
-        await Clients.Users(groupPairs.Where(p => !p.IsPinned && !p.IsModerator).Select(g => g.GroupUserUID)).Client_GroupDelete(new GroupDto(group.ToGroupData())).ConfigureAwait(false);
+        await Clients.Users(notPinned.Select(g => g.GroupUserUID)).Client_GroupDelete(new GroupDto(group.ToGroupData())).ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
-
-        var notPinned = groupPairs.Where(g => !g.IsPinned && !g.IsModerator).ToList();
 
         DbContext.GroupPairs.RemoveRange(notPinned);
 
@@ -134,9 +133,11 @@ public partial class MareHub
             var pairIdent = await GetUserIdent(pair.GroupUserUID).ConfigureAwait(false);
             if (string.IsNullOrEmpty(pairIdent)) continue;
 
+            var allUserPairs = await GetAllPairInfo(pair.GroupUserUID).ConfigureAwait(false);
+
             foreach (var groupUserPair in groupPairs.Where(p => !string.Equals(p.GroupUserUID, pair.GroupUserUID, StringComparison.Ordinal)))
             {
-                await UserGroupLeave(groupUserPair, pairIdent, pair.GroupUserUID).ConfigureAwait(false);
+                await UserGroupLeave(pair, pairIdent, allUserPairs, pair.GroupUserUID).ConfigureAwait(false);
             }
         }
 
@@ -534,9 +535,10 @@ public partial class MareHub
 
         await Clients.User(dto.User.UID).Client_GroupDelete(new GroupDto(dto.Group)).ConfigureAwait(false);
 
+        var userPairs = await GetAllPairInfo(dto.User.UID).ConfigureAwait(false);
         foreach (var groupUserPair in groupPairs)
         {
-            await UserGroupLeave(groupUserPair, userIdent, dto.User.UID).ConfigureAwait(false);
+            await UserGroupLeave(groupUserPair, userIdent, userPairs, dto.User.UID).ConfigureAwait(false);
         }
 
     }
