@@ -40,12 +40,16 @@ public sealed class BlockFileDataStream : Stream
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);
-        foreach (var substream in _substreams)
+        if (disposing)
         {
-            // probably unnecessary but better safe than sorry
-            substream.Dispose();
+            foreach (var substream in _substreams)
+            {
+                // probably unnecessary but better safe than sorry
+                substream.Dispose();
+            }
         }
+
+        base.Dispose(disposing);
     }
 
     public override void Flush()

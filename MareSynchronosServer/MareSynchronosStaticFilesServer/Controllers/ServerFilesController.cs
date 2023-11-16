@@ -16,7 +16,6 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
-using System.Security.Policy;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -230,6 +229,7 @@ public class ServerFilesController : ControllerBase
         finally
         {
             fileLock.Release();
+            fileLock.Dispose();
         }
     }
 
@@ -305,6 +305,7 @@ public class ServerFilesController : ControllerBase
         finally
         {
             fileLock.Release();
+            fileLock.Dispose();
         }
     }
 
@@ -388,6 +389,7 @@ public class ServerFilesController : ControllerBase
         finally
         {
             fileLock.Release();
+            fileLock.Dispose();
         }
     }
 }
