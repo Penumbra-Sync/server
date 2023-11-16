@@ -165,7 +165,7 @@ public class FileCleanupService : IHostedService
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
             int filesToTake = 10000;
-            var filesChunk = await dbContext.Files.Take(filesToTake).ToListAsync().ConfigureAwait(false);
+            var filesChunk = await dbContext.Files.OrderBy(f => f.Hash).Take(filesToTake).ToListAsync().ConfigureAwait(false);
             int iterations = 1;
             var allFiles = new List<FileCache>();
             while (filesChunk.Any())
@@ -222,7 +222,7 @@ public class FileCleanupService : IHostedService
                 }
 
                 allFiles.AddRange(filesChunk);
-                filesChunk = await dbContext.Files.Skip(filesToTake * iterations).Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
+                filesChunk = await dbContext.Files.OrderBy(f => f.Hash).Skip(filesToTake * iterations).Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
                 iterations++;
             }
 
