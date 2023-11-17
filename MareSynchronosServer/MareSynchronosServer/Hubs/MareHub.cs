@@ -30,6 +30,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     private readonly int _maxGroupUserCount;
     private readonly IRedisDatabase _redis;
     private readonly OnlineSyncedPairCacheService _onlineSyncedPairCacheService;
+    private readonly MareCensus _mareCensus;
     private readonly Uri _fileServerAddress;
     private readonly Version _expectedClientVersion;
     private readonly Lazy<MareDbContext> _dbContextLazy;
@@ -38,7 +39,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     public MareHub(MareMetrics mareMetrics,
         IDbContextFactory<MareDbContext> mareDbContextFactory, ILogger<MareHub> logger, SystemInfoService systemInfoService,
         IConfigurationService<ServerConfiguration> configuration, IHttpContextAccessor contextAccessor,
-        IRedisDatabase redisDb, OnlineSyncedPairCacheService onlineSyncedPairCacheService)
+        IRedisDatabase redisDb, OnlineSyncedPairCacheService onlineSyncedPairCacheService, MareCensus mareCensus)
     {
         _mareMetrics = mareMetrics;
         _systemInfoService = systemInfoService;
@@ -51,6 +52,7 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
         _contextAccessor = contextAccessor;
         _redis = redisDb;
         _onlineSyncedPairCacheService = onlineSyncedPairCacheService;
+        _mareCensus = mareCensus;
         _logger = new MareHubLogger(this, logger);
         _dbContextLazy = new Lazy<MareDbContext>(() => mareDbContextFactory.CreateDbContext());
     }
@@ -157,6 +159,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
 
             await RemoveUserFromRedis().ConfigureAwait(false);
+
+            _mareCensus.ClearStatistics(UserUID);
 
             await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 

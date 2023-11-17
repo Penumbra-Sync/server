@@ -152,7 +152,7 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
-    public async Task<List<OnlineUserIdentDto>> UserGetOnlinePairs()
+    public async Task<List<OnlineUserIdentDto>> UserGetOnlinePairs(CensusDataDto? censusData)
     {
         _logger.LogCallInfo();
 
@@ -160,6 +160,8 @@ public partial class MareHub
         var pairs = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
 
         await SendOnlineToAllPairedUsers().ConfigureAwait(false);
+
+        _mareCensus.PublishStatistics(UserUID, censusData);
 
         return pairs.Select(p => new OnlineUserIdentDto(new UserData(p.Key), p.Value)).ToList();
     }
@@ -277,6 +279,8 @@ public partial class MareHub
         _logger.LogCallInfo(MareHubLogger.Args(recipientUids.Count));
 
         await Clients.Users(recipientUids).Client_UserReceiveCharacterData(new OnlineUserCharaDataDto(new UserData(UserUID), dto.CharaData)).ConfigureAwait(false);
+
+        _mareCensus.PublishStatistics(UserUID, dto.CensusDataDto);
 
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushData);
         _mareMetrics.IncCounter(MetricsAPI.CounterUserPushDataTo, recipientUids.Count);

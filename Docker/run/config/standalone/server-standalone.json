@@ -44,7 +44,8 @@
         "MaxGroupUserCount": 100,
         "PurgeUnusedAccounts": false,
         "PurgeUnusedAccountsPeriodInDays": 14,
-        "ExpectedClientVersion": "0.8.0"
+        "ExpectedClientVersion": "0.9.0",
+        "XIVAPIKey": ""
     },
     "AllowedHosts": "*",
     "Kestrel": {

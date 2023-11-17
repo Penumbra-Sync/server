@@ -29,8 +29,10 @@ services:
     restart: on-failure
     ports:
       - 6000:6000/tcp
+      - 6050:6050/tcp
     environment:
       MareSynchronos__CdnFullUrl: "${DEV_MARE_CDNURL}"
+      MareSynchronos__XIVAPIKey: "${DEV_MARE_XIVAPIKEY}"
       DOTNET_USE_POLLING_FILE_WATCHER: 1
     volumes:
       - ../config/standalone/server-standalone.json:/opt/MareSynchronosServer/appsettings.json
