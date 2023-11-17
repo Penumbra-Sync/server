@@ -5,6 +5,7 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
@@ -164,8 +165,10 @@ public class FileCleanupService : IHostedService
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
+            var availableHashes = allFilesInDir.Select(k => char.ToUpper(k.Name[0], CultureInfo.InvariantCulture)).Distinct().ToList();
             int filesToTake = 10000;
-            var filesChunk = await dbContext.Files.OrderBy(f => f.Hash).Take(filesToTake).ToListAsync().ConfigureAwait(false);
+            var files = dbContext.Files.Where(c => availableHashes.Contains(c.Hash.First())).OrderBy(f => f.Hash);
+            var filesChunk = await files.Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
             int iterations = 1;
             var allFiles = new List<FileCache>();
             while (filesChunk.Any())
@@ -222,7 +225,7 @@ public class FileCleanupService : IHostedService
                 }
 
                 allFiles.AddRange(filesChunk);
-                filesChunk = await dbContext.Files.OrderBy(f => f.Hash).Skip(filesToTake * iterations).Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
+                filesChunk = await files.Skip(filesToTake * iterations).Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
                 iterations++;
             }
 
