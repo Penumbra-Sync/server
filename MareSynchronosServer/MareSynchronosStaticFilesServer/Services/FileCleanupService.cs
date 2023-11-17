@@ -5,7 +5,6 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.EntityFrameworkCore;
-using System.Globalization;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
@@ -63,8 +62,8 @@ public class FileCleanupService : IHostedService
 
             var now = DateTime.Now;
             TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
-            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 10, 0);
-            var span = futureTime.AddMinutes(10) - currentTime;
+            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 30, 0);
+            var span = futureTime.AddMinutes(30) - currentTime;
 
             _logger.LogInformation("File Cleanup Complete, next run at {date}", now.Add(span));
             await Task.Delay(span, ct).ConfigureAwait(false);
@@ -165,67 +164,59 @@ public class FileCleanupService : IHostedService
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
-            int filesToTake = 10000;
             var files = dbContext.Files.OrderBy(f => f.Hash);
-            var filesChunk = await files.Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
-            int iterations = 1;
-            var allFiles = new List<FileCache>();
-            while (filesChunk.Any())
+            List<FileCache> allFiles;
+            if (_isMainServer) allFiles = await dbContext.Files.ToListAsync(ct).ConfigureAwait(false);
+            else allFiles = await dbContext.Files.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+            int fileCounter = 0;
+
+            foreach (var fileCache in allFiles.Where(f => f.Uploaded))
             {
-                int fileCounter = 0;
+                bool fileDeleted = false;
 
-                foreach (var fileCache in filesChunk.Where(f => f.Uploaded))
+                var file = FilePathUtil.GetFileInfoForHash(_cacheDir, fileCache.Hash);
+                if (file == null && _isMainServer)
                 {
-                    bool fileDeleted = false;
-
-                    var file = FilePathUtil.GetFileInfoForHash(_cacheDir, fileCache.Hash);
-                    if (file == null && _isMainServer)
+                    _logger.LogInformation("File does not exist anymore: {fileName}", fileCache.Hash);
+                    dbContext.Files.Remove(fileCache);
+                    fileDeleted = true;
+                }
+                else if (file != null && file.LastAccessTime < prevTime)
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    _logger.LogInformation("File outdated: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
+                    file.Delete();
+                    if (_isMainServer)
                     {
-                        _logger.LogInformation("File does not exist anymore: {fileName}", fileCache.Hash);
-                        dbContext.Files.Remove(fileCache);
                         fileDeleted = true;
+                        dbContext.Files.Remove(fileCache);
                     }
-                    else if (file != null && file.LastAccessTime < prevTime)
+                }
+                else if (file != null && forcedDeletionAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
+                    file.Delete();
+                    if (_isMainServer)
                     {
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
-                        _logger.LogInformation("File outdated: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
-                        file.Delete();
-                        if (_isMainServer)
-                        {
-                            fileDeleted = true;
-                            dbContext.Files.Remove(fileCache);
-                        }
+                        fileDeleted = true;
+                        dbContext.Files.Remove(fileCache);
                     }
-                    else if (file != null && forcedDeletionAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
-                    {
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
-                        _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
-                        _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
-                        file.Delete();
-                        if (_isMainServer)
-                        {
-                            fileDeleted = true;
-                            dbContext.Files.Remove(fileCache);
-                        }
-                    }
-
-                    if (_isMainServer && !fileDeleted && file != null && fileCache.Size == 0)
-                    {
-                        _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
-                        fileCache.Size = file.Length;
-                        // commit every 1000 files to db
-                        if (fileCounter % 1000 == 0) await dbContext.SaveChangesAsync().ConfigureAwait(false);
-                    }
-
-                    fileCounter++;
-
-                    ct.ThrowIfCancellationRequested();
                 }
 
-                allFiles.AddRange(filesChunk);
-                filesChunk = await files.Skip(filesToTake * iterations).Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
-                iterations++;
+                if (_isMainServer && !fileDeleted && file != null && fileCache.Size == 0)
+                {
+                    _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
+                    fileCache.Size = file.Length;
+                    // commit every 1000 files to db
+                    if (fileCounter % 1000 == 0) await dbContext.SaveChangesAsync().ConfigureAwait(false);
+                }
+
+                fileCounter++;
+
+                ct.ThrowIfCancellationRequested();
             }
 
             // clean up files that are on disk but not in DB for some reason
