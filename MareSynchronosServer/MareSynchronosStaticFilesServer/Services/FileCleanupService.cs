@@ -165,9 +165,8 @@ public class FileCleanupService : IHostedService
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
-            var availableHashes = allFilesInDir.Select(k => char.ToUpper(k.Name[0], CultureInfo.InvariantCulture)).Distinct().ToList();
             int filesToTake = 10000;
-            var files = dbContext.Files.Where(c => availableHashes.Contains(c.Hash.ToString()[0])).OrderBy(f => f.Hash);
+            var files = dbContext.Files.OrderBy(f => f.Hash);
             var filesChunk = await files.Take(filesToTake).ToListAsync(cancellationToken: ct).ConfigureAwait(false);
             int iterations = 1;
             var allFiles = new List<FileCache>();
