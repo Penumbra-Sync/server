@@ -165,14 +165,26 @@ public class ServerFilesController : ControllerBase
         var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
-        SemaphoreSlim fileLock;
-        lock (_fileUploadLocks)
+        SemaphoreSlim? fileLock = null;
+        bool successfullyWaited = false;
+        while (!successfullyWaited && !requestAborted.IsCancellationRequested)
         {
-            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
-                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
-        }
+            lock (_fileUploadLocks)
+            {
+                if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                    _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
+            }
 
-        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+            try
+            {
+                await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+                successfullyWaited = true;
+            }
+            catch (ObjectDisposedException)
+            {
+                _logger.LogWarning("Semaphore disposed for {hash}, recreating", hash);
+            }
+        }
 
         try
         {
@@ -228,8 +240,9 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock.Release();
-            fileLock.Dispose();
+            fileLock?.Release();
+            fileLock?.Dispose();
+            _fileUploadLocks.TryRemove(hash, out _);
         }
     }
 
@@ -242,14 +255,26 @@ public class ServerFilesController : ControllerBase
         var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
-        SemaphoreSlim fileLock;
-        lock (_fileUploadLocks)
+        SemaphoreSlim? fileLock = null;
+        bool successfullyWaited = false;
+        while (!successfullyWaited && !requestAborted.IsCancellationRequested)
         {
-            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
-                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
-        }
+            lock (_fileUploadLocks)
+            {
+                if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                    _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
+            }
 
-        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+            try
+            {
+                await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+                successfullyWaited = true;
+            }
+            catch (ObjectDisposedException)
+            {
+                _logger.LogWarning("Semaphore disposed for {hash}, recreating", hash);
+            }
+        }
 
         try
         {
@@ -293,8 +318,6 @@ public class ServerFilesController : ControllerBase
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, compressedMungedStream.Length);
 
-            _fileUploadLocks.TryRemove(hash, out _);
-
             return Ok();
         }
         catch (Exception e)
@@ -304,8 +327,9 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock.Release();
-            fileLock.Dispose();
+            fileLock?.Release();
+            fileLock?.Dispose();
+            _fileUploadLocks.TryRemove(hash, out _);
         }
     }
 
@@ -326,14 +350,26 @@ public class ServerFilesController : ControllerBase
         var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
-        SemaphoreSlim fileLock;
-        lock (_fileUploadLocks)
+        SemaphoreSlim? fileLock = null;
+        bool successfullyWaited = false;
+        while (!successfullyWaited && !requestAborted.IsCancellationRequested)
         {
-            if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
-                _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
-        }
+            lock (_fileUploadLocks)
+            {
+                if (!_fileUploadLocks.TryGetValue(hash, out fileLock))
+                    _fileUploadLocks[hash] = fileLock = new SemaphoreSlim(1);
+            }
 
-        await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+            try
+            {
+                await fileLock.WaitAsync(requestAborted).ConfigureAwait(false);
+                successfullyWaited = true;
+            }
+            catch (ObjectDisposedException)
+            {
+                _logger.LogWarning("Semaphore disposed for {hash}, recreating", hash);
+            }
+        }
 
         try
         {
@@ -377,8 +413,6 @@ public class ServerFilesController : ControllerBase
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotal, 1);
             _metricsClient.IncGauge(MetricsAPI.GaugeFilesTotalSize, rawFileStream.Length);
 
-            _fileUploadLocks.TryRemove(hash, out _);
-
             return Ok();
         }
         catch (Exception e)
@@ -388,8 +422,9 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock.Release();
-            fileLock.Dispose();
+            fileLock?.Release();
+            fileLock?.Dispose();
+            _fileUploadLocks.TryRemove(hash, out _);
         }
     }
 }
