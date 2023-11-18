@@ -240,9 +240,19 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock?.Release();
-            fileLock?.Dispose();
-            _fileUploadLocks.TryRemove(hash, out _);
+            try
+            {
+                fileLock?.Release();
+                fileLock?.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // it's disposed whatever
+            }
+            finally
+            {
+                _fileUploadLocks.TryRemove(hash, out _);
+            }
         }
     }
 
@@ -327,9 +337,19 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock?.Release();
-            fileLock?.Dispose();
-            _fileUploadLocks.TryRemove(hash, out _);
+            try
+            {
+                fileLock?.Release();
+                fileLock?.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // it's disposed whatever
+            }
+            finally
+            {
+                _fileUploadLocks.TryRemove(hash, out _);
+            }
         }
     }
 
@@ -422,9 +442,19 @@ public class ServerFilesController : ControllerBase
         }
         finally
         {
-            fileLock?.Release();
-            fileLock?.Dispose();
-            _fileUploadLocks.TryRemove(hash, out _);
+            try
+            {
+                fileLock?.Release();
+                fileLock?.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // it's disposed whatever
+            }
+            finally
+            {
+                _fileUploadLocks.TryRemove(hash, out _);
+            }
         }
     }
 }
