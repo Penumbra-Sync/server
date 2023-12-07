@@ -47,7 +47,7 @@ public class RequestController : ControllerBase
             foreach (var file in files)
             {
                 _logger.LogDebug("Prerequested file: " + file);
-                _cachedFileProvider.DownloadFileWhenRequired(file);
+                await _cachedFileProvider.DownloadFileWhenRequired(file).ConfigureAwait(false);
             }
 
             Guid g = Guid.NewGuid();

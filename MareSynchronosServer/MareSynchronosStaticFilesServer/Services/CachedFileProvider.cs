@@ -8,7 +8,7 @@ using MareSynchronos.API.Routes;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
-public class CachedFileProvider
+public sealed class CachedFileProvider : IDisposable
 {
     private readonly ILogger<CachedFileProvider> _logger;
     private readonly FileStatisticsService _fileStatisticsService;
@@ -18,6 +18,9 @@ public class CachedFileProvider
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
     private readonly HttpClient _httpClient;
+    private readonly SemaphoreSlim _downloadSemaphore = new(1);
+    private bool _disposed;
+
     private bool IsMainServer => _remoteCacheSourceUri == null;
 
     public CachedFileProvider(IConfigurationService<StaticFilesServerConfiguration> configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService, MareMetrics metrics, ServerTokenGenerator generator)
@@ -28,7 +31,18 @@ public class CachedFileProvider
         _generator = generator;
         _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress), null);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
-        _httpClient = new HttpClient();
+        _httpClient = new();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _httpClient?.Dispose();
     }
 
     private async Task DownloadTask(string hash)
@@ -39,7 +53,7 @@ public class CachedFileProvider
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
         requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _generator.Token);
-        var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
 
         try
         {
@@ -57,7 +71,8 @@ public class CachedFileProvider
         var buffer = new byte[bufferSize];
 
         var bytesRead = 0;
-        while ((bytesRead = await (await response.Content.ReadAsStreamAsync().ConfigureAwait(false)).ReadAsync(buffer).ConfigureAwait(false)) > 0)
+        using var content = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        while ((bytesRead = await content.ReadAsync(buffer).ConfigureAwait(false)) > 0)
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
         }
@@ -66,19 +81,31 @@ public class CachedFileProvider
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
     }
 
-    public void DownloadFileWhenRequired(string hash)
+    public async Task DownloadFileWhenRequired(string hash)
     {
         var fi = FilePathUtil.GetFileInfoForHash(_basePath, hash);
         if (fi == null && IsMainServer) return;
 
+        await _downloadSemaphore.WaitAsync().ConfigureAwait(false);
         if (fi == null && !_currentTransfers.ContainsKey(hash))
         {
             _currentTransfers[hash] = Task.Run(async () =>
             {
-                await DownloadTask(hash).ConfigureAwait(false);
-                _currentTransfers.Remove(hash, out _);
+                try
+                {
+                    await DownloadTask(hash).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error during Download Task for {hash}", hash);
+                }
+                finally
+                {
+                    _currentTransfers.Remove(hash, out _);
+                }
             });
         }
+        _downloadSemaphore.Release();
     }
 
     public FileStream? GetLocalFileStream(string hash)
@@ -93,7 +120,7 @@ public class CachedFileProvider
 
     public async Task<FileStream?> GetAndDownloadFileStream(string hash)
     {
-        DownloadFileWhenRequired(hash);
+        await DownloadFileWhenRequired(hash).ConfigureAwait(false);
 
         if (_currentTransfers.TryGetValue(hash, out var downloadTask))
         {
@@ -101,5 +128,13 @@ public class CachedFileProvider
         }
 
         return GetLocalFileStream(hash);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(GetType().FullName);
+        }
     }
 }
