@@ -72,7 +72,6 @@ public class ServerFilesController : ControllerBase
     [HttpGet(MareFiles.ServerFiles_GetSizes)]
     public async Task<IActionResult> FilesGetSizes([FromBody] List<string> hashes)
     {
-        var allFiles = await _mareDbContext.Files.Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         var forbiddenFiles = await _mareDbContext.ForbiddenUploadEntries.
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();

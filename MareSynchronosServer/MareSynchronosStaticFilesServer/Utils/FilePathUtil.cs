@@ -1,13 +1,17 @@
-﻿namespace MareSynchronosStaticFilesServer.Utils;
+﻿using System.Text.RegularExpressions;
 
-public static class FilePathUtil
+namespace MareSynchronosStaticFilesServer.Utils;
+
+public static partial class FilePathUtil
 {
     public static FileInfo GetFileInfoForHash(string basePath, string hash)
     {
-        FileInfo fi = new(Path.Combine(basePath, hash[0].ToString(), hash));
+        if (hash.Length != 40 || !hash.All(char.IsAsciiLetterOrDigit)) throw new InvalidOperationException();
+
+        FileInfo fi = new(Path.Join(basePath, hash[0].ToString(), hash));
         if (!fi.Exists)
         {
-            fi = new FileInfo(Path.Combine(basePath, hash));
+            fi = new FileInfo(Path.Join(basePath, hash));
             if (!fi.Exists)
             {
                 return null;
@@ -19,8 +23,10 @@ public static class FilePathUtil
 
     public static string GetFilePath(string basePath, string hash)
     {
-        var dirPath = Path.Combine(basePath, hash[0].ToString());
-        var path = Path.Combine(dirPath, hash);
+        if (hash.Length != 40 || !hash.All(char.IsAsciiLetterOrDigit)) throw new InvalidOperationException();
+
+        var dirPath = Path.Join(basePath, hash[0].ToString());
+        var path = Path.Join(dirPath, hash);
         if (!Directory.Exists(dirPath)) Directory.CreateDirectory(dirPath);
         return path;
     }
