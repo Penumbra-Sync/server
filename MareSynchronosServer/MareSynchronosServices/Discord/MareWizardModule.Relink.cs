@@ -103,7 +103,7 @@ public partial class MareWizardModule
                 eb.WithTitle("Your relink verification is still pending");
                 eb.WithDescription("Please try again and click Check in a few seconds");
                 cb.WithButton("Cancel", "wizard-relink", ButtonStyle.Secondary, emote: new Emoji("❌"));
-                cb.WithButton("Check", "wizard-relink-verify-check:" + verificationCode, ButtonStyle.Primary, emote: new Emoji("❓"));
+                cb.WithButton("Check", "wizard-relink-verify-check:" + verificationCode + "," + uid, ButtonStyle.Primary, emote: new Emoji("❓"));
             }
             else
             {
