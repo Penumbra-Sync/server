@@ -24,6 +24,7 @@ public class ServerConfiguration : MareConfigurationAuthBase
 
     [RemoteConfiguration]
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
+    public string GeoIPDbCountryFile { get; set; } = string.Empty;
 
     public int RedisPool { get; set; } = 50;
 
@@ -40,6 +41,7 @@ public class ServerConfiguration : MareConfigurationAuthBase
         sb.AppendLine($"{nameof(MaxGroupUserCount)} => {MaxGroupUserCount}");
         sb.AppendLine($"{nameof(PurgeUnusedAccounts)} => {PurgeUnusedAccounts}");
         sb.AppendLine($"{nameof(PurgeUnusedAccountsPeriodInDays)} => {PurgeUnusedAccountsPeriodInDays}");
+        sb.AppendLine($"{nameof(GeoIPDbCountryFile)} => {GeoIPDbCountryFile}");
         return sb.ToString();
     }
 }

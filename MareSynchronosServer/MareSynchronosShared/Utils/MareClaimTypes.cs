@@ -6,4 +6,5 @@ public static class MareClaimTypes
     public const string CharaIdent = "character_identification";
     public const string Internal = "internal";
     public const string Expires = "expiration_date";
+    public const string Continent = "continent";
 }

@@ -1,5 +1,6 @@
 ﻿using MareSynchronos.API.Routes;
 using MareSynchronosServer.Authentication;
+using MareSynchronosServer.Services;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Models;
@@ -26,17 +27,19 @@ public class JwtController : Controller
     private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
     private readonly MareDbContext _mareDbContext;
     private readonly IRedisDatabase _redis;
+    private readonly GeoIPService _geoIPProvider;
     private readonly SecretKeyAuthenticatorService _secretKeyAuthenticatorService;
 
     public JwtController(ILogger<JwtController> logger,
         IHttpContextAccessor accessor, MareDbContext mareDbContext,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<MareConfigurationAuthBase> configuration,
-        IRedisDatabase redisDb)
+        IRedisDatabase redisDb, GeoIPService geoIPProvider)
     {
         _logger = logger;
         _accessor = accessor;
         _redis = redisDb;
+        _geoIPProvider = geoIPProvider;
         _mareDbContext = mareDbContext;
         _secretKeyAuthenticatorService = secretKeyAuthenticatorService;
         _configuration = configuration;
@@ -71,7 +74,7 @@ public class JwtController : Controller
             }
 
             _logger.LogInformation("RenewToken:SUCCESS:{id}:{ident}", uid, ident);
-            return CreateJwtFromId(uid, ident);
+            return await CreateJwtFromId(uid, ident);
         }
         catch (Exception ex)
         {
@@ -123,7 +126,7 @@ public class JwtController : Controller
             }
 
             _logger.LogInformation("Authenticate:SUCCESS:{id}:{ident}", authResult.Uid, charaIdent);
-            return CreateJwtFromId(authResult.Uid, charaIdent);
+            return await CreateJwtFromId(authResult.Uid, charaIdent);
         }
         catch (Exception ex)
         {
@@ -147,13 +150,14 @@ public class JwtController : Controller
         return handler.CreateJwtSecurityToken(token);
     }
 
-    private IActionResult CreateJwtFromId(string uid, string charaIdent)
+    private async Task<IActionResult> CreateJwtFromId(string uid, string charaIdent)
     {
         var token = CreateJwt(new List<Claim>()
         {
             new Claim(MareClaimTypes.Uid, uid),
             new Claim(MareClaimTypes.CharaIdent, charaIdent),
-            new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddHours(6).Ticks.ToString(CultureInfo.InvariantCulture))
+            new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddHours(6).Ticks.ToString(CultureInfo.InvariantCulture)),
+            new Claim(MareClaimTypes.Continent, await _geoIPProvider.GetCountryFromIP(_accessor))
         });
 
         return Content(token.RawData);
