@@ -101,7 +101,8 @@ public class ServerFilesController : ControllerBase
                 }
 
                 var shard = selectedShards
-                    .OrderBy(s => s.Continents.Contains("*", StringComparer.Ordinal) ? 0 : 1)
+                    .OrderBy(s => !s.Continents.Any() ? 0 : 1)
+                    .ThenBy(s => s.Continents.Contains("*", StringComparer.Ordinal) ? 0 : 1)
                     .ThenBy(g => Guid.NewGuid()).FirstOrDefault();
 
                 baseUrl = shard?.CdnFullUrl ?? _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl));
