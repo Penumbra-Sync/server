@@ -83,25 +83,29 @@ public class ServerFilesController : ControllerBase
         foreach (var file in cacheFile)
         {
             var forbiddenFile = forbiddenFiles.SingleOrDefault(f => string.Equals(f.Hash, file.Hash, StringComparison.OrdinalIgnoreCase));
+            Uri? baseUrl = null;
 
-            List<CdnShardConfiguration> selectedShards = new();
-            var matchingShards = allFileShards.Where(f => new Regex(f.FileMatch).IsMatch(file.Hash)).ToList();
-
-            if (string.Equals(Continent, "*", StringComparison.Ordinal))
+            if (forbiddenFile == null)
             {
-                selectedShards = matchingShards;
-            }
-            else
-            {
-                selectedShards = matchingShards.Where(c => c.Continents.Contains(Continent, StringComparer.OrdinalIgnoreCase)).ToList();
-                if (!selectedShards.Any()) selectedShards = matchingShards;
-            }
+                List<CdnShardConfiguration> selectedShards = new();
+                var matchingShards = allFileShards.Where(f => new Regex(f.FileMatch).IsMatch(file.Hash)).ToList();
 
-            var shard = selectedShards
-                .OrderBy(s => s.Continents.Contains("*", StringComparer.Ordinal) ? 0 : 1)
-                .ThenBy(g => Guid.NewGuid()).FirstOrDefault();
+                if (string.Equals(Continent, "*", StringComparison.Ordinal))
+                {
+                    selectedShards = matchingShards;
+                }
+                else
+                {
+                    selectedShards = matchingShards.Where(c => c.Continents.Contains(Continent, StringComparer.OrdinalIgnoreCase)).ToList();
+                    if (!selectedShards.Any()) selectedShards = matchingShards;
+                }
 
-            var baseUrl = shard?.CdnFullUrl ?? _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl));
+                var shard = selectedShards
+                    .OrderBy(s => s.Continents.Contains("*", StringComparer.Ordinal) ? 0 : 1)
+                    .ThenBy(g => Guid.NewGuid()).FirstOrDefault();
+
+                baseUrl = shard?.CdnFullUrl ?? _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl));
+            }
 
             response.Add(new DownloadFileDto
             {
@@ -110,7 +114,7 @@ public class ServerFilesController : ControllerBase
                 IsForbidden = forbiddenFile != null,
                 Hash = file.Hash,
                 Size = file.Size,
-                Url = baseUrl.ToString(),
+                Url = baseUrl?.ToString() ?? string.Empty,
             });
         }
 
