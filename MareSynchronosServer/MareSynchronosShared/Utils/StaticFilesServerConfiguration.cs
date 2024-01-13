@@ -29,7 +29,7 @@ public class StaticFilesServerConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(CacheDirectory)} => {CacheDirectory}");
         sb.AppendLine($"{nameof(DownloadQueueSize)} => {DownloadQueueSize}");
         sb.AppendLine($"{nameof(DownloadQueueReleaseSeconds)} => {DownloadQueueReleaseSeconds}");
-        sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration.ToString())}");
+        sb.AppendLine($"{nameof(CdnShardConfiguration)} => {string.Join(", ", CdnShardConfiguration)}");
         return sb.ToString();
     }
 }
