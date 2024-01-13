@@ -31,6 +31,9 @@ public class MetricsAPI
     public const string GaugeQueueActive = "mare_download_queue_active";
     public const string GaugeQueueInactive = "mare_download_queue_inactive";
     public const string GaugeDownloadQueue = "mare_download_queue";
+    public const string GaugeDownloadQueueCancelled = "mare_download_queue_cancelled";
+    public const string GaugeDownloadPriorityQueue = "mare_download_priority_queue";
+    public const string GaugeDownloadPriorityQueueCancelled = "mare_download_priority_queue_cancelled";
     public const string CounterFileRequests = "mare_files_requests";
     public const string CounterFileRequestSize = "mare_files_request_size";
     public const string CounterUserPairCacheHit = "mare_pairscache_hit";

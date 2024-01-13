@@ -22,7 +22,6 @@ public class RequestQueueService : IHostedService
     private readonly ConcurrentQueue<UserRequest> _priorityQueue = new();
     private readonly int _queueExpirationSeconds;
     private readonly SemaphoreSlim _queueProcessingSemaphore = new(1);
-    private readonly ConcurrentDictionary<Guid, string> _queueRemoval = new();
     private readonly SemaphoreSlim _queueSemaphore = new(1);
     private readonly UserQueueEntry[] _userQueueRequests;
     private readonly ConcurrentDictionary<string, PriorityEntry> _priorityCache = new(StringComparer.Ordinal);
@@ -118,7 +117,9 @@ public class RequestQueueService : IHostedService
 
     public void RemoveFromQueue(Guid requestId, string user)
     {
-        if (!_queue.Any(f => f.RequestId == requestId && string.Equals(f.User, user, StringComparison.Ordinal)))
+        var existingRequest = _priorityQueue.FirstOrDefault(f => f.RequestId == requestId && string.Equals(f.User, user, StringComparison.Ordinal))
+            ?? _queue.FirstOrDefault(f => f.RequestId == requestId && string.Equals(f.User, user, StringComparison.Ordinal));
+        if (existingRequest == null)
         {
             var activeSlot = _userQueueRequests.FirstOrDefault(r => r != null && string.Equals(r.UserRequest.User, user, StringComparison.Ordinal) && r.UserRequest.RequestId == requestId);
             if (activeSlot != null)
@@ -129,10 +130,11 @@ public class RequestQueueService : IHostedService
                     _userQueueRequests[idx] = null;
                 }
             }
-
-            return;
         }
-        _queueRemoval[requestId] = user;
+        else
+        {
+            existingRequest.IsCancelled = true;
+        }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -175,7 +177,7 @@ public class RequestQueueService : IHostedService
 
         try
         {
-            if (_queue.Count > _queueLimitForReset)
+            if (_queue.Count(c => !c.IsCancelled) > _queueLimitForReset)
             {
                 _queue.Clear();
                 return;
@@ -189,56 +191,36 @@ public class RequestQueueService : IHostedService
             {
                 try
                 {
-                    if (_userQueueRequests[i] != null && ((!_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow)))
+                    if (_userQueueRequests[i] != null
+                        && (((!_userQueueRequests[i].IsActive && _userQueueRequests[i].ExpirationDate < DateTime.UtcNow))
+                            || (_userQueueRequests[i].IsActive && _userQueueRequests[i].ActivationDate < DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(_queueReleaseSeconds))))
+                            )
                     {
-                        _logger.LogDebug("Expiring inactive request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
+                        _logger.LogDebug("Expiring request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
                         _userQueueRequests[i] = null;
                     }
 
-                    if (_userQueueRequests[i] != null && (_userQueueRequests[i].IsActive && _userQueueRequests[i].ActivationDate < DateTime.UtcNow.Subtract(TimeSpan.FromSeconds(_queueReleaseSeconds))))
-                    {
-                        _logger.LogDebug("Expiring active request {guid} slot {slot}", _userQueueRequests[i].UserRequest.RequestId, i);
-                        _userQueueRequests[i] = null;
-                    }
+                    if ((!_queue.Any() && !_priorityQueue.Any()) || _userQueueRequests[i] != null) return;
 
-                    if (!_queue.Any() && !_priorityQueue.Any()) return;
-
-                    if (_userQueueRequests[i] == null)
+                    while (true)
                     {
-                        bool enqueued = false;
-                        while (!enqueued)
+                        if (_priorityQueue.TryDequeue(out var prioRequest))
                         {
-                            if (_priorityQueue.TryDequeue(out var prioRequest))
-                            {
-                                if (_queueRemoval.TryGetValue(prioRequest.RequestId, out string user) && string.Equals(user, prioRequest.User, StringComparison.Ordinal))
-                                {
-                                    _logger.LogDebug("Request cancelled: {requestId} by {user}", prioRequest.RequestId, user);
-                                    _queueRemoval.Remove(prioRequest.RequestId, out _);
-                                    continue;
-                                }
+                            if (prioRequest.IsCancelled) continue;
 
-                                await DequeueIntoSlotAsync(prioRequest, i).ConfigureAwait(false);
-                                enqueued = true;
-                                break;
-                            }
-
-                            if (_queue.TryDequeue(out var request))
-                            {
-                                if (_queueRemoval.TryGetValue(request.RequestId, out string user) && string.Equals(user, request.User, StringComparison.Ordinal))
-                                {
-                                    _logger.LogDebug("Request cancelled: {requestId} by {user}", request.RequestId, user);
-                                    _queueRemoval.Remove(request.RequestId, out _);
-                                    continue;
-                                }
-
-                                await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
-                                enqueued = true;
-                            }
-                            else
-                            {
-                                enqueued = true;
-                            }
+                            await DequeueIntoSlotAsync(prioRequest, i).ConfigureAwait(false);
+                            break;
                         }
+
+                        if (_queue.TryDequeue(out var request))
+                        {
+                            if (request.IsCancelled) continue;
+
+                            await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
+                            break;
+                        }
+
+                        break;
                     }
                 }
                 catch (Exception ex)
@@ -259,6 +241,9 @@ public class RequestQueueService : IHostedService
         _metrics.SetGaugeTo(MetricsAPI.GaugeQueueFree, _userQueueRequests.Count(c => c == null));
         _metrics.SetGaugeTo(MetricsAPI.GaugeQueueActive, _userQueueRequests.Count(c => c != null && c.IsActive));
         _metrics.SetGaugeTo(MetricsAPI.GaugeQueueInactive, _userQueueRequests.Count(c => c != null && !c.IsActive));
-        _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count);
+        _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueue, _queue.Count(q => !q.IsCancelled));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadQueueCancelled, _queue.Count(q => q.IsCancelled));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadPriorityQueue, _priorityQueue.Count(q => !q.IsCancelled));
+        _metrics.SetGaugeTo(MetricsAPI.GaugeDownloadPriorityQueueCancelled, _priorityQueue.Count(q => q.IsCancelled));
     }
 }

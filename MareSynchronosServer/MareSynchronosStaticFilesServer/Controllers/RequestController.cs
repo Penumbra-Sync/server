@@ -24,9 +24,10 @@ public class RequestController : ControllerBase
     [Route(MareFiles.Request_Cancel)]
     public async Task<IActionResult> CancelQueueRequest(Guid requestId)
     {
+        await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
+
         try
         {
-            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
             _requestQueue.RemoveFromQueue(requestId, MareUser);
             return Ok();
         }
@@ -41,9 +42,10 @@ public class RequestController : ControllerBase
     [Route(MareFiles.Request_Enqueue)]
     public async Task<IActionResult> PreRequestFilesAsync([FromBody] IEnumerable<string> files)
     {
+        await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
+
         try
         {
-            await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
             foreach (var file in files)
             {
                 _logger.LogDebug("Prerequested file: " + file);
@@ -66,6 +68,8 @@ public class RequestController : ControllerBase
     [Route(MareFiles.Request_Check)]
     public async Task<IActionResult> CheckQueueAsync(Guid requestId, [FromBody] IEnumerable<string> files)
     {
+        await _parallelRequestSemaphore.WaitAsync(HttpContext.RequestAborted);
+
         try
         {
             if (!await _requestQueue.StillEnqueued(requestId, MareUser, _mareDbContext))
@@ -73,5 +77,9 @@ public class RequestController : ControllerBase
             return Ok();
         }
         catch (OperationCanceledException) { return BadRequest(); }
+        finally
+        {
+            _parallelRequestSemaphore.Release();
+        }
     }
 }
