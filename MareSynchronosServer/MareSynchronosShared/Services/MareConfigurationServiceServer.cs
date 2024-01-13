@@ -1,5 +1,6 @@
 ﻿using MareSynchronosShared.Utils;
 using Microsoft.Extensions.Options;
+using System.Collections;
 using System.Text;
 
 namespace MareSynchronosShared.Services;
@@ -30,11 +31,20 @@ public class MareConfigurationServiceServer<T> : IConfigurationService<T> where 
         StringBuilder sb = new();
         foreach (var prop in props)
         {
-            sb.AppendLine($"{prop.Name} (IsRemote: {prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any()}) => {prop.GetValue(_config.CurrentValue)}");
+            var isRemote = prop.GetCustomAttributes(typeof(RemoteConfigurationAttribute), true).Any();
+            var getValueMethod = GetType().GetMethod(nameof(GetValue)).MakeGenericMethod(prop.PropertyType);
+            var value = isRemote ? getValueMethod.Invoke(this, new[] { prop.Name }) : prop.GetValue(_config.CurrentValue);
+            if (typeof(IEnumerable).IsAssignableFrom(prop.PropertyType) && !typeof(string).IsAssignableFrom(prop.PropertyType))
+            {
+                var enumVal = (IEnumerable)value;
+                value = string.Empty;
+                foreach (var listVal in enumVal)
+                {
+                    value += listVal.ToString() + ", ";
+                }
+            }
+            sb.AppendLine($"{prop.Name} (IsRemote: {isRemote}) => {value}");
         }
-
-        sb.AppendLine(_config.ToString());
-
         return sb.ToString();
     }
 }
