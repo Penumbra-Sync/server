@@ -2,7 +2,7 @@
 
 public class CdnShardConfiguration
 {
-    public List<string> Continents { get; set; } = new List<string>() { "*" };
+    public List<string> Continents { get; set; }
     public string FileMatch { get; set; }
     public Uri CdnFullUrl { get; set; }
 
