@@ -44,8 +44,13 @@ public class RequestQueueService : IHostedService
         req.MarkActive();
     }
 
-    public void EnqueueUser(UserRequest request, bool isPriority)
+    public async Task EnqueueUser(UserRequest request, bool isPriority, CancellationToken token)
     {
+        while (_queueProcessingSemaphore.CurrentCount == 0)
+        {
+            await Task.Delay(50, token).ConfigureAwait(false);
+        }
+
         _logger.LogDebug("Enqueueing req {guid} from {user} for {file}", request.RequestId, request.User, string.Join(", ", request.FileIds));
 
         GetQueue(isPriority).Enqueue(request);
