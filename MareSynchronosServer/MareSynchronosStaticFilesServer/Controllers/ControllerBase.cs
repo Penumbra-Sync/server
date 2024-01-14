@@ -14,4 +14,5 @@ public class ControllerBase : Controller
 
     protected string MareUser => HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
     protected string Continent => HttpContext.User.Claims.FirstOrDefault(f => string.Equals(f.Type, MareClaimTypes.Continent, StringComparison.Ordinal))?.Value ?? "*";
+    protected bool IsPriority => !string.IsNullOrEmpty(HttpContext.User.Claims.FirstOrDefault(f => string.Equals(f.Type, MareClaimTypes.Alias, StringComparison.Ordinal))?.Value ?? string.Empty);
 }

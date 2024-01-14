@@ -10,29 +10,23 @@ namespace MareSynchronosServer.Authentication;
 public class SecretKeyAuthenticatorService
 {
     private readonly MareMetrics _metrics;
-    private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly IConfigurationService<MareConfigurationAuthBase> _configurationService;
     private readonly ILogger<SecretKeyAuthenticatorService> _logger;
-    private readonly ConcurrentDictionary<string, SecretKeyAuthReply> _cachedPositiveResponses = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SecretKeyFailedAuthorization> _failedAuthorizations = new(StringComparer.Ordinal);
 
-    public SecretKeyAuthenticatorService(MareMetrics metrics, IServiceScopeFactory serviceScopeFactory, IConfigurationService<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
+    public SecretKeyAuthenticatorService(MareMetrics metrics, IDbContextFactory<MareDbContext> dbContextFactory,
+        IConfigurationService<MareConfigurationAuthBase> configuration, ILogger<SecretKeyAuthenticatorService> logger)
     {
         _logger = logger;
         _configurationService = configuration;
         _metrics = metrics;
-        _serviceScopeFactory = serviceScopeFactory;
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task<SecretKeyAuthReply> AuthorizeAsync(string ip, string hashedSecretKey)
     {
         _metrics.IncCounter(MetricsAPI.CounterAuthenticationRequests);
-
-        if (_cachedPositiveResponses.TryGetValue(hashedSecretKey, out var cachedPositiveResponse))
-        {
-            _metrics.IncCounter(MetricsAPI.CounterAuthenticationCacheHits);
-            return cachedPositiveResponse;
-        }
 
         if (_failedAuthorizations.TryGetValue(ip, out var existingFailedAuthorization)
             && existingFailedAuthorization.FailedAttempts > _configurationService.GetValueOrDefault(nameof(MareConfigurationAuthBase.FailedAuthForTempBan), 5))
@@ -50,12 +44,12 @@ public class SecretKeyAuthenticatorService
                     _failedAuthorizations.Remove(ip, out _);
                 });
             }
-            return new(Success: false, Uid: null, PrimaryUid: null, TempBan: true, Permaban: false);
+            return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: true, Permaban: false);
         }
 
-        using var scope = _serviceScopeFactory.CreateScope();
-        using var context = scope.ServiceProvider.GetService<MareDbContext>();
-        var authReply = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
+        using var context = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+        var authReply = await context.Auth.Include(a => a.User).AsNoTracking()
+            .SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
         var isBanned = authReply?.IsBanned ?? false;
         var primaryUid = authReply?.PrimaryUserUID ?? authReply?.UserUID;
 
@@ -65,21 +59,13 @@ public class SecretKeyAuthenticatorService
             isBanned = isBanned || primaryUser.IsBanned;
         }
 
-        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID, authReply?.PrimaryUserUID ?? authReply?.UserUID, TempBan: false, isBanned);
+        SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID,
+            authReply?.PrimaryUserUID ?? authReply?.UserUID, authReply.User.Alias ?? string.Empty, TempBan: false, isBanned);
 
         if (reply.Success)
         {
             _metrics.IncCounter(MetricsAPI.CounterAuthenticationSuccesses);
             _metrics.IncGauge(MetricsAPI.GaugeAuthenticationCacheEntries);
-
-            _cachedPositiveResponses[hashedSecretKey] = reply;
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-                _cachedPositiveResponses.TryRemove(hashedSecretKey, out _);
-                _metrics.DecGauge(MetricsAPI.GaugeAuthenticationCacheEntries);
-            });
-
         }
         else
         {
@@ -107,6 +93,6 @@ public class SecretKeyAuthenticatorService
             }
         }
 
-        return new(Success: false, Uid: null, PrimaryUid: null, TempBan: false, Permaban: false);
+        return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: false, Permaban: false);
     }
 }

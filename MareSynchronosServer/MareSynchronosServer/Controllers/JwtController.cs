@@ -60,6 +60,7 @@ public class JwtController : Controller
         {
             var uid = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.Uid, StringComparison.Ordinal))!.Value;
             var ident = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))!.Value;
+            var alias = HttpContext.User.Claims.SingleOrDefault(p => string.Equals(p.Type, MareClaimTypes.Alias))?.Value ?? string.Empty;
 
             if (await _mareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.IsBanned))
             {
@@ -74,7 +75,7 @@ public class JwtController : Controller
             }
 
             _logger.LogInformation("RenewToken:SUCCESS:{id}:{ident}", uid, ident);
-            return await CreateJwtFromId(uid, ident);
+            return await CreateJwtFromId(uid, ident, alias);
         }
         catch (Exception ex)
         {
@@ -108,7 +109,7 @@ public class JwtController : Controller
             if (!authResult.Success && authResult.TempBan)
             {
                 _logger.LogWarning("Authenticate:TEMPBAN:{id}:{ident}", authResult.Uid ?? "NOUID", charaIdent);
-                return Unauthorized("You are temporarily banned. Try connecting again in 5 minutes.");
+                return Unauthorized("Due to an excessive amount of failed authentication attempts you are temporarily banned. Check your Secret Key configuration and try connecting again in 5 minutes.");
             }
             if (authResult.Permaban)
             {
@@ -126,7 +127,7 @@ public class JwtController : Controller
             }
 
             _logger.LogInformation("Authenticate:SUCCESS:{id}:{ident}", authResult.Uid, charaIdent);
-            return await CreateJwtFromId(authResult.Uid, charaIdent);
+            return await CreateJwtFromId(authResult.Uid, charaIdent, authResult.Alias ?? string.Empty);
         }
         catch (Exception ex)
         {
@@ -150,12 +151,13 @@ public class JwtController : Controller
         return handler.CreateJwtSecurityToken(token);
     }
 
-    private async Task<IActionResult> CreateJwtFromId(string uid, string charaIdent)
+    private async Task<IActionResult> CreateJwtFromId(string uid, string charaIdent, string alias)
     {
         var token = CreateJwt(new List<Claim>()
         {
             new Claim(MareClaimTypes.Uid, uid),
             new Claim(MareClaimTypes.CharaIdent, charaIdent),
+            new Claim(MareClaimTypes.Alias, alias),
             new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddHours(6).Ticks.ToString(CultureInfo.InvariantCulture)),
             new Claim(MareClaimTypes.Continent, await _geoIPProvider.GetCountryFromIP(_accessor))
         });
