@@ -116,14 +116,14 @@ public class RequestQueueService : IHostedService
         return Task.CompletedTask;
     }
 
-    private async Task DequeueIntoSlotAsync(UserRequest userRequest, int slot)
+    private void DequeueIntoSlot(UserRequest userRequest, int slot)
     {
         _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, string.Join(", ", userRequest.FileIds));
         _userQueueRequests[slot] = new(userRequest, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
-        await _hubContext.Clients.User(userRequest.User).SendAsync(nameof(IMareHub.Client_DownloadReady), userRequest.RequestId).ConfigureAwait(false);
+        _ = _hubContext.Clients.User(userRequest.User).SendAsync(nameof(IMareHub.Client_DownloadReady), userRequest.RequestId).ConfigureAwait(false);
     }
 
-    private async void ProcessQueue(object src, ElapsedEventArgs e)
+    private void ProcessQueue(object src, ElapsedEventArgs e)
     {
         _logger.LogDebug("Periodic Processing Queue Start");
         _metrics.SetGaugeTo(MetricsAPI.GaugeQueueFree, _userQueueRequests.Count(c => c == null));
@@ -140,7 +140,7 @@ public class RequestQueueService : IHostedService
             return;
         }
 
-        await _queueProcessingSemaphore.WaitAsync().ConfigureAwait(false);
+        _queueProcessingSemaphore.Wait();
 
         try
         {
@@ -171,7 +171,7 @@ public class RequestQueueService : IHostedService
                         {
                             if (prioRequest.IsCancelled) continue;
 
-                            await DequeueIntoSlotAsync(prioRequest, i).ConfigureAwait(false);
+                            DequeueIntoSlot(prioRequest, i);
                             break;
                         }
 
@@ -179,7 +179,7 @@ public class RequestQueueService : IHostedService
                         {
                             if (request.IsCancelled) continue;
 
-                            await DequeueIntoSlotAsync(request, i).ConfigureAwait(false);
+                            DequeueIntoSlot(request, i);
                             break;
                         }
 
