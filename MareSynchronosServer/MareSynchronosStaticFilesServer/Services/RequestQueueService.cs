@@ -165,6 +165,8 @@ public class RequestQueueService : IHostedService
 
                     if (!_queue.Any() && !_priorityQueue.Any()) break;
 
+                    if (_userQueueRequests[i] != null) continue;
+
                     while (true)
                     {
                         if (_priorityQueue.TryDequeue(out var prioRequest))
