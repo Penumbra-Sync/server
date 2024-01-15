@@ -18,7 +18,7 @@ public class ShardClientReadyMessageService : IClientReadyMessageService
         _tokenGenerator = tokenGenerator;
         _configurationService = configurationService;
         _httpClient = new();
-        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronosServer"));
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronosServer", "1.0.0.0"));
     }
 
     public void SendDownloadReady(string uid, Guid requestId)
