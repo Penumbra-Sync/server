@@ -21,7 +21,8 @@ public sealed class CachedFileProvider : IDisposable
     private readonly SemaphoreSlim _downloadSemaphore = new(1);
     private bool _disposed;
 
-    private bool IsMainServer => _remoteCacheSourceUri == null;
+    private bool IsMainServer => _remoteCacheSourceUri == null && _isDistributionServer;
+    private bool _isDistributionServer;
 
     public CachedFileProvider(IConfigurationService<StaticFilesServerConfiguration> configuration, ILogger<CachedFileProvider> logger, FileStatisticsService fileStatisticsService, MareMetrics metrics, ServerTokenGenerator generator)
     {
@@ -30,8 +31,10 @@ public sealed class CachedFileProvider : IDisposable
         _metrics = metrics;
         _generator = generator;
         _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress), null);
+        _isDistributionServer = configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.IsDistributionNode), false);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
         _httpClient = new();
+        _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronosServer"));
     }
 
     public void Dispose()
@@ -48,7 +51,7 @@ public sealed class CachedFileProvider : IDisposable
     private async Task DownloadTask(string hash)
     {
         // download file from remote
-        var downloadUrl = MareFiles.ServerFilesGetFullPath(_remoteCacheSourceUri, hash);
+        var downloadUrl = MareFiles.DistributionGetFullPath(_remoteCacheSourceUri, hash);
         _logger.LogInformation("Did not find {hash}, downloading from {server}", hash, downloadUrl);
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
@@ -128,13 +131,5 @@ public sealed class CachedFileProvider : IDisposable
         }
 
         return GetLocalFileStream(hash);
-    }
-
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(GetType().FullName);
-        }
     }
 }

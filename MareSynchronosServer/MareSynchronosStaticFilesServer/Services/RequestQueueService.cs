@@ -1,32 +1,27 @@
 ﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
-using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using System.Timers;
-using MareSynchronos.API.SignalR;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
 public class RequestQueueService : IHostedService
 {
-    private record PriorityEntry(bool IsHighPriority, DateTime LastChecked);
-
-    private readonly IHubContext<MareSynchronosServer.Hubs.MareHub> _hubContext;
+    private readonly IClientReadyMessageService _clientReadyMessageService;
     private readonly ILogger<RequestQueueService> _logger;
     private readonly MareMetrics _metrics;
     private readonly ConcurrentQueue<UserRequest> _queue = new();
     private readonly ConcurrentQueue<UserRequest> _priorityQueue = new();
     private readonly int _queueExpirationSeconds;
     private readonly SemaphoreSlim _queueProcessingSemaphore = new(1);
-    private readonly SemaphoreSlim _queueSemaphore = new(1);
     private readonly UserQueueEntry[] _userQueueRequests;
     private int _queueLimitForReset;
     private readonly int _queueReleaseSeconds;
     private System.Timers.Timer _queueTimer;
 
     public RequestQueueService(MareMetrics metrics, IConfigurationService<StaticFilesServerConfiguration> configurationService,
-        ILogger<RequestQueueService> logger, IHubContext<MareSynchronosServer.Hubs.MareHub> hubContext)
+        ILogger<RequestQueueService> logger, IClientReadyMessageService hubContext)
     {
         _userQueueRequests = new UserQueueEntry[configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueSize), 50)];
         _queueExpirationSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadTimeoutSeconds), 5);
@@ -34,7 +29,7 @@ public class RequestQueueService : IHostedService
         _queueReleaseSeconds = configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.DownloadQueueReleaseSeconds), 15);
         _metrics = metrics;
         _logger = logger;
-        _hubContext = hubContext;
+        _clientReadyMessageService = hubContext;
     }
 
     public void ActivateRequest(Guid request)
@@ -125,7 +120,7 @@ public class RequestQueueService : IHostedService
     {
         _logger.LogDebug("Dequeueing {req} into {i}: {user} with {file}", userRequest.RequestId, slot, userRequest.User, string.Join(", ", userRequest.FileIds));
         _userQueueRequests[slot] = new(userRequest, DateTime.UtcNow.AddSeconds(_queueExpirationSeconds));
-        _ = _hubContext.Clients.User(userRequest.User).SendAsync(nameof(IMareHub.Client_DownloadReady), userRequest.RequestId).ConfigureAwait(false);
+        _clientReadyMessageService.SendDownloadReady(userRequest.User, userRequest.RequestId);
     }
 
     private void ProcessQueue(object src, ElapsedEventArgs e)

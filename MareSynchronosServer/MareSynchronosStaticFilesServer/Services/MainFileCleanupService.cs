@@ -8,23 +8,21 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosStaticFilesServer.Services;
 
-public class FileCleanupService : IHostedService
+public class MainFileCleanupService : IHostedService
 {
     private readonly string _cacheDir;
     private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
-    private readonly bool _isMainServer;
-    private readonly ILogger<FileCleanupService> _logger;
+    private readonly ILogger<MainFileCleanupService> _logger;
     private readonly MareMetrics _metrics;
     private readonly IServiceProvider _services;
     private CancellationTokenSource _cleanupCts;
 
-    public FileCleanupService(MareMetrics metrics, ILogger<FileCleanupService> logger, IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
+    public MainFileCleanupService(MareMetrics metrics, ILogger<MainFileCleanupService> logger, IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
     {
         _metrics = metrics;
         _logger = logger;
         _services = services;
         _configuration = configuration;
-        _isMainServer = configuration.IsMain;
         _cacheDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
     }
 
@@ -48,12 +46,9 @@ public class FileCleanupService : IHostedService
 
                 CleanUpFilesBeyondSizeLimit(dbContext, ct);
 
-                if (_isMainServer)
-                {
-                    CleanUpStuckUploads(dbContext);
+                CleanUpStuckUploads(dbContext);
 
-                    await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
-                }
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             }
             catch (Exception e)
             {
@@ -113,11 +108,8 @@ public class FileCleanupService : IHostedService
                 _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                 _logger.LogInformation("Deleting {oldestFile} with size {size}MiB", oldestFile.FullName, ByteSize.FromBytes(oldestFile.Length).MebiBytes);
                 oldestFile.Delete();
-                if (_isMainServer)
-                {
-                    FileCache f = new() { Hash = oldestFile.Name.ToUpperInvariant() };
-                    dbContext.Entry(f).State = EntityState.Deleted;
-                }
+                FileCache f = new() { Hash = oldestFile.Name.ToUpperInvariant() };
+                dbContext.Entry(f).State = EntityState.Deleted;
             }
         }
         catch (Exception ex)
@@ -128,21 +120,18 @@ public class FileCleanupService : IHostedService
 
     private void CleanUpOrphanedFiles(List<FileCache> allFiles, FileInfo[] allPhysicalFiles, CancellationToken ct)
     {
-        if (_isMainServer)
+        var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
+        foreach (var file in allPhysicalFiles)
         {
-            var allFilesHashes = new HashSet<string>(allFiles.Select(a => a.Hash.ToUpperInvariant()), StringComparer.Ordinal);
-            foreach (var file in allPhysicalFiles)
+            if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
             {
-                if (!allFilesHashes.Contains(file.Name.ToUpperInvariant()))
-                {
-                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
-                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
-                    file.Delete();
-                    _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
-                }
-
-                ct.ThrowIfCancellationRequested();
+                _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                file.Delete();
+                _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
             }
+
+            ct.ThrowIfCancellationRequested();
         }
     }
 
@@ -165,9 +154,7 @@ public class FileCleanupService : IHostedService
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
             var files = dbContext.Files.OrderBy(f => f.Hash);
-            List<FileCache> allFiles;
-            if (_isMainServer) allFiles = await dbContext.Files.ToListAsync(ct).ConfigureAwait(false);
-            else allFiles = await dbContext.Files.AsNoTracking().ToListAsync(ct).ConfigureAwait(false);
+            List<FileCache> allFiles = await dbContext.Files.ToListAsync(ct).ConfigureAwait(false);
             int fileCounter = 0;
 
             foreach (var fileCache in allFiles.Where(f => f.Uploaded))
@@ -175,7 +162,7 @@ public class FileCleanupService : IHostedService
                 bool fileDeleted = false;
 
                 var file = FilePathUtil.GetFileInfoForHash(_cacheDir, fileCache.Hash);
-                if (file == null && _isMainServer)
+                if (file == null)
                 {
                     _logger.LogInformation("File does not exist anymore: {fileName}", fileCache.Hash);
                     dbContext.Files.Remove(fileCache);
@@ -187,11 +174,8 @@ public class FileCleanupService : IHostedService
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     _logger.LogInformation("File outdated: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
-                    if (_isMainServer)
-                    {
-                        fileDeleted = true;
-                        dbContext.Files.Remove(fileCache);
-                    }
+                    fileDeleted = true;
+                    dbContext.Files.Remove(fileCache);
                 }
                 else if (file != null && forcedDeletionAfterHours > 0 && file.LastWriteTime < prevTimeForcedDeletion)
                 {
@@ -199,14 +183,11 @@ public class FileCleanupService : IHostedService
                     _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                     _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
-                    if (_isMainServer)
-                    {
-                        fileDeleted = true;
-                        dbContext.Files.Remove(fileCache);
-                    }
+                    fileDeleted = true;
+                    dbContext.Files.Remove(fileCache);
                 }
 
-                if (_isMainServer && !fileDeleted && file != null && fileCache.Size == 0)
+                if (!fileDeleted && file != null && fileCache.Size == 0)
                 {
                     _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
                     fileCache.Size = file.Length;

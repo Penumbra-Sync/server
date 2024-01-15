@@ -10,7 +10,6 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MareSynchronosStaticFilesServer.Services;
 using MareSynchronosStaticFilesServer.Utils;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -162,18 +161,6 @@ public class ServerFilesController : ControllerBase
         }
 
         return Ok(JsonSerializer.Serialize(notCoveredFiles.Values.ToList()));
-    }
-
-    [HttpGet(MareFiles.ServerFiles_Get + "/{fileId}")]
-    [Authorize(Policy = "Internal")]
-    public IActionResult GetFile(string fileId)
-    {
-        _logger.LogInformation($"GetFile:{MareUser}:{fileId}");
-
-        var fs = _cachedFileProvider.GetLocalFileStream(fileId);
-        if (fs == null) return NotFound();
-
-        return File(fs, "application/octet-stream");
     }
 
     [HttpPost(MareFiles.ServerFiles_Upload + "/{hash}")]

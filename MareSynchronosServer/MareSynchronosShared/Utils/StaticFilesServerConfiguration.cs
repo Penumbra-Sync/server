@@ -5,6 +5,7 @@ namespace MareSynchronosStaticFilesServer;
 
 public class StaticFilesServerConfiguration : MareConfigurationBase
 {
+    public bool IsDistributionNode { get; set; } = false;
     public Uri? MainFileServerAddress { get; set; } = null;
     public int ForcedDeletionOfFilesAfterHours { get; set; } = -1;
     public double CacheSizeHardLimitInGiB { get; set; } = -1;
