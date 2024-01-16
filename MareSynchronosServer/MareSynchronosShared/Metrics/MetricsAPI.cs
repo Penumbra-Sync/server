@@ -3,7 +3,7 @@
 public class MetricsAPI
 {
     public const string CounterInitializedConnections = "mare_initialized_connections";
-    public const string GaugeConnections = "mare_unauthorized_connections";
+    public const string GaugeConnections = "mare_connections";
     public const string GaugeAuthorizedConnections = "mare_authorized_connections";
     public const string GaugeAvailableWorkerThreads = "mare_available_threadpool";
     public const string GaugeAvailableIOWorkerThreads = "mare_available_threadpool_io";

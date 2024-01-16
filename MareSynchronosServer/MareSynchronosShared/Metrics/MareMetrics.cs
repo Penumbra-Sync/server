@@ -25,6 +25,22 @@ public class MareMetrics
 
     private readonly Dictionary<string, Gauge> _gauges = new(StringComparer.Ordinal);
 
+    public void IncGaugeWithLabels(string gaugeName, double value = 1.0, params string[] labels)
+    {
+        if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
+        {
+            gauge.WithLabels(labels).Inc(value);
+        }
+    }
+
+    public void DecGaugeWithLabels(string gaugeName, double value = 1.0, params string[] labels)
+    {
+        if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
+        {
+            gauge.WithLabels(labels).Dec(value);
+        }
+    }
+
     public void SetGaugeTo(string gaugeName, double value)
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
