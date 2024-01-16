@@ -17,7 +17,10 @@ public class MareMetrics
         foreach (var gauge in gaugesToServe)
         {
             logger.LogInformation($"Creating Metric for Counter {gauge}");
-            _gauges.Add(gauge, Prometheus.Metrics.CreateGauge(gauge, gauge));
+            if (!string.Equals(gauge, MetricsAPI.GaugeConnections, StringComparison.OrdinalIgnoreCase))
+                _gauges.Add(gauge, Prometheus.Metrics.CreateGauge(gauge, gauge));
+            else
+                _gauges.Add(gauge, Prometheus.Metrics.CreateGauge(gauge, gauge, new[] { "continent" }));
         }
     }
 
