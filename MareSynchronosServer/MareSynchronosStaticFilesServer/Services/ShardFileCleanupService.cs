@@ -43,10 +43,12 @@ public class ShardFileCleanupService : IHostedService
                 _logger.LogError(e, "Error during cleanup task");
             }
 
+            var cleanupCheckMinutes = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CleanupCheckInMinutes), 15);
+
             var now = DateTime.Now;
             TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
-            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 15, 0);
-            var span = futureTime.AddMinutes(15) - currentTime;
+            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % cleanupCheckMinutes, 0);
+            var span = futureTime.AddMinutes(cleanupCheckMinutes) - currentTime;
 
             _logger.LogInformation("File Cleanup Complete, next run at {date}", now.Add(span));
             await Task.Delay(span, ct).ConfigureAwait(false);
