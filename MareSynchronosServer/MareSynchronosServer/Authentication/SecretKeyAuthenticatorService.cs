@@ -60,7 +60,7 @@ public class SecretKeyAuthenticatorService
         }
 
         SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID,
-            authReply?.PrimaryUserUID ?? authReply?.UserUID, authReply.User.Alias ?? string.Empty, TempBan: false, isBanned);
+            authReply?.PrimaryUserUID ?? authReply?.UserUID, authReply?.User?.Alias ?? string.Empty, TempBan: false, isBanned);
 
         if (reply.Success)
         {
