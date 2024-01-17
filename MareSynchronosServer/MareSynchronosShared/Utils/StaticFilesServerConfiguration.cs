@@ -7,6 +7,7 @@ public class StaticFilesServerConfiguration : MareConfigurationBase
 {
     public bool IsDistributionNode { get; set; } = false;
     public Uri? MainFileServerAddress { get; set; } = null;
+    public Uri? DistributionFileServerAddress { get; set; } = null;
     public int ForcedDeletionOfFilesAfterHours { get; set; } = -1;
     public double CacheSizeHardLimitInGiB { get; set; } = -1;
     public int UnusedFileRetentionPeriodInDays { get; set; } = 14;
@@ -15,6 +16,7 @@ public class StaticFilesServerConfiguration : MareConfigurationBase
     public int DownloadTimeoutSeconds { get; set; } = 5;
     public int DownloadQueueReleaseSeconds { get; set; } = 15;
     public int DownloadQueueClearLimit { get; set; } = 15000;
+    public int CleanupCheckInMinutes { get; set; } = 15;
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
     [RemoteConfiguration]

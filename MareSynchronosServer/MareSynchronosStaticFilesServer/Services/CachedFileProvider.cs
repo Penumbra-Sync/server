@@ -30,7 +30,7 @@ public sealed class CachedFileProvider : IDisposable
         _fileStatisticsService = fileStatisticsService;
         _metrics = metrics;
         _generator = generator;
-        _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress), null);
+        _remoteCacheSourceUri = configuration.GetValueOrDefault<Uri>(nameof(StaticFilesServerConfiguration.DistributionFileServerAddress), null);
         _isDistributionServer = configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.IsDistributionNode), false);
         _basePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
         _httpClient = new();

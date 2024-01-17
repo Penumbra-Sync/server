@@ -17,7 +17,8 @@ public class MainFileCleanupService : IHostedService
     private readonly IServiceProvider _services;
     private CancellationTokenSource _cleanupCts;
 
-    public MainFileCleanupService(MareMetrics metrics, ILogger<MainFileCleanupService> logger, IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
+    public MainFileCleanupService(MareMetrics metrics, ILogger<MainFileCleanupService> logger,
+        IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
     {
         _metrics = metrics;
         _logger = logger;
@@ -54,11 +55,11 @@ public class MainFileCleanupService : IHostedService
             {
                 _logger.LogError(e, "Error during cleanup task");
             }
-
+            var cleanupCheckMinutes = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CleanupCheckInMinutes), 15);
             var now = DateTime.Now;
             TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
-            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % 30, 0);
-            var span = futureTime.AddMinutes(30) - currentTime;
+            TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % cleanupCheckMinutes, 0);
+            var span = futureTime.AddMinutes(cleanupCheckMinutes) - currentTime;
 
             _logger.LogInformation("File Cleanup Complete, next run at {date}", now.Add(span));
             await Task.Delay(span, ct).ConfigureAwait(false);
