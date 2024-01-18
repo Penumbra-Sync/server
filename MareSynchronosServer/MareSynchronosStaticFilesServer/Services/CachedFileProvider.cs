@@ -94,7 +94,7 @@ public sealed class CachedFileProvider : IDisposable
         if (fi == null && IsMainServer) return;
 
         await _downloadSemaphore.WaitAsync().ConfigureAwait(false);
-        if ((fi.Length == 0 || fi == null) && !_currentTransfers.ContainsKey(hash))
+        if ((fi == null || (fi?.Length ?? 0) == 0) && !_currentTransfers.ContainsKey(hash))
         {
             _currentTransfers[hash] = Task.Run(async () =>
             {
