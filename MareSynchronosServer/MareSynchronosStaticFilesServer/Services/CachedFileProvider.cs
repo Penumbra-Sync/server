@@ -80,6 +80,7 @@ public sealed class CachedFileProvider : IDisposable
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
         }
+        await fileStream.FlushAsync().ConfigureAwait(false);
         await fileStream.DisposeAsync().ConfigureAwait(false);
         File.Move(tempFileName, fileName, true);
 
