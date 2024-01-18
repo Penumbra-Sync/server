@@ -123,7 +123,6 @@ public class ShardFileCleanupService : IHostedService
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             DirectoryInfo dir = new(_cacheDir);
             var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
-            int fileCounter = 0;
 
             foreach (var file in allFilesInDir)
             {
@@ -141,8 +140,13 @@ public class ShardFileCleanupService : IHostedService
                     _logger.LogInformation("File forcefully deleted: {fileName}, {fileSize}MiB", file.Name, ByteSize.FromBytes(file.Length).MebiBytes);
                     file.Delete();
                 }
-
-                fileCounter++;
+                else if (file.Length == 0 && !string.Equals(file.Extension, ".dl", StringComparison.OrdinalIgnoreCase))
+                {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotalSize, file.Length);
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
+                    _logger.LogInformation("File with size 0 deleted: {filename}", file.Name);
+                    file.Delete();
+                }
 
                 ct.ThrowIfCancellationRequested();
             }

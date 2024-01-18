@@ -69,7 +69,8 @@ public sealed class CachedFileProvider : IDisposable
         }
 
         var fileName = FilePathUtil.GetFilePath(_basePath, hash);
-        using var fileStream = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+        var tempFileName = fileName + ".dl";
+        var fileStream = new FileStream(tempFileName, FileMode.Create, FileAccess.ReadWrite);
         var bufferSize = response.Content.Headers.ContentLength > 1024 * 1024 ? 4096 : 1024;
         var buffer = new byte[bufferSize];
 
@@ -79,6 +80,8 @@ public sealed class CachedFileProvider : IDisposable
         {
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
         }
+        await fileStream.DisposeAsync().ConfigureAwait(false);
+        File.Move(tempFileName, fileName, true);
 
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
@@ -90,7 +93,7 @@ public sealed class CachedFileProvider : IDisposable
         if (fi == null && IsMainServer) return;
 
         await _downloadSemaphore.WaitAsync().ConfigureAwait(false);
-        if (fi == null && !_currentTransfers.ContainsKey(hash))
+        if ((fi.Length == 0 || fi == null) && !_currentTransfers.ContainsKey(hash))
         {
             _currentTransfers[hash] = Task.Run(async () =>
             {
