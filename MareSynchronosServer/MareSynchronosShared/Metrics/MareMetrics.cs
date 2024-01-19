@@ -32,7 +32,8 @@ public class MareMetrics
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
         {
-            gauge.WithLabels(labels).Inc(value);
+            lock (gauge)
+                gauge.WithLabels(labels).Inc(value);
         }
     }
 
@@ -40,7 +41,8 @@ public class MareMetrics
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
         {
-            gauge.WithLabels(labels).Dec(value);
+            lock (gauge)
+                gauge.WithLabels(labels).Dec(value);
         }
     }
 
@@ -48,7 +50,8 @@ public class MareMetrics
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
         {
-            gauge.Set(value);
+            lock (gauge)
+                gauge.Set(value);
         }
     }
 
@@ -56,7 +59,8 @@ public class MareMetrics
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
         {
-            gauge.Inc(value);
+            lock (gauge)
+                gauge.Inc(value);
         }
     }
 
@@ -64,7 +68,8 @@ public class MareMetrics
     {
         if (_gauges.TryGetValue(gaugeName, out Gauge gauge))
         {
-            gauge.Dec(value);
+            lock (gauge)
+                gauge.Dec(value);
         }
     }
 
@@ -72,7 +77,8 @@ public class MareMetrics
     {
         if (_counters.TryGetValue(counterName, out Counter counter))
         {
-            counter.Inc(value);
+            lock (counter)
+                counter.Inc(value);
         }
     }
 }
