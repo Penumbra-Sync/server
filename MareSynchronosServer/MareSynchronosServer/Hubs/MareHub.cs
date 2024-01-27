@@ -14,12 +14,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis.Extensions.Core.Abstractions;
+using System.Collections.Concurrent;
 
 namespace MareSynchronosServer.Hubs;
 
 [Authorize(Policy = "Authenticated")]
 public partial class MareHub : Hub<IMareHub>, IMareHub
 {
+    private static readonly ConcurrentDictionary<string, string> _userConnections = new(StringComparer.Ordinal);
     private readonly MareMetrics _mareMetrics;
     private readonly SystemInfoService _systemInfoService;
     private readonly IHttpContextAccessor _contextAccessor;
@@ -132,15 +134,27 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     [Authorize(Policy = "Authenticated")]
     public override async Task OnConnectedAsync()
     {
-        _mareMetrics.IncGaugeWithLabels(MetricsAPI.GaugeConnections, labels: Continent);
-
-        try
+        if (_userConnections.TryGetValue(UserUID, out var oldId))
         {
-            _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
-            await _onlineSyncedPairCacheService.InitPlayer(UserUID).ConfigureAwait(false);
-            await UpdateUserOnRedis().ConfigureAwait(false);
+            _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), "UpdatingId", oldId, Context.ConnectionId));
+            _userConnections[UserUID] = Context.ConnectionId;
         }
-        catch { }
+        else
+        {
+            _mareMetrics.IncGaugeWithLabels(MetricsAPI.GaugeConnections, labels: Continent);
+
+            try
+            {
+                _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), Context.ConnectionId, UserCharaIdent));
+                await _onlineSyncedPairCacheService.InitPlayer(UserUID).ConfigureAwait(false);
+                await UpdateUserOnRedis().ConfigureAwait(false);
+                _userConnections[UserUID] = Context.ConnectionId;
+            }
+            catch
+            {
+                _userConnections.Remove(UserUID, out _);
+            }
+        }
 
         await base.OnConnectedAsync().ConfigureAwait(false);
     }
@@ -148,27 +162,39 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
     [Authorize(Policy = "Authenticated")]
     public override async Task OnDisconnectedAsync(Exception exception)
     {
-        _mareMetrics.DecGaugeWithLabels(MetricsAPI.GaugeConnections, labels: Continent);
-
-        try
+        if (_userConnections.TryGetValue(UserUID, out var connectionId)
+            && string.Equals(connectionId, Context.ConnectionId, StringComparison.Ordinal))
         {
-            await _onlineSyncedPairCacheService.DisposePlayer(UserUID).ConfigureAwait(false);
+            _mareMetrics.DecGaugeWithLabels(MetricsAPI.GaugeConnections, labels: Continent);
 
-            _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), UserCharaIdent));
-            if (exception != null)
-                _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), exception.Message, exception.StackTrace));
+            try
+            {
+                await _onlineSyncedPairCacheService.DisposePlayer(UserUID).ConfigureAwait(false);
 
-            await RemoveUserFromRedis().ConfigureAwait(false);
+                _logger.LogCallInfo(MareHubLogger.Args(_contextAccessor.GetIpAddress(), Context.ConnectionId, UserCharaIdent));
+                if (exception != null)
+                    _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), Context.ConnectionId, exception.Message, exception.StackTrace));
 
-            _mareCensus.ClearStatistics(UserUID);
+                await RemoveUserFromRedis().ConfigureAwait(false);
 
-            await SendOfflineToAllPairedUsers().ConfigureAwait(false);
+                _mareCensus.ClearStatistics(UserUID);
 
-            DbContext.RemoveRange(DbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
-            await DbContext.SaveChangesAsync().ConfigureAwait(false);
+                await SendOfflineToAllPairedUsers().ConfigureAwait(false);
 
+                DbContext.RemoveRange(DbContext.Files.Where(f => !f.Uploaded && f.UploaderUID == UserUID));
+                await DbContext.SaveChangesAsync().ConfigureAwait(false);
+
+            }
+            catch { }
+            finally
+            {
+                _userConnections.Remove(UserUID, out _);
+            }
         }
-        catch { }
+        else
+        {
+            _logger.LogCallWarning(MareHubLogger.Args(_contextAccessor.GetIpAddress(), "ObsoleteId", UserUID, Context.ConnectionId));
+        }
 
         await base.OnDisconnectedAsync(exception).ConfigureAwait(false);
     }
