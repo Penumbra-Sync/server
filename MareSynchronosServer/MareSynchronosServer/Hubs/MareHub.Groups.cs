@@ -512,10 +512,12 @@ public partial class MareHub
         var (hasRights, group) = await TryValidateGroupModeratorOrOwner(dto.Group.GID).ConfigureAwait(false);
         if (!hasRights) return -1;
 
-        var allGroupUsers = await DbContext.GroupPairs.Include(p => p.GroupUser)
+        var allGroupUsers = await DbContext.GroupPairs.Include(p => p.GroupUser).Include(p => p.Group)
             .Where(g => g.GroupGID == dto.Group.GID)
             .ToListAsync().ConfigureAwait(false);
-        var usersToPrune = allGroupUsers.Where(p => !p.IsPinned && !p.IsModerator && p.GroupUserUID != UserUID
+        var usersToPrune = allGroupUsers.Where(p => !p.IsPinned && !p.IsModerator
+            && p.GroupUserUID != UserUID
+            && p.Group.OwnerUID != p.GroupUserUID
             && p.GroupUser.LastLoggedIn.AddDays(days) < DateTime.UtcNow);
 
         if (!execute) return usersToPrune.Count();
