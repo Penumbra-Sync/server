@@ -509,8 +509,9 @@ public partial class MareHub
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto, days, execute));
 
-        var (isOwner, group) = await TryValidateOwner(dto.Group.GID).ConfigureAwait(false);
-        if (!isOwner) return -1;
+        var (hasRights, group) = await TryValidateGroupModeratorOrOwner(dto.Group.GID).ConfigureAwait(false);
+        var (isOwner, _) = await TryValidateOwner(dto.Group.GID).ConfigureAwait(false);
+        if (!hasRights) return -1;
 
         var allGroupUsers = await DbContext.GroupPairs.Include(p => p.GroupUser)
             .Where(g => g.GroupGID == dto.Group.GID)
@@ -518,7 +519,7 @@ public partial class MareHub
         var usersToPrune = allGroupUsers.Where(p => !p.IsPinned && !p.IsModerator && p.GroupUserUID != UserUID
             && p.GroupUser.LastLoggedIn.AddDays(days) < DateTime.UtcNow);
 
-        if (!execute) return usersToPrune.Count();
+        if (!execute || !isOwner) return usersToPrune.Count();
 
         DbContext.GroupPairs.RemoveRange(usersToPrune);
 
