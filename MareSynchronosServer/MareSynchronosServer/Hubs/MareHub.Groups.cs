@@ -433,7 +433,6 @@ public partial class MareHub
 
                     ownPermissionsToOther = existingPermissionsOnDb;
                 }
-
             }
             else if (!ownPermissionsToOther.Sticky)
             {
@@ -506,6 +505,35 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
+    public async Task<int> GroupPrune(GroupDto dto, int days, bool execute)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(dto, days, execute));
+
+        var (isOwner, group) = await TryValidateOwner(dto.Group.GID).ConfigureAwait(false);
+        if (!isOwner) return -1;
+
+        var allGroupUsers = await DbContext.GroupPairs.Include(p => p.GroupUser)
+            .Where(g => g.GroupGID == dto.Group.GID)
+            .ToListAsync().ConfigureAwait(false);
+        var usersToPrune = allGroupUsers.Where(p => !p.IsPinned && !p.IsModerator && p.GroupUserUID != UserUID
+            && p.GroupUser.LastLoggedIn.AddDays(days) < DateTime.UtcNow);
+
+        if (!execute) return usersToPrune.Count();
+
+        DbContext.GroupPairs.RemoveRange(usersToPrune);
+
+        foreach (var pair in usersToPrune)
+        {
+            await Clients.Users(allGroupUsers.Where(p => !usersToPrune.Contains(p)).Select(g => g.GroupUserUID))
+                .Client_GroupPairLeft(new GroupPairDto(dto.Group, pair.GroupUser.ToUserData())).ConfigureAwait(false);
+        }
+
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        return usersToPrune.Count();
+    }
+
+    [Authorize(Policy = "Identified")]
     public async Task GroupRemoveUser(GroupPairDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
@@ -540,7 +568,6 @@ public partial class MareHub
         {
             await UserGroupLeave(groupUserPair, userIdent, userPairs, dto.User.UID).ConfigureAwait(false);
         }
-
     }
 
     [Authorize(Policy = "Identified")]
