@@ -17,13 +17,13 @@ public partial class MareWizardModule
 
         StringBuilder sb = new();
         var user = await Context.Guild.GetUserAsync(Context.User.Id).ConfigureAwait(false);
-        bool userIsInVanityRole = _botServices.VanityRoles.Exists(u => user.RoleIds.Contains(u.Id)) || !_botServices.VanityRoles.Any();
+        bool userIsInVanityRole = _botServices.VanityRoles.Keys.Any(u => user.RoleIds.Contains(u.Id)) || !_botServices.VanityRoles.Any();
         if (!userIsInVanityRole)
         {
             sb.AppendLine("To be able to set Vanity IDs you must have one of the following roles:");
             foreach (var role in _botServices.VanityRoles)
             {
-                sb.Append("- ").AppendLine(role.Mention);
+                sb.Append("- ").Append(role.Key.Mention).Append(" (").Append(role.Value).AppendLine(")");
             }
         }
         else

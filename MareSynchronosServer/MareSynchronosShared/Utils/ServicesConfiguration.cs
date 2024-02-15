@@ -9,7 +9,7 @@ public class ServicesConfiguration : MareConfigurationBase
     public ulong? DiscordChannelForReports { get; set; } = null;
     public ulong? DiscordChannelForCommands { get; set; } = null;
     public Uri MainServerGrpcAddress { get; set; } = null;
-    public ulong[]? VanityRoles { get; set; } = null;
+    public Dictionary<ulong, string> VanityRoles { get; set; } = new Dictionary<ulong, string>();
 
     public override string ToString()
     {
@@ -22,7 +22,7 @@ public class ServicesConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(DiscordChannelForCommands)} => {DiscordChannelForCommands}");
         foreach (var role in VanityRoles)
         {
-            sb.AppendLine($"{nameof(VanityRoles)} => {role}");
+            sb.AppendLine($"{nameof(VanityRoles)} => {role.Key} = {role.Value}");
         }
         return sb.ToString();
     }

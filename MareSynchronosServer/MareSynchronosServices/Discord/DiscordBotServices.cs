@@ -13,7 +13,7 @@ public class DiscordBotServices
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
     public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
     public ConcurrentDictionary<ulong, ulong> ValidInteractions { get; } = new();
-    public List<RestRole> VanityRoles { get; set; } = new();
+    public Dictionary<RestRole, string> VanityRoles { get; set; } = new();
     private readonly IServiceProvider _serviceProvider;
     private CancellationTokenSource verificationTaskCts;
 

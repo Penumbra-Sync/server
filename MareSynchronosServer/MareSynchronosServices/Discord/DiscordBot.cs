@@ -11,6 +11,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Text;
 using System.Threading.Channels;
@@ -54,6 +55,9 @@ internal class DiscordBot : IHostedService
         var token = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.DiscordBotToken), string.Empty);
         if (!string.IsNullOrEmpty(token))
         {
+            _logger.LogInformation("Starting DiscordBot");
+            _logger.LogInformation("Using Configuration: " + _configurationService.ToString());
+
             _interactionModule = new InteractionService(_discordClient);
             _interactionModule.Log += Log;
             await _interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
@@ -213,18 +217,28 @@ internal class DiscordBot : IHostedService
     {
         while (!_updateStatusCts.IsCancellationRequested)
         {
-            var vanityRoles = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), Array.Empty<ulong>());
-            if (vanityRoles.Length != _botServices.VanityRoles.Count)
+            try
             {
-                _botServices.VanityRoles.Clear();
-                foreach (var role in vanityRoles)
+                _logger.LogInformation("Updating Vanity Roles");
+                Dictionary<ulong, string> vanityRoles = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), new Dictionary<ulong, string>());
+                if (vanityRoles.Keys.Count != _botServices.VanityRoles.Count)
                 {
-                    var restrole = guild.GetRole(role);
-                    if (restrole != null) _botServices.VanityRoles.Add(restrole);
-                }
-            }
+                    _botServices.VanityRoles.Clear();
+                    foreach (var role in vanityRoles)
+                    {
+                        _logger.LogInformation("Adding Role: {id} => {desc}", role.Key, role.Value);
 
-            await Task.Delay(TimeSpan.FromSeconds(30), _updateStatusCts.Token).ConfigureAwait(false);
+                        var restrole = guild.GetRole(role.Key);
+                        if (restrole != null) _botServices.VanityRoles.Add(restrole, role.Value);
+                    }
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(30), _updateStatusCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error during UpdateVanityRoles");
+            }
         }
     }
 
@@ -270,7 +284,14 @@ internal class DiscordBot : IHostedService
         if (prevMessage == null)
         {
             var msg = await channel.SendMessageAsync(embed: eb.Build(), components: cb.Build()).ConfigureAwait(false);
-            await msg.PinAsync().ConfigureAwait(false);
+            try
+            {
+                await msg.PinAsync().ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                // swallow
+            }
         }
         else
         {
@@ -405,7 +426,7 @@ internal class DiscordBot : IHostedService
                 _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
                 var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id);
 
-                ulong[] allowedRoleIds = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), Array.Empty<ulong>());
+                Dictionary<ulong, string> allowedRoleIds = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), new Dictionary<ulong, string>());
                 _logger.LogInformation($"Allowed role ids: {string.Join(", ", allowedRoleIds)}");
 
                 if (allowedRoleIds.Any())
@@ -423,7 +444,7 @@ internal class DiscordBot : IHostedService
                             var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
                             _logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
 
-                            if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
+                            if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                             {
                                 _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
                                 lodestoneAuth.User.Alias = null;
@@ -453,7 +474,7 @@ internal class DiscordBot : IHostedService
 
                             _logger.LogInformation($"Checking Group: {group.GID}, owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
 
-                            if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Contains(u)))
+                            if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                             {
                                 _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
                                 group.Alias = null;
