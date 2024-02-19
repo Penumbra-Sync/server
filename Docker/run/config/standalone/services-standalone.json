@@ -36,7 +36,7 @@
         "DiscordChannelForCommands": "",
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
         "RedisConnectionString": "redis,password=secretredispassword",
-        "VanityRoles": []
+        "VanityRoles": {"984484868241096724":"Main Developer", "1012008556259725398":"Patreon Subscriber"}
     },
     "AllowedHosts": "*",
     "Kestrel": {
