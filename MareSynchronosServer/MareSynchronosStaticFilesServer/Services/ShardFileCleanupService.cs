@@ -85,6 +85,7 @@ public class ShardFileCleanupService : IHostedService
         {
             _logger.LogInformation("Cleaning up files beyond the cache size limit of {cacheSizeLimit} GiB", sizeLimit);
             var allLocalFiles = Directory.EnumerateFiles(_cacheDir, "*", SearchOption.AllDirectories)
+                .Where(f => !f.EndsWith("dl", StringComparison.OrdinalIgnoreCase))
                 .Select(f => new FileInfo(f)).ToList()
                 .OrderBy(f => f.LastAccessTimeUtc).ToList();
             var totalCacheSizeInBytes = allLocalFiles.Sum(s => s.Length);
@@ -122,7 +123,9 @@ public class ShardFileCleanupService : IHostedService
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(unusedRetention));
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             DirectoryInfo dir = new(_cacheDir);
-            var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories);
+            var allFilesInDir = dir.GetFiles("*", SearchOption.AllDirectories)
+                .Where(f => !f.Name.EndsWith("dl", StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
             foreach (var file in allFilesInDir)
             {

@@ -18,7 +18,7 @@ public sealed class CachedFileProvider : IDisposable
     private readonly string _basePath;
     private readonly ConcurrentDictionary<string, Task> _currentTransfers = new(StringComparer.Ordinal);
     private readonly HttpClient _httpClient;
-    private readonly SemaphoreSlim _downloadSemaphore = new(1);
+    private readonly SemaphoreSlim _downloadSemaphore = new(1, 1);
     private bool _disposed;
 
     private bool IsMainServer => _remoteCacheSourceUri == null && _isDistributionServer;
@@ -56,15 +56,17 @@ public sealed class CachedFileProvider : IDisposable
 
         using var requestMessage = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
         requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _generator.Token);
-        using var response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
+        HttpResponseMessage? response = null;
 
         try
         {
+            response = await _httpClient.SendAsync(requestMessage).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to download {url}", downloadUrl);
+            response?.Dispose();
             return;
         }
 
@@ -86,6 +88,7 @@ public sealed class CachedFileProvider : IDisposable
 
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
         _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, FilePathUtil.GetFileInfoForHash(_basePath, hash).Length);
+        response.Dispose();
     }
 
     public async Task DownloadFileWhenRequired(string hash)
@@ -94,7 +97,9 @@ public sealed class CachedFileProvider : IDisposable
         if (fi == null && IsMainServer) return;
 
         await _downloadSemaphore.WaitAsync().ConfigureAwait(false);
-        if ((fi == null || (fi?.Length ?? 0) == 0) && !_currentTransfers.ContainsKey(hash))
+        if ((fi == null || (fi?.Length ?? 0) == 0)
+            && (!_currentTransfers.TryGetValue(hash, out var downloadTask)
+                || (downloadTask?.IsCompleted ?? true)))
         {
             _currentTransfers[hash] = Task.Run(async () =>
             {
