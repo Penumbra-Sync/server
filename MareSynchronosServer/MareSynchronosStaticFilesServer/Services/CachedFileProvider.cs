@@ -161,6 +161,6 @@ public sealed class CachedFileProvider : IDisposable
 
     public bool AnyFilesDownloading(List<string> hashes)
     {
-        return hashes.TrueForAll(_currentTransfers.Keys.Contains);
+        return hashes.Exists(_currentTransfers.Keys.Contains);
     }
 }
