@@ -74,6 +74,8 @@ public class Startup
             MetricsAPI.GaugeQueueFree,
             MetricsAPI.GaugeQueueInactive,
             MetricsAPI.GaugeQueueActive,
+            MetricsAPI.GaugeFilesDownloadingFromCache,
+            MetricsAPI.GaugeFilesTasksWaitingForDownloadFromCache
         }));
 
         // generic services

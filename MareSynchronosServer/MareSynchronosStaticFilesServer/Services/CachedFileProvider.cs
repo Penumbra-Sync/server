@@ -105,6 +105,7 @@ public sealed class CachedFileProvider : IDisposable
             {
                 try
                 {
+                    _metrics.IncGauge(MetricsAPI.GaugeFilesDownloadingFromCache);
                     await DownloadTask(hash).ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -113,6 +114,7 @@ public sealed class CachedFileProvider : IDisposable
                 }
                 finally
                 {
+                    _metrics.DecGauge(MetricsAPI.GaugeFilesDownloadingFromCache);
                     _currentTransfers.Remove(hash, out _);
                 }
             });
@@ -136,9 +138,29 @@ public sealed class CachedFileProvider : IDisposable
 
         if (_currentTransfers.TryGetValue(hash, out var downloadTask))
         {
-            await downloadTask.ConfigureAwait(false);
+            try
+            {
+                using CancellationTokenSource cts = new();
+                cts.CancelAfter(TimeSpan.FromSeconds(15));
+                _metrics.IncGauge(MetricsAPI.GaugeFilesTasksWaitingForDownloadFromCache);
+                await downloadTask.WaitAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "Failed while waiting for download task for {hash}", hash);
+                return null;
+            }
+            finally
+            {
+                _metrics.DecGauge(MetricsAPI.GaugeFilesTasksWaitingForDownloadFromCache);
+            }
         }
 
         return GetLocalFileStream(hash);
+    }
+
+    public bool AnyFilesDownloading(List<string> hashes)
+    {
+        return hashes.TrueForAll(_currentTransfers.Keys.Contains);
     }
 }

@@ -13,6 +13,8 @@ public class MetricsAPI
     public const string GaugePairsPaused = "mare_pairs_paused";
     public const string GaugeFilesTotal = "mare_files";
     public const string GaugeFilesTotalSize = "mare_files_size";
+    public const string GaugeFilesDownloadingFromCache = "mare_files_downloading_from_cache";
+    public const string GaugeFilesTasksWaitingForDownloadFromCache = "mare_files_waiting_for_dl";
     public const string CounterUserPushData = "mare_user_push";
     public const string CounterUserPushDataTo = "mare_user_push_to";
     public const string CounterAuthenticationRequests = "mare_auth_requests";
