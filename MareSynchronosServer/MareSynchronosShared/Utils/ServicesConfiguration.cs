@@ -8,6 +8,7 @@ public class ServicesConfiguration : MareConfigurationBase
     public ulong? DiscordChannelForMessages { get; set; } = null;
     public ulong? DiscordChannelForReports { get; set; } = null;
     public ulong? DiscordChannelForCommands { get; set; } = null;
+    public ulong? DiscordRoleAprilFools2024 { get; set; } = null;
     public Uri MainServerGrpcAddress { get; set; } = null;
     public Dictionary<ulong, string> VanityRoles { get; set; } = new Dictionary<ulong, string>();
 
@@ -20,6 +21,7 @@ public class ServicesConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(DiscordChannelForMessages)} => {DiscordChannelForMessages}");
         sb.AppendLine($"{nameof(DiscordChannelForReports)} => {DiscordChannelForReports}");
         sb.AppendLine($"{nameof(DiscordChannelForCommands)} => {DiscordChannelForCommands}");
+        sb.AppendLine($"{nameof(DiscordRoleAprilFools2024)} => {DiscordRoleAprilFools2024}");
         foreach (var role in VanityRoles)
         {
             sb.AppendLine($"{nameof(VanityRoles)} => {role.Key} = {role.Value}");

@@ -7,7 +7,7 @@ COPY MareSynchronosServer/MareSynchronosServices /server/MareSynchronosServer/Ma
 WORKDIR /server/MareSynchronosServer/MareSynchronosServices/
 
 RUN dotnet publish \
-        --configuration=Release \
+        --configuration=Debug \
         --os=linux \
         --output=/build \
         MareSynchronosServices.csproj

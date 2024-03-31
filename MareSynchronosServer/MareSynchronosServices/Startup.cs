@@ -10,7 +10,6 @@ using MareSynchronosShared.Services;
 using StackExchange.Redis;
 using MessagePack.Resolvers;
 using MessagePack;
-using Microsoft.AspNetCore.Authorization;
 
 namespace MareSynchronosServices;
 
