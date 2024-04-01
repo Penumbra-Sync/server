@@ -60,7 +60,9 @@ public partial class MareWizardModule : InteractionModuleBase
                 + "This entire thing was a jab at the ridiculousness of cryptocurrency, microtransactions and games featuring multiple currencies. I hope you enjoyed the announcement post!"
                 + Environment.NewLine + Environment.NewLine
                 + "__As you already have a role that gives you a permanent Vanity ID, you cannot win another one here. "
-                + "However, tell your friends as this bot will give them a chance to win one of " + _totalAprilFoolsRoles + " lifetime vanity roles.__");
+                + "However, tell your friends as this bot will give them a chance to win one of " + _totalAprilFoolsRoles + " lifetime vanity roles.__"
+                + Environment.NewLine + Environment.NewLine
+                + "The giveaway is active until <t:" + (new DateTime(2024, 04, 01, 23, 59, 59, DateTimeKind.Utc).Subtract(DateTime.UnixEpoch).TotalSeconds) + ":f>.");
         }
         else if (participatedUsers.ContainsKey(Context.User.Id))
         {
@@ -88,7 +90,9 @@ public partial class MareWizardModule : InteractionModuleBase
                 + "(" + remainingRoles + " still remain) and you can win one using this bot!"
                 + Environment.NewLine + Environment.NewLine
                 + "To win you simply have to pick one of the buttons labeled \"Win\" below this post. Which button will win is random. "
-                + "There is a 1 in 5 chance that you can win the role. __You can only participate once.__");
+                + "There is a 1 in 5 chance that you can win the role. __You can only participate once.__"
+                + Environment.NewLine + Environment.NewLine
+                + "The giveaway is active until <t:" + (new DateTime(2024, 04, 01, 23, 59, 59, DateTimeKind.Utc).Subtract(DateTime.UnixEpoch).TotalSeconds) + ":f>.");
             cb.WithButton("Win", "wizard-fools-win:1", ButtonStyle.Primary, new Emoji("1️⃣"));
             cb.WithButton("Win", "wizard-fools-win:2", ButtonStyle.Primary, new Emoji("2️⃣"));
             cb.WithButton("Win", "wizard-fools-win:3", ButtonStyle.Primary, new Emoji("3️⃣"));
