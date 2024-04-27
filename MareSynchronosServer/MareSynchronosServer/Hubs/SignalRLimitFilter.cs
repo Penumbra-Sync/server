@@ -10,8 +10,8 @@ public class SignalRLimitFilter : IHubFilter
     private readonly IRateLimitProcessor _processor;
     private readonly IHttpContextAccessor accessor;
     private readonly ILogger<SignalRLimitFilter> logger;
-    private static readonly SemaphoreSlim ConnectionLimiterSemaphore = new(20);
-    private static readonly SemaphoreSlim DisconnectLimiterSemaphore = new(20);
+    private static readonly SemaphoreSlim ConnectionLimiterSemaphore = new(20, 20);
+    private static readonly SemaphoreSlim DisconnectLimiterSemaphore = new(20, 20);
 
     public SignalRLimitFilter(
         IOptions<IpRateLimitOptions> options, IProcessingStrategy processing, IIpPolicyStore policyStore, IHttpContextAccessor accessor, ILogger<SignalRLimitFilter> logger)
