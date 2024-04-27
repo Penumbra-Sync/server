@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0 as BUILD
+FROM mcr.microsoft.com/dotnet/sdk:8.0 as BUILD
 
 RUN git clone --recurse-submodules https://github.com/Penumbra-Sync/server
 
@@ -10,7 +10,7 @@ RUN dotnet publish \
         --output=/MareSynchronosStaticFilesServer \
         MareSynchronosStaticFilesServer.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
 RUN adduser \
         --disabled-password \

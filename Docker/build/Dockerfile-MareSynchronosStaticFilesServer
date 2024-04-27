@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:7.0 as BUILD
+FROM mcr.microsoft.com/dotnet/sdk:8.0 as BUILD
 
 COPY MareAPI /server/MareAPI
 COPY MareSynchronosServer/MareSynchronosShared /server/MareSynchronosServer/MareSynchronosShared
@@ -12,7 +12,7 @@ RUN dotnet publish \
         --output=/build \
         MareSynchronosStaticFilesServer.csproj
 
-FROM mcr.microsoft.com/dotnet/aspnet:7.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 
 RUN adduser \
         --disabled-password \
