@@ -171,7 +171,11 @@ public class RequestQueueService : IHostedService
                     {
                         if (_priorityQueue.TryPeek(out var prioRequest))
                         {
-                            if (prioRequest.IsCancelled) continue;
+                            if (prioRequest.IsCancelled)
+                            {
+                                _priorityQueue.TryDequeue(out var _);
+                                continue;
+                            }
                             if (_cachedFileProvider.AnyFilesDownloading(prioRequest.FileIds)) continue;
 
                             _priorityQueue.TryDequeue(out var priorityRequest);
@@ -181,10 +185,14 @@ public class RequestQueueService : IHostedService
 
                         if (_queue.TryPeek(out var request))
                         {
-                            if (request.IsCancelled) continue;
+                            if (request.IsCancelled)
+                            {
+                                _queue.TryDequeue(out var _);
+                                continue;
+                            }
                             if (_cachedFileProvider.AnyFilesDownloading(request.FileIds)) continue;
 
-                            _priorityQueue.TryDequeue(out var priorityRequest);
+                            _queue.TryDequeue(out var priorityRequest);
                             DequeueIntoSlot(request, i);
                             break;
                         }
