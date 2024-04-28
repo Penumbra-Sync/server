@@ -6,6 +6,7 @@ namespace MareSynchronosStaticFilesServer.Utils;
 public sealed class BlockFileDataSubstream : IDisposable
 {
     private readonly MemoryStream _headerStream;
+    private readonly BinaryWriter _headerStreamWriter;
     private readonly FileStream _dataStream;
     private int _headerPosition = 0;
     private long _dataPosition = 0;
@@ -17,9 +18,9 @@ public sealed class BlockFileDataSubstream : IDisposable
     public BlockFileDataSubstream(FileStream dataStream)
     {
         _headerStream = new MemoryStream();
-        using var headerStreamWriter = new BinaryWriter(_headerStream);
-        headerStreamWriter.Write(Encoding.ASCII.GetBytes("#" + new FileInfo(dataStream.Name).Name + ":" + dataStream.Length.ToString(CultureInfo.InvariantCulture) + "#"));
-        headerStreamWriter.Flush();
+        _headerStreamWriter = new BinaryWriter(_headerStream);
+        _headerStreamWriter.Write(Encoding.ASCII.GetBytes("#" + new FileInfo(dataStream.Name).Name + ":" + dataStream.Length.ToString(CultureInfo.InvariantCulture) + "#"));
+        _headerStreamWriter.Flush();
         _headerStream.Position = 0;
         _dataStream = dataStream;
     }
@@ -67,6 +68,7 @@ public sealed class BlockFileDataSubstream : IDisposable
     {
         if (_disposed) return;
         _headerStream.Dispose();
+        _headerStreamWriter.Dispose();
         _dataStream.Dispose();
         _disposed = true;
     }
