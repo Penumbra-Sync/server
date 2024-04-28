@@ -221,6 +221,7 @@ public class Startup
         services.AddSingleton<IUserIdProvider, IdBasedUserIdProvider>();
 
         services.AddHealthChecks();
+        services.AddHttpLogging(e => e = new Microsoft.AspNetCore.HttpLogging.HttpLoggingOptions());
     }
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
