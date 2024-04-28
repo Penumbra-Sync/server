@@ -107,9 +107,9 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
         try
         {
             _logger.LogInformation("Getting {key} from Http", key);
-            HttpRequestMessage msg = new(HttpMethod.Get, GetRoute(key, Convert.ToString(defaultValue, CultureInfo.InvariantCulture)));
+            using HttpRequestMessage msg = new(HttpMethod.Get, GetRoute(key, Convert.ToString(defaultValue, CultureInfo.InvariantCulture)));
             msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _serverTokenGenerator.Token);
-            var response = await _httpClient.SendAsync(msg).ConfigureAwait(false);
+            using var response = await _httpClient.SendAsync(msg).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             _logger.LogInformation("Http Response for {key} = {value}", key, content);
