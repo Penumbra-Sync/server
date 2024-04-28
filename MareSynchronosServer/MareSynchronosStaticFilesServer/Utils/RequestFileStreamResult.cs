@@ -34,6 +34,7 @@ public class RequestFileStreamResult : FileStreamResult
             _requestQueueService.FinishRequest(_requestId);
 
             _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+            FileStream?.Dispose();
         }
     }
 
@@ -50,8 +51,8 @@ public class RequestFileStreamResult : FileStreamResult
         finally
         {
             _requestQueueService.FinishRequest(_requestId);
-
             _mareMetrics.DecGauge(MetricsAPI.GaugeCurrentDownloads);
+            FileStream?.Dispose();
         }
     }
 }

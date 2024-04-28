@@ -17,7 +17,7 @@ public sealed class BlockFileDataSubstream : IDisposable
     public BlockFileDataSubstream(FileStream dataStream)
     {
         _headerStream = new MemoryStream();
-        var headerStreamWriter = new BinaryWriter(_headerStream);
+        using var headerStreamWriter = new BinaryWriter(_headerStream);
         headerStreamWriter.Write(Encoding.ASCII.GetBytes("#" + new FileInfo(dataStream.Name).Name + ":" + dataStream.Length.ToString(CultureInfo.InvariantCulture) + "#"));
         headerStreamWriter.Flush();
         _headerStream.Position = 0;

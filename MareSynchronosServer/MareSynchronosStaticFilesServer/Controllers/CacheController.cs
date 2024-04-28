@@ -48,6 +48,6 @@ public class CacheController : ControllerBase
 
         _fileStatisticsService.LogRequest(requestSize);
 
-        return _requestFileStreamResultFactory.Create(requestId, new BlockFileDataStream(substreams.ToArray()));
+        return _requestFileStreamResultFactory.Create(requestId, new BlockFileDataStream(substreams));
     }
 }

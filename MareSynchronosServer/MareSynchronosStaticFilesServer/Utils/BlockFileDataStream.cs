@@ -2,10 +2,10 @@
 
 public sealed class BlockFileDataStream : Stream
 {
-    private readonly BlockFileDataSubstream[] _substreams;
+    private readonly List<BlockFileDataSubstream> _substreams;
     private int _currentStreamIndex = 0;
 
-    public BlockFileDataStream(BlockFileDataSubstream[] substreams)
+    public BlockFileDataStream(List<BlockFileDataSubstream> substreams)
     {
         _substreams = substreams;
     }
@@ -21,7 +21,7 @@ public sealed class BlockFileDataStream : Stream
         int totalRead = 0;
         int currentOffset = 0;
         int remainingCount = count;
-        while (totalRead < count && _currentStreamIndex < _substreams.Length)
+        while (totalRead < count && _currentStreamIndex < _substreams.Count)
         {
             var lastReadBytes = _substreams[_currentStreamIndex].Read(buffer, currentOffset, remainingCount);
             if (lastReadBytes < remainingCount)
