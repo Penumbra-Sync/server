@@ -98,7 +98,7 @@ public class RequestQueueService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _queueTimer = new System.Timers.Timer(250);
+        _queueTimer = new System.Timers.Timer(500);
         _queueTimer.Elapsed += ProcessQueue;
         _queueTimer.AutoReset = true;
         _queueTimer.Start();
@@ -169,20 +169,22 @@ public class RequestQueueService : IHostedService
 
                     while (true)
                     {
-                        if (_priorityQueue.TryDequeue(out var prioRequest))
+                        if (_priorityQueue.TryPeek(out var prioRequest))
                         {
                             if (prioRequest.IsCancelled) continue;
                             if (_cachedFileProvider.AnyFilesDownloading(prioRequest.FileIds)) continue;
 
-                            DequeueIntoSlot(prioRequest, i);
+                            _priorityQueue.TryDequeue(out var priorityRequest);
+                            DequeueIntoSlot(priorityRequest, i);
                             break;
                         }
 
-                        if (_queue.TryDequeue(out var request))
+                        if (_queue.TryPeek(out var request))
                         {
                             if (request.IsCancelled) continue;
                             if (_cachedFileProvider.AnyFilesDownloading(request.FileIds)) continue;
 
+                            _priorityQueue.TryDequeue(out var priorityRequest);
                             DequeueIntoSlot(request, i);
                             break;
                         }
