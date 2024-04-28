@@ -26,7 +26,7 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Karambolo.Extensions.Logging.File" Version="3.5.0" />
-		<PackageReference Include="Meziantou.Analyzer" Version="2.0.149">
+		<PackageReference Include="Meziantou.Analyzer" Version="2.0.150">
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -47,8 +47,8 @@
 		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.4" />
 		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="7.5.1" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.2" />
-		<PackageReference Include="prometheus-net" Version="7.0.0" />
-		<PackageReference Include="prometheus-net.AspNetCore" Version="7.0.0" />
+		<PackageReference Include="prometheus-net" Version="8.2.1" />
+		<PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
 		<PackageReference Include="StackExchange.Redis" Version="2.7.33" />
 		<PackageReference Include="StackExchange.Redis.Extensions.AspNetCore" Version="10.2.0" />
 		<PackageReference Include="StackExchange.Redis.Extensions.Core" Version="10.2.0" />
