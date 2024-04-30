@@ -9,7 +9,7 @@ public class ServicesConfiguration : MareConfigurationBase
     public ulong? DiscordChannelForReports { get; set; } = null;
     public ulong? DiscordChannelForCommands { get; set; } = null;
     public ulong? DiscordRoleAprilFools2024 { get; set; } = null;
-    public Uri MainServerGrpcAddress { get; set; } = null;
+    public Uri MainServerAddress { get; set; } = null;
     public Dictionary<ulong, string> VanityRoles { get; set; } = new Dictionary<ulong, string>();
 
     public override string ToString()
@@ -17,7 +17,7 @@ public class ServicesConfiguration : MareConfigurationBase
         StringBuilder sb = new();
         sb.AppendLine(base.ToString());
         sb.AppendLine($"{nameof(DiscordBotToken)} => {DiscordBotToken}");
-        sb.AppendLine($"{nameof(MainServerGrpcAddress)} => {MainServerGrpcAddress}");
+        sb.AppendLine($"{nameof(MainServerAddress)} => {MainServerAddress}");
         sb.AppendLine($"{nameof(DiscordChannelForMessages)} => {DiscordChannelForMessages}");
         sb.AppendLine($"{nameof(DiscordChannelForReports)} => {DiscordChannelForReports}");
         sb.AppendLine($"{nameof(DiscordChannelForCommands)} => {DiscordChannelForCommands}");

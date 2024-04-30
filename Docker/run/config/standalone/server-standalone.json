@@ -52,10 +52,6 @@
         "Endpoints": {
             "Http": {
                 "Url": "http://+:6000"
-            },
-            "Grpc": {
-                "Protocols": "Http2",
-                "Url": "http://+:6005"
             }
         }
     },

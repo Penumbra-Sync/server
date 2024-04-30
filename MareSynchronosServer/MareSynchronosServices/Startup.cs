@@ -4,8 +4,6 @@ using MareSynchronosShared.Metrics;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using MareSynchronosShared.Utils;
-using Grpc.Net.Client.Configuration;
-using MareSynchronosShared.Protos;
 using MareSynchronosShared.Services;
 using StackExchange.Redis;
 using MessagePack.Resolvers;
@@ -52,30 +50,12 @@ public class Startup
         services.AddSingleton(m => new MareMetrics(m.GetService<ILogger<MareMetrics>>(), new List<string> { },
         new List<string> { }));
 
-        var noRetryConfig = new MethodConfig
-        {
-            Names = { MethodName.Default },
-            RetryPolicy = null
-        };
-
         var redis = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
         var options = ConfigurationOptions.Parse(redis);
         options.ClientName = "Mare";
         options.ChannelPrefix = "UserData";
         ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
         services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
-
-        services.AddGrpcClient<ClientMessageService.ClientMessageServiceClient>("MessageClient", c =>
-        {
-            c.Address = new Uri(mareConfig.GetValue<string>(nameof(ServicesConfiguration.MainServerGrpcAddress)));
-        }).ConfigureChannel(c =>
-        {
-            c.ServiceConfig = new ServiceConfig { MethodConfigs = { noRetryConfig } };
-            c.HttpHandler = new SocketsHttpHandler()
-            {
-                EnableMultipleHttp2Connections = true
-            };
-        });
 
         var signalRServiceBuilder = services.AddSignalR(hubOptions =>
         {
