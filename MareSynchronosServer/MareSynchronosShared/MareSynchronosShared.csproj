@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
+		<TargetFramework>net8.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 	</PropertyGroup>
 
@@ -19,7 +19,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="ByteSize" Version="2.1.2" />
-		<PackageReference Include="EFCore.NamingConventions" Version="7.0.2" />
+		<PackageReference Include="EFCore.NamingConventions" Version="8.0.3" />
 		<PackageReference Include="Grpc.AspNetCore" Version="2.62.0" />
 		<PackageReference Include="IDisposableAnalyzers" Version="4.0.7">
 		  <PrivateAssets>all</PrivateAssets>
@@ -35,20 +35,20 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.AspNetCore.Authentication" Version="2.2.0" />
 		<PackageReference Include="Microsoft.AspNetCore.Authentication.Core" Version="2.2.0" />
-		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="7.0.18" />
-		<PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="7.0.18" />
-		<PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="7.0.18" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="7.0.18" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="7.0.18" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.18">
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.4" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Protocols.MessagePack" Version="8.0.4" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="8.0.4" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.4" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.4">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="7.0.18" />
+		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.4" />
 		<PackageReference Include="Microsoft.IdentityModel.Tokens" Version="7.5.1" />
-		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.11" />
-		<PackageReference Include="prometheus-net" Version="7.0.0" />
-		<PackageReference Include="prometheus-net.AspNetCore" Version="7.0.0" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.2" />
+		<PackageReference Include="prometheus-net" Version="8.2.1" />
+		<PackageReference Include="prometheus-net.AspNetCore" Version="8.2.1" />
 		<PackageReference Include="StackExchange.Redis" Version="2.7.33" />
 		<PackageReference Include="StackExchange.Redis.Extensions.AspNetCore" Version="10.2.0" />
 		<PackageReference Include="StackExchange.Redis.Extensions.Core" Version="10.2.0" />
