@@ -2,7 +2,6 @@
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MaxMind.GeoIP2;
-using System.Reflection.Metadata.Ecma335;
 
 namespace MareSynchronosServer.Services;
 
