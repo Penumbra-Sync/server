@@ -2,6 +2,7 @@
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
 using MaxMind.GeoIP2;
+using System.Reflection.Metadata.Ecma335;
 
 namespace MareSynchronosServer.Services;
 
@@ -10,7 +11,7 @@ public class GeoIPService : IHostedService
     private readonly ILogger<GeoIPService> _logger;
     private readonly IConfigurationService<ServerConfiguration> _mareConfiguration;
     private bool _useGeoIP = false;
-    private string _countryFile = string.Empty;
+    private string _cityFile = string.Empty;
     private DatabaseReader? _dbReader;
     private DateTime _dbLastWriteTime = DateTime.Now;
     private CancellationTokenSource _fileWriteTimeCheckCts = new();
@@ -38,9 +39,23 @@ public class GeoIPService : IHostedService
             waitCts.CancelAfter(TimeSpan.FromSeconds(5));
             while (_processingReload) await Task.Delay(100, waitCts.Token).ConfigureAwait(false);
 
-            if (_dbReader.TryCountry(ip, out var response))
+            if (_dbReader.TryCity(ip, out var response))
             {
-                return response.Continent.Code;
+                var continent = response.Continent.Code;
+                if (string.Equals(continent, "NA", StringComparison.Ordinal) 
+                    && response.Location.Longitude != null)
+                {
+                    if (response.Location.Longitude < -102)
+                    {
+                        continent = "NA-W";
+                    }
+                    else
+                    {
+                        continent = "NA-E";
+                    }
+                }
+
+                return continent;
             }
 
             return "*";
@@ -71,20 +86,20 @@ public class GeoIPService : IHostedService
                 _processingReload = true;
 
                 var useGeoIP = _mareConfiguration.GetValueOrDefault(nameof(ServerConfiguration.UseGeoIP), false);
-                var countryFile = _mareConfiguration.GetValueOrDefault(nameof(ServerConfiguration.GeoIPDbCountryFile), string.Empty);
-                var lastWriteTime = new FileInfo(countryFile).LastWriteTimeUtc;
-                if (useGeoIP && (!string.Equals(countryFile, _countryFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime != _dbLastWriteTime))
+                var cityFile = _mareConfiguration.GetValueOrDefault(nameof(ServerConfiguration.GeoIPDbCityFile), string.Empty);
+                var lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
+                if (useGeoIP && (!string.Equals(cityFile, _cityFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime != _dbLastWriteTime))
                 {
-                    _countryFile = countryFile;
-                    if (!File.Exists(_countryFile)) throw new FileNotFoundException($"Could not open GeoIP Country Database, path does not exist: {_countryFile}");
+                    _cityFile = cityFile;
+                    if (!File.Exists(_cityFile)) throw new FileNotFoundException($"Could not open GeoIP City Database, path does not exist: {_cityFile}");
                     _dbReader?.Dispose();
                     _dbReader = null;
-                    _dbReader = new DatabaseReader(_countryFile);
+                    _dbReader = new DatabaseReader(_cityFile);
                     _dbLastWriteTime = lastWriteTime;
 
-                    _ = _dbReader.Country("8.8.8.8").Continent;
+                    _ = _dbReader.City("8.8.8.8").Continent;
 
-                    _logger.LogInformation($"Loaded GeoIP country file from {_countryFile}");
+                    _logger.LogInformation($"Loaded GeoIP city file from {_cityFile}");
 
                     if (_useGeoIP != useGeoIP)
                     {
