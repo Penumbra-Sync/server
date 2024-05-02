@@ -115,6 +115,10 @@ public sealed class CachedFileProvider : IDisposable
             File.Copy(coldStorageFilePath.FullName, tempFileName, true);
             File.Move(tempFileName, destinationFilePath, true);
             coldStorageFilePath.LastAccessTimeUtc = DateTime.UtcNow;
+            var destinationFile = new FileInfo(destinationFilePath);
+            destinationFile.LastAccessTimeUtc = DateTime.UtcNow;
+            destinationFile.CreationTimeUtc = DateTime.UtcNow;
+            destinationFile.LastWriteTimeUtc = DateTime.UtcNow;
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, new FileInfo(destinationFilePath).Length);
             return true;
