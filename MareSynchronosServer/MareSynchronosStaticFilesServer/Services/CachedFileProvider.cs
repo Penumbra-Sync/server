@@ -112,9 +112,9 @@ public sealed class CachedFileProvider : IDisposable
         {
             _logger.LogDebug("Copying {hash} from cold storage: {path}", hash, coldStorageFilePath);
             var tempFileName = destinationFilePath + ".dl";
-            coldStorageFilePath.LastWriteTimeUtc = DateTime.UtcNow;
             File.Copy(coldStorageFilePath.FullName, tempFileName, true);
             File.Move(tempFileName, destinationFilePath, true);
+            coldStorageFilePath.LastAccessTimeUtc = DateTime.UtcNow;
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, new FileInfo(destinationFilePath).Length);
             return true;
