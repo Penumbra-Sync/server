@@ -60,6 +60,8 @@ public class Startup
             MetricsAPI.CounterFileRequestSize
         }, new List<string>
         {
+            MetricsAPI.GaugeFilesTotalColdStorage,
+            MetricsAPI.GaugeFilesTotalSizeColdStorage,
             MetricsAPI.GaugeFilesTotalSize,
             MetricsAPI.GaugeFilesTotal,
             MetricsAPI.GaugeFilesUniquePastDay,
