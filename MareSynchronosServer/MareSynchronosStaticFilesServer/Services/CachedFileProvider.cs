@@ -105,14 +105,15 @@ public sealed class CachedFileProvider : IDisposable
         string coldStorageDir = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageDirectory), string.Empty);
         if (string.IsNullOrEmpty(coldStorageDir)) return false;
 
-        var coldStorageFilePath = FilePathUtil.GetFilePath(coldStorageDir, hash);
-        if (!File.Exists(coldStorageFilePath)) return false;
+        var coldStorageFilePath = FilePathUtil.GetFileInfoForHash(coldStorageDir, hash);
+        if (coldStorageFilePath == null) return false;
 
         try
         {
             _logger.LogDebug("Copying {hash} from cold storage: {path}", hash, coldStorageFilePath);
             var tempFileName = destinationFilePath + ".dl";
-            File.Copy(coldStorageFilePath, tempFileName, true);
+            coldStorageFilePath.LastWriteTimeUtc = DateTime.UtcNow;
+            File.Copy(coldStorageFilePath.FullName, tempFileName, true);
             File.Move(tempFileName, destinationFilePath, true);
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotal);
             _metrics.IncGauge(MetricsAPI.GaugeFilesTotalSize, new FileInfo(destinationFilePath).Length);
@@ -165,6 +166,8 @@ public sealed class CachedFileProvider : IDisposable
     {
         var fi = FilePathUtil.GetFileInfoForHash(_hotStoragePath, hash);
         if (fi == null) return null;
+
+        fi.LastAccessTimeUtc = DateTime.UtcNow;
 
         _fileStatisticsService.LogFile(hash, fi.Length);
 
