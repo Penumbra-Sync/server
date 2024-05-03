@@ -46,7 +46,7 @@ public class MainFileCleanupService : IHostedService
                     var allFilesInColdStorageDir = dirColdStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
 
                     var coldStorageRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageUnusedFileRetentionPeriodInDays), 60);
-                    var coldStorageSize = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
+                    var coldStorageSize = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
 
                     // clean up cold storage
                     var remainingColdFiles = await CleanUpOutdatedFiles(coldStorageDir, allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
