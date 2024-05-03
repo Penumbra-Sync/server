@@ -76,12 +76,12 @@ public class MainFileCleanupService : IHostedService
                     isColdStorage: false, deleteFromDb: !useColdStorage,
                     dbContext, ct);
 
-                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, finalRemainingHotFiles.Sum(f => f.Length));
-                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, finalRemainingHotFiles.Count);
-
                 CleanUpStuckUploads(dbContext);
 
                 await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, finalRemainingHotFiles.Sum(f => { try { return f.Length; } catch { return 0; } }));
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, finalRemainingHotFiles.Count);
             }
             catch (Exception e)
             {
@@ -143,7 +143,7 @@ public class MainFileCleanupService : IHostedService
                     dbContext.Entry(f).State = EntityState.Deleted;
             }
 
-            return files;
+            return allLocalFiles;
         }
         catch (Exception ex)
         {
