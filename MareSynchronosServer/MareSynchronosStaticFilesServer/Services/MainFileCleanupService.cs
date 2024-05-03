@@ -3,6 +3,7 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
+using MareSynchronosStaticFilesServer.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosStaticFilesServer.Services;
@@ -48,7 +49,7 @@ public class MainFileCleanupService : IHostedService
                     var coldStorageSize = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
 
                     // clean up cold storage
-                    var remainingColdFiles = await CleanUpOutdatedFiles(allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
+                    var remainingColdFiles = await CleanUpOutdatedFiles(coldStorageDir, allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
                         isColdStorage: true, deleteFromDb: true,
                         dbContext, ct).ConfigureAwait(false);
                     var finalRemainingColdFiles = CleanUpFilesBeyondSizeLimit(remainingColdFiles, coldStorageSize,
@@ -67,7 +68,7 @@ public class MainFileCleanupService : IHostedService
                 var forcedDeletionAfterHours = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
                 var sizeLimit = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.CacheSizeHardLimitInGiB), -1);
 
-                var remainingHotFiles = await CleanUpOutdatedFiles(allFilesInHotStorage, unusedRetention, forcedDeletionAfterHours,
+                var remainingHotFiles = await CleanUpOutdatedFiles(hotStorageDir, allFilesInHotStorage, unusedRetention, forcedDeletionAfterHours,
                     isColdStorage: false, deleteFromDb: !useColdStorage,
                     dbContext, ct).ConfigureAwait(false);
 
@@ -163,6 +164,7 @@ public class MainFileCleanupService : IHostedService
                 _metrics.DecGauge(MetricsAPI.GaugeFilesTotal);
                 file.Delete();
                 _logger.LogInformation("File not in DB, deleting: {fileName}", file.Name);
+                allPhysicalFiles.Remove(file);
             }
 
             ct.ThrowIfCancellationRequested();
@@ -171,7 +173,7 @@ public class MainFileCleanupService : IHostedService
         return allPhysicalFiles;
     }
 
-    private async Task<List<FileInfo>> CleanUpOutdatedFiles(List<FileInfo> allFilesInDir, int unusedRetention, int forcedDeletionAfterHours,
+    private async Task<List<FileInfo>> CleanUpOutdatedFiles(string dir, List<FileInfo> allFilesInDir, int unusedRetention, int forcedDeletionAfterHours,
         bool isColdStorage, bool deleteFromDb, MareDbContext dbContext, CancellationToken ct)
     {
         try
@@ -186,12 +188,13 @@ public class MainFileCleanupService : IHostedService
             var prevTime = DateTime.Now.Subtract(TimeSpan.FromDays(unusedRetention));
             var prevTimeForcedDeletion = DateTime.Now.Subtract(TimeSpan.FromHours(forcedDeletionAfterHours));
             List<FileCache> allDbFiles = await dbContext.Files.ToListAsync(ct).ConfigureAwait(false);
+            List<string> removedFileHashes = new List<string>();
             int fileCounter = 0;
 
             foreach (var fileCache in allDbFiles.Where(f => f.Uploaded))
             {
                 bool deleteCurrentFile = false;
-                var file = allFilesInDir.Find(f => string.Equals(f.Name, fileCache.Hash, StringComparison.OrdinalIgnoreCase));
+                var file = FilePathUtil.GetFileInfoForHash(dir, fileCache.Hash);
                 if (file == null)
                 {
                     _logger.LogInformation("File does not exist anymore: {fileName}", fileCache.Hash);
@@ -213,7 +216,7 @@ public class MainFileCleanupService : IHostedService
                 {
                     if (file != null) file.Delete();
 
-                    allFilesInDir.Remove(file);
+                    removedFileHashes.Add(fileCache.Hash);
 
                     if (deleteFromDb)
                         dbContext.Files.Remove(fileCache);
@@ -235,7 +238,7 @@ public class MainFileCleanupService : IHostedService
             }
 
             // clean up files that are on disk but not in DB for some reason
-            return CleanUpOrphanedFiles(allDbFiles, allFilesInDir, ct);
+            return CleanUpOrphanedFiles(allDbFiles, allFilesInDir.Where(c => !removedFileHashes.Contains(c.Name, StringComparer.OrdinalIgnoreCase)).ToList(), ct);
         }
         catch (Exception ex)
         {
