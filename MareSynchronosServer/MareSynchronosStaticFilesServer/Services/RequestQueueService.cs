@@ -2,6 +2,7 @@
 using MareSynchronosShared.Services;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Timers;
 
 namespace MareSynchronosStaticFilesServer.Services;
@@ -169,7 +170,8 @@ public class RequestQueueService : IHostedService
 
                     while (true)
                     {
-                        if (_priorityQueue.TryDequeue(out var prioRequest))
+                        if (!_priorityQueue.All(u => _cachedFileProvider.AnyFilesDownloading(u.FileIds))
+                            && _priorityQueue.TryDequeue(out var prioRequest))
                         {
                             if (prioRequest.IsCancelled)
                             {
@@ -177,13 +179,17 @@ public class RequestQueueService : IHostedService
                             }
 
                             if (_cachedFileProvider.AnyFilesDownloading(prioRequest.FileIds))
+                            {
                                 _priorityQueue.Enqueue(prioRequest);
+                                continue;
+                            }
 
                             DequeueIntoSlot(prioRequest, i);
                             break;
                         }
 
-                        if (_queue.TryDequeue(out var request))
+                        if (!_queue.All(u => _cachedFileProvider.AnyFilesDownloading(u.FileIds))
+                            && _queue.TryDequeue(out var request))
                         {
                             if (request.IsCancelled)
                             {
@@ -191,7 +197,10 @@ public class RequestQueueService : IHostedService
                             }
 
                             if (_cachedFileProvider.AnyFilesDownloading(request.FileIds))
+                            {
                                 _queue.Enqueue(request);
+                                continue;
+                            }
 
                             DequeueIntoSlot(request, i);
                             break;
