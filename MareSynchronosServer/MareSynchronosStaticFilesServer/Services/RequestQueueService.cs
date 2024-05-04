@@ -169,30 +169,30 @@ public class RequestQueueService : IHostedService
 
                     while (true)
                     {
-                        if (_priorityQueue.TryPeek(out var prioRequest))
+                        if (_priorityQueue.TryDequeue(out var prioRequest))
                         {
                             if (prioRequest.IsCancelled)
                             {
-                                _priorityQueue.TryDequeue(out var _);
                                 continue;
                             }
-                            if (_cachedFileProvider.AnyFilesDownloading(prioRequest.FileIds)) continue;
 
-                            _priorityQueue.TryDequeue(out var priorityRequest);
-                            DequeueIntoSlot(priorityRequest, i);
+                            if (_cachedFileProvider.AnyFilesDownloading(prioRequest.FileIds))
+                                _priorityQueue.Enqueue(prioRequest);
+
+                            DequeueIntoSlot(prioRequest, i);
                             break;
                         }
 
-                        if (_queue.TryPeek(out var request))
+                        if (_queue.TryDequeue(out var request))
                         {
                             if (request.IsCancelled)
                             {
-                                _queue.TryDequeue(out var _);
                                 continue;
                             }
-                            if (_cachedFileProvider.AnyFilesDownloading(request.FileIds)) continue;
 
-                            _queue.TryDequeue(out var priorityRequest);
+                            if (_cachedFileProvider.AnyFilesDownloading(request.FileIds))
+                                _queue.Enqueue(request);
+
                             DequeueIntoSlot(request, i);
                             break;
                         }
