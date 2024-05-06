@@ -61,6 +61,8 @@ public class Startup
     {
         var mareConfig = _configuration.GetRequiredSection("MareSynchronos");
 
+        services.AddHttpContextAccessor();
+
         ConfigureRedis(services, mareConfig);
 
         services.AddSingleton<SecretKeyAuthenticatorService>();
