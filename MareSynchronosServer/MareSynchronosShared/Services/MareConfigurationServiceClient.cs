@@ -28,7 +28,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
         if (_config.CurrentValue.GetType() == typeof(ServerConfiguration))
             return new Uri((_config.CurrentValue as ServerConfiguration).MainServerAddress, $"configuration/MareServerConfiguration/{nameof(MareServerConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
         if (_config.CurrentValue.GetType() == typeof(MareConfigurationBase))
-            return new Uri((_config.CurrentValue as MareConfigurationBase).MainServerAddress, $"configuration/MareAuthBaseConfiguration/{nameof(MareAuthBaseConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+            return new Uri((_config.CurrentValue as MareConfigurationBase).MainServerAddress, $"configuration/MareBaseConfiguration/{nameof(MareBaseConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
         if (_config.CurrentValue.GetType() == typeof(ServicesConfiguration))
             return new Uri((_config.CurrentValue as ServicesConfiguration).MainServerAddress, $"configuration/MareServicesConfiguration/{nameof(MareServicesConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
         if (_config.CurrentValue.GetType() == typeof(StaticFilesServerConfiguration))

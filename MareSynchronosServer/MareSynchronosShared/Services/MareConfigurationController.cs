@@ -37,9 +37,9 @@ public class MareStaticFilesServerConfigurationController : MareConfigurationCon
     }
 }
 
-public class MareAuthBaseConfigurationController : MareConfigurationController<MareConfigurationAuthBase>
+public class MareBaseConfigurationController : MareConfigurationController<MareConfigurationBase>
 {
-    public MareAuthBaseConfigurationController(IOptionsMonitor<MareConfigurationAuthBase> config, ILogger<MareAuthBaseConfigurationController> logger) : base(config, logger)
+    public MareBaseConfigurationController(IOptionsMonitor<MareConfigurationBase> config, ILogger<MareBaseConfigurationController> logger) : base(config, logger)
     {
     }
 }
