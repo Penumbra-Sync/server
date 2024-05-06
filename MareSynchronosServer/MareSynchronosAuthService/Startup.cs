@@ -81,6 +81,8 @@ public class Startup
 
         ConfigureConfigServices(services);
 
+        ConfigureMetrics(services);
+
         services.AddHealthChecks();
         services.AddControllers().ConfigureApplicationPartManager(a =>
         {
