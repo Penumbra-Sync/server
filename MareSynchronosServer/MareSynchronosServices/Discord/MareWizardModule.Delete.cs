@@ -2,6 +2,7 @@
 using Discord;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosServices.Discord;
 

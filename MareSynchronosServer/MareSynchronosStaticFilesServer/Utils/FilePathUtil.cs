@@ -1,6 +1,4 @@
-﻿using System.Text.RegularExpressions;
-
-namespace MareSynchronosStaticFilesServer.Utils;
+﻿namespace MareSynchronosStaticFilesServer.Utils;
 
 public static partial class FilePathUtil
 {

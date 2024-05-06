@@ -1,5 +1,6 @@
 ﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils.Configuration;
 using MareSynchronosStaticFilesServer.Services;
 
 namespace MareSynchronosStaticFilesServer.Utils;

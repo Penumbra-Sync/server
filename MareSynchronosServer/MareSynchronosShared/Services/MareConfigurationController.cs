@@ -1,5 +1,4 @@
-﻿using MareSynchronosShared.Utils;
-using MareSynchronosStaticFilesServer;
+﻿using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;

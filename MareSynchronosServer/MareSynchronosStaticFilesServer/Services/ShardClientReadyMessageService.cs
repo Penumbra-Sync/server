@@ -1,6 +1,7 @@
 ﻿using MareSynchronos.API.Routes;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 using System.Net.Http.Headers;
 
 namespace MareSynchronosStaticFilesServer.Services;

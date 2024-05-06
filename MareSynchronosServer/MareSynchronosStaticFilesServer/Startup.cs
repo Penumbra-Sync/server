@@ -20,6 +20,7 @@ using StackExchange.Redis.Extensions.System.Text.Json;
 using StackExchange.Redis;
 using System.Net;
 using System.Text;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosStaticFilesServer;
 
@@ -47,7 +48,7 @@ public class Startup
         services.AddLogging();
 
         services.Configure<StaticFilesServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
-        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<KestrelServerOptions>(Configuration.GetSection("Kestrel"));
         services.AddSingleton(Configuration);
 
@@ -88,8 +89,8 @@ public class Startup
         services.AddSingleton<RequestQueueService>();
         services.AddHostedService(p => p.GetService<RequestQueueService>());
         services.AddHostedService(m => m.GetService<FileStatisticsService>());
-        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
-        services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
+        services.AddSingleton<IConfigurationService<MareConfigurationBase>, MareConfigurationServiceClient<MareConfigurationBase>>();
+        services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationBase>)p.GetService<IConfigurationService<MareConfigurationBase>>());
 
         // specific services
         if (_isMain)
@@ -198,7 +199,7 @@ public class Startup
 
         // authentication and authorization 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<IConfigurationService<MareConfigurationAuthBase>>((o, s) =>
+            .Configure<IConfigurationService<MareConfigurationBase>>((o, s) =>
             {
                 o.TokenValidationParameters = new()
                 {
@@ -206,7 +207,7 @@ public class Startup
                     ValidateLifetime = true,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt))))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(s.GetValue<string>(nameof(MareConfigurationBase.Jwt))))
                 };
             });
         services.AddAuthentication(o =>
@@ -232,7 +233,7 @@ public class Startup
 
         app.UseRouting();
 
-        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationBase>>();
 
         var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4981));
         metricServer.Start();

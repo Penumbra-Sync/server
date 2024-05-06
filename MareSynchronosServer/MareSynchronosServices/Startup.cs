@@ -8,6 +8,7 @@ using MareSynchronosShared.Services;
 using StackExchange.Redis;
 using MessagePack.Resolvers;
 using MessagePack;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosServices;
 
@@ -22,7 +23,7 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
-        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationBase>>();
 
         var metricServer = new KestrelMetricServer(config.GetValueOrDefault<int>(nameof(MareConfigurationBase.MetricsPort), 4982));
         metricServer.Start();
@@ -88,16 +89,16 @@ public class Startup
 
         services.Configure<ServicesConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
-        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
+        services.Configure<MareConfigurationBase>(Configuration.GetRequiredSection("MareSynchronos"));
         services.AddSingleton(Configuration);
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<DiscordBotServices>();
         services.AddHostedService<DiscordBot>();
         services.AddSingleton<IConfigurationService<ServicesConfiguration>, MareConfigurationServiceServer<ServicesConfiguration>>();
         services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
-        services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
+        services.AddSingleton<IConfigurationService<MareConfigurationBase>, MareConfigurationServiceClient<MareConfigurationBase>>();
 
-        services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
+        services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationBase>)p.GetService<IConfigurationService<MareConfigurationBase>>());
         services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());
     }
 }

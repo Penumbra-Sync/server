@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using MareSynchronosShared.Utils;
 using MareSynchronos.API.Routes;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosStaticFilesServer.Services;
 

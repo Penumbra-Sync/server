@@ -1,6 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
-using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 using System.Text.Json;
 
 namespace MareSynchronosServices.Discord;

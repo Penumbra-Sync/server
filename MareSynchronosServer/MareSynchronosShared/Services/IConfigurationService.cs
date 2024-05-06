@@ -1,4 +1,4 @@
-﻿using MareSynchronosShared.Utils;
+﻿using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosShared.Services;
 

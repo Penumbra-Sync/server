@@ -8,6 +8,7 @@ using MareSynchronosShared.Utils;
 using MareSynchronosShared.Services;
 using StackExchange.Redis;
 using MareSynchronos.API.Data.Enum;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosServices.Discord;
 

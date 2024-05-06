@@ -13,7 +13,6 @@ using Prometheus;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using MareSynchronosServer.Authentication;
 using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Configuration;
 using System.Net;
@@ -24,6 +23,7 @@ using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using MareSynchronosServer.Controllers;
 using MareSynchronosShared.RequirementHandlers;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosServer;
 
@@ -71,7 +71,7 @@ public class Startup
             a.FeatureProviders.Remove(a.FeatureProviders.OfType<ControllerFeatureProvider>().First());
             if (mareConfig.GetValue<Uri>(nameof(ServerConfiguration.MainServerAddress), defaultValue: null) == null)
             {
-                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareServerConfigurationController), typeof(MareAuthBaseConfigurationController), typeof(JwtController), typeof(ClientMessageController)));
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareServerConfigurationController), typeof(MareAuthBaseConfigurationController), typeof(ClientMessageController)));
             }
             else
             {
@@ -86,7 +86,6 @@ public class Startup
 
         services.Configure<ServerConfiguration>(Configuration.GetRequiredSection("MareSynchronos"));
         services.Configure<MareConfigurationBase>(Configuration.GetRequiredSection("MareSynchronos"));
-        services.Configure<MareConfigurationAuthBase>(Configuration.GetRequiredSection("MareSynchronos"));
 
         services.AddSingleton<ServerTokenGenerator>();
         services.AddSingleton<SystemInfoService>();
@@ -100,10 +99,8 @@ public class Startup
 
         if (isMainServer)
         {
-            services.AddSingleton<GeoIPService>();
             services.AddSingleton<UserCleanupService>();
             services.AddHostedService(provider => provider.GetService<UserCleanupService>());
-            services.AddHostedService(provider => provider.GetService<GeoIPService>());
         }
     }
 
@@ -188,13 +185,12 @@ public class Startup
 
     private static void ConfigureAuthorization(IServiceCollection services)
     {
-        services.AddSingleton<SecretKeyAuthenticatorService>();
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenHubRequirementHandler>();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
-            .Configure<IConfigurationService<MareConfigurationAuthBase>>((options, config) =>
+            .Configure<IConfigurationService<MareConfigurationBase>>((options, config) =>
             {
                 options.TokenValidationParameters = new()
                 {
@@ -202,7 +198,7 @@ public class Startup
                     ValidateLifetime = true,
                     ValidateAudience = false,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(config.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt)))),
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(config.GetValue<string>(nameof(MareConfigurationBase.Jwt)))),
                 };
             });
 
@@ -305,15 +301,15 @@ public class Startup
         if (!isMainServer)
         {
             services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceClient<ServerConfiguration>>();
-            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceClient<MareConfigurationAuthBase>>();
+            services.AddSingleton<IConfigurationService<MareConfigurationBase>, MareConfigurationServiceClient<MareConfigurationBase>>();
 
             services.AddHostedService(p => (MareConfigurationServiceClient<ServerConfiguration>)p.GetService<IConfigurationService<ServerConfiguration>>());
-            services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationAuthBase>)p.GetService<IConfigurationService<MareConfigurationAuthBase>>());
+            services.AddHostedService(p => (MareConfigurationServiceClient<MareConfigurationBase>)p.GetService<IConfigurationService<MareConfigurationBase>>());
         }
         else
         {
             services.AddSingleton<IConfigurationService<ServerConfiguration>, MareConfigurationServiceServer<ServerConfiguration>>();
-            services.AddSingleton<IConfigurationService<MareConfigurationAuthBase>, MareConfigurationServiceServer<MareConfigurationAuthBase>>();
+            services.AddSingleton<IConfigurationService<MareConfigurationBase>, MareConfigurationServiceServer<MareConfigurationBase>>();
         }
     }
 
@@ -321,7 +317,7 @@ public class Startup
     {
         logger.LogInformation("Running Configure");
 
-        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationAuthBase>>();
+        var config = app.ApplicationServices.GetRequiredService<IConfigurationService<MareConfigurationBase>>();
 
         app.UseIpRateLimiting();
 

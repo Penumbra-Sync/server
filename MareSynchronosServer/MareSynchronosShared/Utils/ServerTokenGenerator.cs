@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using MareSynchronosShared.Utils.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Globalization;
@@ -10,7 +11,7 @@ namespace MareSynchronosShared.Utils;
 
 public class ServerTokenGenerator
 {
-    private readonly IOptionsMonitor<MareConfigurationAuthBase> _configuration;
+    private readonly IOptionsMonitor<MareConfigurationBase> _configuration;
     private readonly ILogger<ServerTokenGenerator> _logger;
 
     private Dictionary<string, string> _tokenDictionary { get; set; } = new(StringComparer.Ordinal);
@@ -28,7 +29,7 @@ public class ServerTokenGenerator
         }
     }
 
-    public ServerTokenGenerator(IOptionsMonitor<MareConfigurationAuthBase> configuration, ILogger<ServerTokenGenerator> logger)
+    public ServerTokenGenerator(IOptionsMonitor<MareConfigurationBase> configuration, ILogger<ServerTokenGenerator> logger)
     {
         _configuration = configuration;
         _logger = logger;

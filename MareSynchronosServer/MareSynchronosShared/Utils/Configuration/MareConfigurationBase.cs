@@ -2,13 +2,14 @@
 using System.Text;
 using System.Text.Json;
 
-namespace MareSynchronosShared.Utils;
+namespace MareSynchronosShared.Utils.Configuration;
 
 public class MareConfigurationBase : IMareConfiguration
 {
     public int DbContextPoolSize { get; set; } = 100;
     public string Jwt { get; set; } = string.Empty;
     public Uri MainServerAddress { get; set; }
+    public int RedisPool { get; set; } = 50;
     public int MetricsPort { get; set; }
     public string RedisConnectionString { get; set; } = string.Empty;
     public string ShardName { get; set; } = string.Empty;

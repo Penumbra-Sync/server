@@ -1,14 +1,14 @@
 ﻿using MareSynchronosShared;
 using MareSynchronosShared.Services;
-using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 using MaxMind.GeoIP2;
 
-namespace MareSynchronosServer.Services;
+namespace MareSynchronosAuthService.Services;
 
 public class GeoIPService : IHostedService
 {
     private readonly ILogger<GeoIPService> _logger;
-    private readonly IConfigurationService<ServerConfiguration> _mareConfiguration;
+    private readonly IConfigurationService<AuthServiceConfiguration> _mareConfiguration;
     private bool _useGeoIP = false;
     private string _cityFile = string.Empty;
     private DatabaseReader? _dbReader;
@@ -17,7 +17,7 @@ public class GeoIPService : IHostedService
     private bool _processingReload = false;
 
     public GeoIPService(ILogger<GeoIPService> logger,
-        IConfigurationService<ServerConfiguration> mareConfiguration)
+        IConfigurationService<AuthServiceConfiguration> mareConfiguration)
     {
         _logger = logger;
         _mareConfiguration = mareConfiguration;
@@ -38,11 +38,12 @@ public class GeoIPService : IHostedService
             waitCts.CancelAfter(TimeSpan.FromSeconds(5));
             while (_processingReload) await Task.Delay(100, waitCts.Token).ConfigureAwait(false);
 
-            if (_dbReader.TryCity(ip, out var response))
+            if (_dbReader!.TryCity(ip, out var response))
             {
-                var continent = response.Continent.Code;
-                if (string.Equals(continent, "NA", StringComparison.Ordinal) 
-                    && response.Location.Longitude != null)
+                string? continent = response?.Continent.Code;
+                if (!string.IsNullOrEmpty(continent) &&
+                    string.Equals(continent, "NA", StringComparison.Ordinal)
+                    && response?.Location.Longitude != null)
                 {
                     if (response.Location.Longitude < -102)
                     {
@@ -84,8 +85,8 @@ public class GeoIPService : IHostedService
             {
                 _processingReload = true;
 
-                var useGeoIP = _mareConfiguration.GetValueOrDefault(nameof(ServerConfiguration.UseGeoIP), false);
-                var cityFile = _mareConfiguration.GetValueOrDefault(nameof(ServerConfiguration.GeoIPDbCityFile), string.Empty);
+                var useGeoIP = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.UseGeoIP), false);
+                var cityFile = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.GeoIPDbCityFile), string.Empty);
                 var lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
                 if (useGeoIP && (!string.Equals(cityFile, _cityFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime != _dbLastWriteTime))
                 {
@@ -131,7 +132,7 @@ public class GeoIPService : IHostedService
     {
         _fileWriteTimeCheckCts.Cancel();
         _fileWriteTimeCheckCts.Dispose();
-        _dbReader.Dispose();
+        _dbReader?.Dispose();
         return Task.CompletedTask;
     }
 }

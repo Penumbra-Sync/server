@@ -1,5 +1,5 @@
 ﻿using MareSynchronosShared.Utils;
-using MareSynchronosStaticFilesServer;
+using MareSynchronosShared.Utils.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,8 +27,8 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
     {
         if (_config.CurrentValue.GetType() == typeof(ServerConfiguration))
             return new Uri((_config.CurrentValue as ServerConfiguration).MainServerAddress, $"configuration/MareServerConfiguration/{nameof(MareServerConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
-        if (_config.CurrentValue.GetType() == typeof(MareConfigurationAuthBase))
-            return new Uri((_config.CurrentValue as MareConfigurationAuthBase).MainServerAddress, $"configuration/MareAuthBaseConfiguration/{nameof(MareAuthBaseConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
+        if (_config.CurrentValue.GetType() == typeof(MareConfigurationBase))
+            return new Uri((_config.CurrentValue as MareConfigurationBase).MainServerAddress, $"configuration/MareAuthBaseConfiguration/{nameof(MareAuthBaseConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
         if (_config.CurrentValue.GetType() == typeof(ServicesConfiguration))
             return new Uri((_config.CurrentValue as ServicesConfiguration).MainServerAddress, $"configuration/MareServicesConfiguration/{nameof(MareServicesConfigurationController.GetConfigurationEntry)}?key={key}&defaultValue={value}");
         if (_config.CurrentValue.GetType() == typeof(StaticFilesServerConfiguration))

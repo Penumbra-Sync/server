@@ -1,7 +1,7 @@
 using MareSynchronosServices;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Services;
-using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 
 public class Program
 {

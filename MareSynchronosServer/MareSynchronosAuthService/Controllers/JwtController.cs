@@ -1,11 +1,11 @@
 ﻿using MareSynchronos.API.Routes;
-using MareSynchronosServer.Authentication;
-using MareSynchronosServer.Services;
+using MareSynchronosAuthService.Services;
 using MareSynchronosShared;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +16,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace MareSynchronosServer.Controllers;
+namespace MareSynchronosAuthService.Controllers;
 
 [AllowAnonymous]
 [Route(MareAuth.Auth)]
@@ -24,7 +24,7 @@ public class JwtController : Controller
 {
     private readonly ILogger<JwtController> _logger;
     private readonly IHttpContextAccessor _accessor;
-    private readonly IConfigurationService<MareConfigurationAuthBase> _configuration;
+    private readonly IConfigurationService<AuthServiceConfiguration> _configuration;
     private readonly MareDbContext _mareDbContext;
     private readonly IRedisDatabase _redis;
     private readonly GeoIPService _geoIPProvider;
@@ -33,7 +33,7 @@ public class JwtController : Controller
     public JwtController(ILogger<JwtController> logger,
         IHttpContextAccessor accessor, MareDbContext mareDbContext,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
-        IConfigurationService<MareConfigurationAuthBase> configuration,
+        IConfigurationService<AuthServiceConfiguration> configuration,
         IRedisDatabase redisDb, GeoIPService geoIPProvider)
     {
         _logger = logger;
@@ -138,7 +138,7 @@ public class JwtController : Controller
 
     private JwtSecurityToken CreateJwt(IEnumerable<Claim> authClaims)
     {
-        var authSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_configuration.GetValue<string>(nameof(MareConfigurationAuthBase.Jwt))));
+        var authSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(_configuration.GetValue<string>(nameof(MareConfigurationBase.Jwt))));
 
         var token = new SecurityTokenDescriptor()
         {

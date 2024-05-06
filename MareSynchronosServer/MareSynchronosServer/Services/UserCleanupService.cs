@@ -3,6 +3,7 @@ using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils;
+using MareSynchronosShared.Utils.Configuration;
 using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Services;

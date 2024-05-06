@@ -1,8 +1,8 @@
 ﻿using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils.Configuration;
 using MareSynchronosStaticFilesServer.Utils;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Timers;
 
 namespace MareSynchronosStaticFilesServer.Services;

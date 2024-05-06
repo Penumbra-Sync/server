@@ -1,8 +1,8 @@
 ﻿using System.Text;
 
-namespace MareSynchronosShared.Utils;
+namespace MareSynchronosShared.Utils.Configuration;
 
-public class ServerConfiguration : MareConfigurationAuthBase
+public class ServerConfiguration : MareConfigurationBase
 {
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
@@ -26,15 +26,12 @@ public class ServerConfiguration : MareConfigurationAuthBase
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
     public string GeoIPDbCityFile { get; set; } = string.Empty;
 
-    public int RedisPool { get; set; } = 50;
-
     public override string ToString()
     {
         StringBuilder sb = new();
         sb.AppendLine(base.ToString());
         sb.AppendLine($"{nameof(CdnFullUrl)} => {CdnFullUrl}");
         sb.AppendLine($"{nameof(RedisConnectionString)} => {RedisConnectionString}");
-        sb.AppendLine($"{nameof(RedisPool)} => {RedisPool}");
         sb.AppendLine($"{nameof(ExpectedClientVersion)} => {ExpectedClientVersion}");
         sb.AppendLine($"{nameof(MaxExistingGroupsByUser)} => {MaxExistingGroupsByUser}");
         sb.AppendLine($"{nameof(MaxJoinedGroupsByUser)} => {MaxJoinedGroupsByUser}");
