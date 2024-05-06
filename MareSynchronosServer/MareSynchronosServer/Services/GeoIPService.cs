@@ -54,7 +54,7 @@ public class GeoIPService : IHostedService
                     }
                 }
 
-                return continent;
+                return continent ?? "*";
             }
 
             return "*";
