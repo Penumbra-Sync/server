@@ -1,0 +1,30 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0 as BUILD
+
+RUN git clone --recurse-submodules https://github.com/Penumbra-Sync/server
+
+WORKDIR /server/MareSynchronosServer/MareSynchronosAuthService/
+
+RUN dotnet publish \
+        --configuration=Release \
+        --os=linux \
+        --output=/MareSynchronosAuthService \
+        MareSynchronosAuthService.csproj
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
+
+RUN adduser \
+        --disabled-password \
+        --group \
+        --no-create-home \
+        --quiet \
+        --system \
+        mare
+
+COPY --from=BUILD /MareSynchronosAuthService /opt/MareSynchronosAuthService
+RUN chown -R mare:mare /opt/MareSynchronosAuthService
+RUN apt-get update; apt-get install curl -y
+
+USER mare:mare
+WORKDIR /opt/MareSynchronosAuthService
+
+CMD ["./MareSynchronosAuthService"]

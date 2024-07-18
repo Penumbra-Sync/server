@@ -10,6 +10,7 @@ public class Auth
 
     public string UserUID { get; set; }
     public User User { get; set; }
+    public bool MarkForBan { get; set; }
     public bool IsBanned { get; set; }
     public string? PrimaryUserUID { get; set; }
     public User? PrimaryUser { get; set; }

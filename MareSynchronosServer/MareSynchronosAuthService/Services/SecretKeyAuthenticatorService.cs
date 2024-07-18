@@ -45,23 +45,26 @@ public class SecretKeyAuthenticatorService
                     _failedAuthorizations.Remove(ip, out _);
                 });
             }
-            return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: true, Permaban: false);
+            return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: true, Permaban: false, MarkedForBan: false);
         }
 
         using var context = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
         var authReply = await context.Auth.Include(a => a.User).AsNoTracking()
             .SingleOrDefaultAsync(u => u.HashedKey == hashedSecretKey).ConfigureAwait(false);
         var isBanned = authReply?.IsBanned ?? false;
+        var markedForBan = authReply?.MarkForBan ?? false;
         var primaryUid = authReply?.PrimaryUserUID ?? authReply?.UserUID;
 
         if (authReply?.PrimaryUserUID != null)
         {
-            var primaryUser = await context.Auth.AsNoTracking().SingleOrDefaultAsync(u => u.UserUID == authReply.PrimaryUserUID).ConfigureAwait(false);
+            var primaryUser = await context.Auth.AsNoTracking().SingleAsync(u => u.UserUID == authReply.PrimaryUserUID).ConfigureAwait(false);
             isBanned = isBanned || primaryUser.IsBanned;
+            markedForBan = markedForBan || primaryUser.MarkForBan;
         }
 
         SecretKeyAuthReply reply = new(authReply != null, authReply?.UserUID,
-            authReply?.PrimaryUserUID ?? authReply?.UserUID, authReply?.User?.Alias ?? string.Empty, TempBan: false, isBanned);
+            authReply?.PrimaryUserUID ?? authReply?.UserUID, authReply?.User?.Alias ?? string.Empty,
+            TempBan: false, isBanned, markedForBan);
 
         if (reply.Success)
         {
@@ -94,6 +97,6 @@ public class SecretKeyAuthenticatorService
             }
         }
 
-        return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: false, Permaban: false);
+        return new(Success: false, Uid: null, PrimaryUid: null, Alias: null, TempBan: false, Permaban: false, MarkedForBan: false);
     }
 }

@@ -43,7 +43,6 @@ public class MareDbContext : DbContext
     public DbSet<GroupTempInvite> GroupTempInvites { get; set; }
     public DbSet<LodeStoneAuth> LodeStoneAuth { get; set; }
     public DbSet<UserProfileData> UserProfileData { get; set; }
-    public DbSet<UserProfileDataReport> UserProfileReports { get; set; }
     public DbSet<User> Users { get; set; }
     public DbSet<UserPermissionSet> Permissions { get; set; }
     public DbSet<GroupPairPreferredPermission> GroupPairPreferredPermissions { get; set; }
@@ -79,7 +78,6 @@ public class MareDbContext : DbContext
         modelBuilder.Entity<GroupTempInvite>().HasIndex(c => c.Invite);
         modelBuilder.Entity<UserProfileData>().ToTable("user_profile_data");
         modelBuilder.Entity<UserProfileData>().HasKey(c => c.UserUID);
-        modelBuilder.Entity<UserProfileDataReport>().ToTable("user_profile_data_reports");
         modelBuilder.Entity<UserPermissionSet>().ToTable("user_permission_sets");
         modelBuilder.Entity<UserPermissionSet>().HasKey(u => new { u.UserUID, u.OtherUserUID });
         modelBuilder.Entity<UserPermissionSet>().HasIndex(c => c.UserUID);

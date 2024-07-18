@@ -47,6 +47,21 @@ services:
       start_period: 10s
       timeout: 1s
 
+  mare-auth:
+    image: darkarchon/mare-synchronos-authservice:latest
+    restart: on-failure
+    environment:
+      DOTNET_USE_POLLING_FILE_WATCHER: 1
+    volumes:
+      - ../config/standalone/authservice-standalone.json:/opt/MareSynchronosAuthService/appsettings.json
+      - ../log/authservice-standalone/:/opt/MareSynchronosAuthService/logs/:rw
+      - postgres_socket:/var/run/postgresql/:rw
+    depends_on:
+      mare-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   mare-services:
     image: darkarchon/mare-synchronos-services:latest
     restart: on-failure

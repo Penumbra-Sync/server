@@ -7,9 +7,9 @@
             "Default": "Warning",
             "Microsoft": "Warning",
             "Microsoft.Hosting.Lifetime": "Information",
-            "MareSynchronosStaticFilesServer": "Debug",
-            "MareSynchronosShared": "Debug",
-            "System.IO": "Information",
+            "MareSynchronosServices": "Information",
+            "MareSynchronosShared": "Information",
+            "System.IO": "Information"
         },
         "File": {
             "BasePath": "logs",
@@ -26,27 +26,16 @@
     },
     "MareSynchronos": {
         "DbContextPoolSize": 512,
-        "ShardName": "Files",
-        "MetricsPort": 6250,
-        "ForcedDeletionOfFilesAfterHours": -1,
-        "CacheSizeHardLimitInGiB": -1,
-        "UnusedFileRetentionPeriodInDays": 14,
-        "CacheDirectory": "/marecache/",
-        "RemoteCacheSourceUri": "",
-        "MainServerAddress": "http://mare-server:6000/",
-        "RedisConnectionString": "redis,password=secretredispassword",
-        "MainFileServerAddress": "",
+        "ShardName": "AuthServices",
+        "MetricsPort": 6150,
         "Jwt": "teststringteststringteststringteststringteststringteststringteststringteststringteststringteststring",
-        "UseColdStorage": false,
-        "IsDistributionNode": true
+        "RedisConnectionString": "redis,password=secretredispassword",
+        "FailedAuthForTempBan": 5,
+        "UseGeoIP": false,
+        "GeoIPDbCityFile": ""
     },
     "AllowedHosts": "*",
     "Kestrel": {
-        "Endpoints": {
-            "Http": {
-                "Url": "http://+:6200"
-            }
-        }
     },
     "IpRateLimiting": {},
     "IPRateLimitPolicies": {}

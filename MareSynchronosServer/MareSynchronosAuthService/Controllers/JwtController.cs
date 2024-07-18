@@ -62,16 +62,17 @@ public class JwtController : Controller
             var ident = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))!.Value;
             var alias = HttpContext.User.Claims.SingleOrDefault(p => string.Equals(p.Type, MareClaimTypes.Alias))?.Value ?? string.Empty;
 
-            if (await _mareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.IsBanned))
+            if (await _mareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.MarkForBan))
             {
-                await EnsureBan(uid, ident);
+                var userAuth = await _mareDbContext.Auth.SingleAsync(u => u.UserUID == uid);
+                await EnsureBan(uid, userAuth.PrimaryUserUID, ident);
 
-                return Unauthorized("You are permanently banned.");
+                return Unauthorized("Your Mare account is banned.");
             }
 
-            if (await IsIdentBanned(uid, ident))
+            if (await IsIdentBanned(ident))
             {
-                return Unauthorized("Your character is banned from using the service.");
+                return Unauthorized("Your XIV service account is banned from using the service.");
             }
 
             _logger.LogInformation("RenewToken:SUCCESS:{id}:{ident}", uid, ident);
@@ -95,10 +96,10 @@ public class JwtController : Controller
 
             var authResult = await _secretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
 
-            if (await IsIdentBanned(authResult.Uid, charaIdent))
+            if (await IsIdentBanned(charaIdent))
             {
                 _logger.LogWarning("Authenticate:IDENTBAN:{id}:{ident}", authResult.Uid, charaIdent);
-                return Unauthorized("Your character is banned from using the service.");
+                return Unauthorized("Your XIV service account is banned from using the service.");
             }
 
             if (!authResult.Success && !authResult.TempBan)
@@ -111,23 +112,28 @@ public class JwtController : Controller
                 _logger.LogWarning("Authenticate:TEMPBAN:{id}:{ident}", authResult.Uid ?? "NOUID", charaIdent);
                 return Unauthorized("Due to an excessive amount of failed authentication attempts you are temporarily banned. Check your Secret Key configuration and try connecting again in 5 minutes.");
             }
-            if (authResult.Permaban)
+
+            if (authResult.Permaban || authResult.MarkedForBan)
             {
-                await EnsureBan(authResult.Uid, charaIdent);
+                if (authResult.MarkedForBan)
+                {
+                    _logger.LogWarning("Authenticate:MARKBAN:{id}:{primaryid}:{ident}", authResult.Uid, authResult.PrimaryUid, charaIdent);
+                    await EnsureBan(authResult.Uid!, authResult.PrimaryUid, charaIdent);
+                }
 
                 _logger.LogWarning("Authenticate:UIDBAN:{id}:{ident}", authResult.Uid, charaIdent);
-                return Unauthorized("You are permanently banned.");
+                return Unauthorized("Your Mare account is banned.");
             }
 
             var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
             if (!string.IsNullOrEmpty(existingIdent))
             {
                 _logger.LogWarning("Authenticate:DUPLICATE:{id}:{ident}", authResult.Uid, charaIdent);
-                return Unauthorized("Already logged in to this account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
+                return Unauthorized("Already logged in to this XIV service account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
             }
 
             _logger.LogInformation("Authenticate:SUCCESS:{id}:{ident}", authResult.Uid, charaIdent);
-            return await CreateJwtFromId(authResult.Uid, charaIdent, authResult.Alias ?? string.Empty);
+            return await CreateJwtFromId(authResult.Uid!, charaIdent, authResult.Alias ?? string.Empty);
         }
         catch (Exception ex)
         {
@@ -165,7 +171,7 @@ public class JwtController : Controller
         return Content(token.RawData);
     }
 
-    private async Task EnsureBan(string uid, string charaIdent)
+    private async Task EnsureBan(string uid, string? primaryUid, string charaIdent)
     {
         if (!_mareDbContext.BannedUsers.Any(c => c.CharacterIdentification == charaIdent))
         {
@@ -174,15 +180,15 @@ public class JwtController : Controller
                 CharacterIdentification = charaIdent,
                 Reason = "Autobanned CharacterIdent (" + uid + ")",
             });
-
-            await _mareDbContext.SaveChangesAsync();
         }
 
-        var primaryUser = await _mareDbContext.Auth.Include(a => a.User).FirstOrDefaultAsync(f => f.PrimaryUserUID == uid);
+        var uidToLookFor = primaryUid ?? uid;
 
-        var toBanUid = primaryUser == null ? uid : primaryUser.UserUID;
+        var primaryUserAuth = await _mareDbContext.Auth.FirstAsync(f => f.UserUID == uidToLookFor);
+        primaryUserAuth.MarkForBan = false;
+        primaryUserAuth.IsBanned = true;
 
-        var lodestone = await _mareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == toBanUid);
+        var lodestone = await _mareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == uidToLookFor);
 
         if (lodestone != null)
         {
@@ -200,24 +206,13 @@ public class JwtController : Controller
                     DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString(),
                 });
             }
-
-            await _mareDbContext.SaveChangesAsync();
         }
+
+        await _mareDbContext.SaveChangesAsync();
     }
 
-    private async Task<bool> IsIdentBanned(string uid, string charaIdent)
+    private async Task<bool> IsIdentBanned(string charaIdent)
     {
-        var isBanned = await _mareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
-        if (isBanned)
-        {
-            var authToBan = _mareDbContext.Auth.SingleOrDefault(a => a.UserUID == uid);
-            if (authToBan != null)
-            {
-                authToBan.IsBanned = true;
-                await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
-            }
-        }
-
-        return isBanned;
+        return await _mareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
     }
 }

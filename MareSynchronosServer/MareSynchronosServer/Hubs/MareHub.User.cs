@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using MareSynchronos.API.Data;
 using MareSynchronos.API.Data.Enum;
 using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto;
 using MareSynchronos.API.Dto.User;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Metrics;
@@ -339,48 +338,6 @@ public partial class MareHub
             await Clients.User(UserUID).Client_UserSendOffline(dto).ConfigureAwait(false);
             await Clients.User(dto.User.UID).Client_UserSendOffline(new(new(UserUID))).ConfigureAwait(false);
         }
-    }
-
-    [Authorize(Policy = "Identified")]
-    public async Task UserReportProfile(UserProfileReportDto dto)
-    {
-        _logger.LogCallInfo(MareHubLogger.Args(dto));
-
-        UserProfileDataReport report = await DbContext.UserProfileReports.SingleOrDefaultAsync(u => u.ReportedUserUID == dto.User.UID && u.ReportingUserUID == UserUID).ConfigureAwait(false);
-        if (report != null)
-        {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "You already reported this profile and it's pending validation").ConfigureAwait(false);
-            return;
-        }
-
-        UserProfileData profile = await DbContext.UserProfileData.SingleOrDefaultAsync(u => u.UserUID == dto.User.UID).ConfigureAwait(false);
-        if (profile == null)
-        {
-            await Clients.Caller.Client_ReceiveServerMessage(MessageSeverity.Error, "This user has no profile").ConfigureAwait(false);
-            return;
-        }
-
-        UserProfileDataReport reportToAdd = new()
-        {
-            ReportDate = DateTime.UtcNow,
-            ReportingUserUID = UserUID,
-            ReportReason = dto.ProfileReport,
-            ReportedUserUID = dto.User.UID,
-        };
-
-        profile.FlaggedForReport = true;
-
-        await DbContext.UserProfileReports.AddAsync(reportToAdd).ConfigureAwait(false);
-
-        await DbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        await Clients.User(dto.User.UID).Client_ReceiveServerMessage(MessageSeverity.Warning, "Your Mare profile has been reported and disabled for admin validation").ConfigureAwait(false);
-
-        var allPairedUsers = await GetAllPairedUnpausedUsers(dto.User.UID).ConfigureAwait(false);
-        var pairs = await GetOnlineUsers(allPairedUsers).ConfigureAwait(false);
-
-        await Clients.Users(pairs.Select(p => p.Key)).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
-        await Clients.Users(dto.User.UID).Client_UserUpdateProfile(new(dto.User)).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Identified")]
