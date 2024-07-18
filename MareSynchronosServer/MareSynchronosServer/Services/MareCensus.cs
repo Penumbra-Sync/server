@@ -95,7 +95,7 @@ public class MareCensus : IHostedService
 
         var worlds = await client.GetStringAsync("https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/World.csv", cancellationToken).ConfigureAwait(false);
         // world: https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/World.csv
-        // id, internalname, name, region, usertype, datacenter
+        // id, internalname, name, region, usertype, datacenter, ispublic
 
         using var worldsReader = new StringReader(worlds);
         using var worldsParser = new TextFieldParser(worldsReader);
@@ -109,7 +109,8 @@ public class MareCensus : IHostedService
             var id = ushort.Parse(fields[0], CultureInfo.InvariantCulture);
             var name = fields[1];
             var dc = short.Parse(fields[5], CultureInfo.InvariantCulture);
-            if (!_dcs.ContainsKey(dc)) continue;
+            var isPublic = bool.Parse(fields[6]);
+            if (!_dcs.ContainsKey(dc) || !isPublic) continue;
             _worlds[id] = (name, dc);
             _logger.LogInformation("World: ID: {id}, Name: {name}, DC: {dc}", id, name, dc);
         }
