@@ -88,6 +88,7 @@ public class MareCensus : IHostedService
             var fields = dcsParser.ReadFields();
             var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
             var name = fields[1];
+            if (string.IsNullOrEmpty(name) || id == 0) continue;
             _logger.LogInformation("DC: ID: {id}, Name: {name}", id, name);
             _dcs[id] = name;
         }
@@ -108,6 +109,7 @@ public class MareCensus : IHostedService
             var id = ushort.Parse(fields[0], CultureInfo.InvariantCulture);
             var name = fields[1];
             var dc = short.Parse(fields[5], CultureInfo.InvariantCulture);
+            if (!_dcs.ContainsKey(dc)) continue;
             _worlds[id] = (name, dc);
             _logger.LogInformation("World: ID: {id}, Name: {name}, DC: {dc}", id, name, dc);
         }
@@ -127,6 +129,7 @@ public class MareCensus : IHostedService
             var fields = raceParser.ReadFields();
             var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
             var name = fields[1];
+            if (string.IsNullOrEmpty(name) || id == 0) continue;
             _races[id] = name;
             _logger.LogInformation("Race: ID: {id}, Name: {name}", id, name);
         }
@@ -146,6 +149,7 @@ public class MareCensus : IHostedService
             var fields = tribeParser.ReadFields();
             var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
             var name = fields[1];
+            if (string.IsNullOrEmpty(name) || id == 0) continue;
             _tribes[id] = name;
             _logger.LogInformation("Tribe: ID: {id}, Name: {name}", id, name);
         }
