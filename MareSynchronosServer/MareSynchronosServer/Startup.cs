@@ -94,7 +94,7 @@ public class Startup
         // configure services based on main server status
         ConfigureServicesBasedOnShardType(services, mareConfig, isMainServer);
 
-        services.AddSingleton(s => new MareCensus(s.GetRequiredService<ILogger<MareCensus>>(), mareConfig.GetValue("XIVAPIKey", string.Empty)));
+        services.AddSingleton(s => new MareCensus(s.GetRequiredService<ILogger<MareCensus>>()));
         services.AddHostedService(p => p.GetRequiredService<MareCensus>());
 
         if (isMainServer)

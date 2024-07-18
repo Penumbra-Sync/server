@@ -1,4 +1,5 @@
 ﻿using MareSynchronos.API.Dto.User;
+using Microsoft.VisualBasic.FileIO;
 using Prometheus;
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -23,13 +24,11 @@ public class MareCensus : IHostedService
     private readonly Dictionary<short, string> _races = new();
     private readonly Dictionary<short, string> _tribes = new();
     private readonly Dictionary<ushort, (string, short)> _worlds = new();
-    private readonly string _xivApiKey;
     private Gauge? _gauge;
 
-    public MareCensus(ILogger<MareCensus> logger, string xivApiKey)
+    public MareCensus(ILogger<MareCensus> logger)
     {
         _logger = logger;
-        _xivApiKey = xivApiKey;
     }
 
     private bool Initialized => _gauge != null;
@@ -68,67 +67,85 @@ public class MareCensus : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(_xivApiKey)) return;
-
         _logger.LogInformation("Loading XIVAPI data");
 
         using HttpClient client = new HttpClient();
 
         Dictionary<ushort, short> worldDcs = new();
-        var dcs = await client.GetStringAsync("https://xivapi.com/worlddcgrouptype?private_key" + _xivApiKey, cancellationToken).ConfigureAwait(false);
-        using var dcsJson = JsonSerializer.Deserialize<JsonElement>(dcs).GetProperty("Results").EnumerateArray();
 
-        foreach (var dcValue in dcsJson)
+        var dcs = await client.GetStringAsync("https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/WorldDCGroupType.csv", cancellationToken).ConfigureAwait(false);
+        // dc: https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/WorldDCGroupType.csv
+        // id, name, region
+
+        using var dcsReader = new StringReader(dcs);
+        using var dcsParser = new TextFieldParser(dcsReader);
+        dcsParser.Delimiters = [","];
+        // read 3 lines and discard
+        dcsParser.ReadLine(); dcsParser.ReadLine(); dcsParser.ReadLine();
+
+        while (!dcsParser.EndOfData)
         {
-            var id = dcValue.GetProperty("ID").GetInt16();
-            var name = dcValue.GetProperty("Name").GetString();
-            _dcs[id] = name;
+            var fields = dcsParser.ReadFields();
+            var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
+            var name = fields[1];
             _logger.LogInformation("DC: ID: {id}, Name: {name}", id, name);
-            var dcData = await client.GetStringAsync("https://xivapi.com/worlddcgrouptype/" + id.ToString(CultureInfo.InvariantCulture) + "?private_key=" + _xivApiKey, cancellationToken).ConfigureAwait(false);
-            if (JsonSerializer.Deserialize<JsonElement>(dcData).TryGetProperty("GameContentLinks", out var gameContentLinks))
-            {
-                if (gameContentLinks.ValueKind == JsonValueKind.Object && gameContentLinks.TryGetProperty("World", out var worldProp))
-                {
-                    using var json = worldProp.GetProperty("DataCenter").EnumerateArray();
-                    foreach (var world in json)
-                    {
-                        worldDcs[(ushort)world.GetInt32()] = id;
-                    }
-                }
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+            _dcs[id] = name;
         }
 
-        var worlds = await client.GetStringAsync("https://xivapi.com/world?limit=1000&private_key" + _xivApiKey, cancellationToken).ConfigureAwait(false);
-        using var worldJson = JsonSerializer.Deserialize<JsonElement>(worlds).GetProperty("Results").EnumerateArray();
-        foreach (var worldValue in worldJson)
+        var worlds = await client.GetStringAsync("https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/World.csv", cancellationToken).ConfigureAwait(false);
+        // world: https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/World.csv
+        // id, internalname, name, region, usertype, datacenter
+
+        using var worldsReader = new StringReader(worlds);
+        using var worldsParser = new TextFieldParser(worldsReader);
+        worldsParser.Delimiters = [","];
+        // read 3 lines and discard
+        worldsParser.ReadLine(); worldsParser.ReadLine(); worldsParser.ReadLine();
+
+        while (!worldsParser.EndOfData)
         {
-            var id = (ushort)worldValue.GetProperty("ID").GetInt32();
-            var name = worldValue.GetProperty("Name").GetString();
-            if (worldDcs.TryGetValue(id, out var dc))
-            {
-                _worlds[(ushort)id] = (name, dc);
-                _logger.LogInformation("World: ID: {id}, Name: {name}, DC: {dc}", id, name, dc);
-            }
+            var fields = worldsParser.ReadFields();
+            var id = ushort.Parse(fields[0], CultureInfo.InvariantCulture);
+            var name = fields[1];
+            var dc = short.Parse(fields[5], CultureInfo.InvariantCulture);
+            _worlds[id] = (name, dc);
+            _logger.LogInformation("World: ID: {id}, Name: {name}, DC: {dc}", id, name, dc);
         }
 
-        var races = await client.GetStringAsync("https://xivapi.com/race?private_key" + _xivApiKey, cancellationToken).ConfigureAwait(false);
-        using var racesJson = JsonSerializer.Deserialize<JsonElement>(races).GetProperty("Results").EnumerateArray();
-        foreach (var racesValue in racesJson)
+        var races = await client.GetStringAsync("https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/Race.csv", cancellationToken).ConfigureAwait(false);
+        // race: https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/Race.csv
+        // id, masc name, fem name, other crap I don't care about
+
+        using var raceReader = new StringReader(races);
+        using var raceParser = new TextFieldParser(raceReader);
+        raceParser.Delimiters = [","];
+        // read 3 lines and discard
+        raceParser.ReadLine(); raceParser.ReadLine(); raceParser.ReadLine();
+
+        while (!raceParser.EndOfData)
         {
-            var id = racesValue.GetProperty("ID").GetInt16();
-            var name = racesValue.GetProperty("Name").GetString();
+            var fields = raceParser.ReadFields();
+            var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
+            var name = fields[1];
             _races[id] = name;
             _logger.LogInformation("Race: ID: {id}, Name: {name}", id, name);
         }
 
-        var tribe = await client.GetStringAsync("https://xivapi.com/tribe?private_key=" + _xivApiKey, cancellationToken).ConfigureAwait(false);
-        using var tribeJson = JsonSerializer.Deserialize<JsonElement>(tribe).GetProperty("Results").EnumerateArray();
-        foreach (var tribeValue in tribeJson)
+        var tribe = await client.GetStringAsync("https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/Tribe.csv", cancellationToken).ConfigureAwait(false);
+        // tribe: https://raw.githubusercontent.com/xivapi/ffxiv-datamining/master/csv/Tribe.csv
+        // id masc name, fem name, other crap I don't care about
+
+        using var tribeReader = new StringReader(tribe);
+        using var tribeParser = new TextFieldParser(tribeReader);
+        tribeParser.Delimiters = [","];
+        // read 3 lines and discard
+        tribeParser.ReadLine(); tribeParser.ReadLine(); tribeParser.ReadLine();
+
+        while (!tribeParser.EndOfData)
         {
-            var id = tribeValue.GetProperty("ID").GetInt16();
-            var name = tribeValue.GetProperty("Name").GetString();
+            var fields = tribeParser.ReadFields();
+            var id = short.Parse(fields[0], CultureInfo.InvariantCulture);
+            var name = fields[1];
             _tribes[id] = name;
             _logger.LogInformation("Tribe: ID: {id}, Name: {name}", id, name);
         }
