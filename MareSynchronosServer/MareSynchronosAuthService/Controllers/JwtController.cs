@@ -105,7 +105,7 @@ public class JwtController : Controller
             if (!authResult.Success && !authResult.TempBan)
             {
                 _logger.LogWarning("Authenticate:INVALID:{id}:{ident}", authResult?.Uid ?? "NOUID", charaIdent);
-                return Unauthorized("The provided secret key is invalid. Verify your accounts existence and/or recover the secret key.");
+                return Unauthorized("The provided secret key is invalid. Verify your Mare accounts existence and/or recover the secret key.");
             }
             if (!authResult.Success && authResult.TempBan)
             {
@@ -122,14 +122,14 @@ public class JwtController : Controller
                 }
 
                 _logger.LogWarning("Authenticate:UIDBAN:{id}:{ident}", authResult.Uid, charaIdent);
-                return Unauthorized("Your Mare account is banned.");
+                return Unauthorized("Your Mare account is banned from using the service.");
             }
 
             var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
             if (!string.IsNullOrEmpty(existingIdent))
             {
                 _logger.LogWarning("Authenticate:DUPLICATE:{id}:{ident}", authResult.Uid, charaIdent);
-                return Unauthorized("Already logged in to this XIV service account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
+                return Unauthorized("Already logged in to this Mare account. Reconnect in 60 seconds. If you keep seeing this issue, restart your game.");
             }
 
             _logger.LogInformation("Authenticate:SUCCESS:{id}:{ident}", authResult.Uid, charaIdent);
