@@ -18,7 +18,7 @@ namespace MareSynchronosServer.Hubs;
 
 public partial class MareHub
 {
-    private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".scd", ".skp", ".shpk" };
+    private static readonly string[] AllowedExtensionsForGamePaths = { ".mdl", ".tex", ".mtrl", ".tmb", ".pap", ".avfx", ".atex", ".sklb", ".eid", ".phyb", ".pbd", ".scd", ".skp", ".shpk" };
 
     [Authorize(Policy = "Identified")]
     public async Task UserAddPair(UserDto dto)
