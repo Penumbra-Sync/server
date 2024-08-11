@@ -261,22 +261,23 @@ public partial class MareWizardModule
         user.LastLoggedIn = DateTime.UtcNow;
 
         var computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+        string hashedKey = StringUtils.Sha256String(computedHash);
         var auth = new Auth()
         {
-            HashedKey = StringUtils.Sha256String(computedHash),
+            HashedKey = hashedKey,
             User = user,
         };
 
         await db.Users.AddAsync(user).ConfigureAwait(false);
         await db.Auth.AddAsync(auth).ConfigureAwait(false);
 
-        _botServices.Logger.LogInformation("User registered: {userUID}", user.UID);
-
         lodestoneAuth.StartedAt = null;
         lodestoneAuth.User = user;
         lodestoneAuth.LodestoneAuthString = null;
 
         await db.SaveChangesAsync().ConfigureAwait(false);
+
+        _botServices.Logger.LogInformation("User registered: {userUID}:{hashedKey}", user.UID, hashedKey);
 
         _botServices.DiscordVerifiedUsers.Remove(Context.User.Id, out _);
 

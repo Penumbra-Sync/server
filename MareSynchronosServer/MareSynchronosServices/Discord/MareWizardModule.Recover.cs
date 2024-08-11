@@ -59,9 +59,10 @@ public partial class MareWizardModule
         }
 
         computedHash = StringUtils.Sha256String(StringUtils.GenerateRandomString(64) + DateTime.UtcNow.ToString());
+        string hashedKey = StringUtils.Sha256String(computedHash);
         auth = new Auth()
         {
-            HashedKey = StringUtils.Sha256String(computedHash),
+            HashedKey = hashedKey,
             User = previousAuth.User,
             PrimaryUserUID = previousAuth.PrimaryUserUID
         };
@@ -77,5 +78,7 @@ public partial class MareWizardModule
 
         await db.Auth.AddAsync(auth).ConfigureAwait(false);
         await db.SaveChangesAsync().ConfigureAwait(false);
+
+        _botServices.Logger.LogInformation("User recovered: {userUID}:{hashedKey}", previousAuth.UserUID, hashedKey);
     }
 }
