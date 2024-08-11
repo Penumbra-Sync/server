@@ -132,6 +132,8 @@ public partial class MareWizardModule
                                              + Environment.NewLine + Environment.NewLine
                                              + "Enter this key in Mare Synchronos and hit save to connect to the service."
                                              + Environment.NewLine
+                                             + "__NOTE: The Secret Key only contains the letters ABCDEF and numbers 0 - 9.__"
+                                             + Environment.NewLine
                                              + "You should connect as soon as possible to not get caught by the automatic cleanup process."
                                              + Environment.NewLine
                                              + "Have fun.");

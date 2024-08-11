@@ -73,6 +73,8 @@ public partial class MareWizardModule
         embed.WithDescription("This is your new private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
                               + Environment.NewLine + Environment.NewLine
                               + $"**{computedHash}**"
+                              + Environment.NewLine
+                              + "__NOTE: The Secret Key only contains the letters ABCDEF and numbers 0 - 9.__"
                               + Environment.NewLine + Environment.NewLine
                               + "Enter this key in the Mare Synchronos Service Settings and reconnect to the service.");
 
