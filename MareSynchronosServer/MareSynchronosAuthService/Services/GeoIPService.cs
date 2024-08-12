@@ -87,7 +87,15 @@ public class GeoIPService : IHostedService
 
                 var useGeoIP = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.UseGeoIP), false);
                 var cityFile = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.GeoIPDbCityFile), string.Empty);
-                var lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
+
+                var lastWriteTime;
+                try {
+                    lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
+                } catch (Exception e) {
+                    _logger.LogDebug($"Unable to get city file info");
+                    lastWriteTime = DateTime.MinTime;
+                }
+
                 if (useGeoIP && (!string.Equals(cityFile, _cityFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime != _dbLastWriteTime))
                 {
                     _cityFile = cityFile;
