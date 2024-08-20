@@ -4,6 +4,7 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Policy;
 
 namespace MareSynchronosServices.Discord;
 
@@ -202,25 +203,34 @@ public partial class MareWizardModule
 
     private async Task HandleVerifyRelinkAsync(ulong userid, string authString, DiscordBotServices services)
     {
-        var req = new HttpClient();
+        using var req = new HttpClient();
 
         services.DiscordVerifiedUsers.Remove(userid, out _);
         if (services.DiscordRelinkLodestoneMapping.ContainsKey(userid))
         {
             var randomServer = services.LodestoneServers[random.Next(services.LodestoneServers.Length)];
-            var response = await req.GetAsync($"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordRelinkLodestoneMapping[userid]}").ConfigureAwait(false);
-            if (response.IsSuccessStatusCode)
+            var url = $"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordLodestoneMapping[userid]}";
+            _logger.LogInformation("Verifying {userid} with URL {url}", userid, url);
+            using var response = await req.GetAsync(url).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
             {
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (content.Contains(authString))
                 {
                     services.DiscordVerifiedUsers[userid] = true;
+                    _logger.LogInformation("Verified {userid} from lodestone {lodestone}", userid, services.DiscordLodestoneMapping[userid]);
                     services.DiscordRelinkLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
                 {
                     services.DiscordVerifiedUsers[userid] = false;
+                    _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
+                        userid, services.DiscordLodestoneMapping[userid], authString, response.StatusCode);
                 }
+            }
+            else
+            {
+                _logger.LogWarning("Could not verify {userid}, HttpStatusCode: {code}", userid, response.StatusCode);
             }
         }
     }

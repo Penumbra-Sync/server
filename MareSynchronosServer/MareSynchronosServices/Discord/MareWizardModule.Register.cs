@@ -145,6 +145,7 @@ public partial class MareWizardModule
                 eb.WithTitle("Failed to verify registration");
                 eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." + Environment.NewLine + Environment.NewLine
                     + "Please restart your verification process, make sure to save your profile _twice_ for it to be properly saved." + Environment.NewLine + Environment.NewLine
+                    + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read logged in or private profiles." + Environment.NewLine + Environment.NewLine
                     + "The code the bot is looking for is" + Environment.NewLine + Environment.NewLine
                     + "**" + verificationCode + "**");
                 cb.WithButton("Cancel", "wizard-register", emote: new Emoji("❌"));
@@ -208,16 +209,16 @@ public partial class MareWizardModule
 
     private async Task HandleVerifyAsync(ulong userid, string authString, DiscordBotServices services)
     {
-        var req = new HttpClient();
+        using var req = new HttpClient();
 
         services.DiscordVerifiedUsers.Remove(userid, out _);
         if (services.DiscordLodestoneMapping.ContainsKey(userid))
         {
             var randomServer = services.LodestoneServers[random.Next(services.LodestoneServers.Length)];
             var url = $"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordLodestoneMapping[userid]}";
-            var response = await req.GetAsync(url).ConfigureAwait(false);
+            using var response = await req.GetAsync(url).ConfigureAwait(false);
             _logger.LogInformation("Verifying {userid} with URL {url}", userid, url);
-            if (response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
             {
                 var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (content.Contains(authString))
@@ -229,7 +230,8 @@ public partial class MareWizardModule
                 else
                 {
                     services.DiscordVerifiedUsers[userid] = false;
-                    _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}", userid, services.DiscordLodestoneMapping[userid], authString);
+                    _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
+                        userid, services.DiscordLodestoneMapping[userid], authString, response.StatusCode);
                 }
             }
             else
