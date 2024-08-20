@@ -12,7 +12,7 @@ public class GeoIPService : IHostedService
     private bool _useGeoIP = false;
     private string _cityFile = string.Empty;
     private DatabaseReader? _dbReader;
-    private DateTime _dbLastWriteTime = DateTime.Now;
+    private DateTime _dbLastWriteTime = DateTime.MinValue;
     private CancellationTokenSource _fileWriteTimeCheckCts = new();
     private bool _processingReload = false;
 
@@ -87,8 +87,13 @@ public class GeoIPService : IHostedService
 
                 var useGeoIP = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.UseGeoIP), false);
                 var cityFile = _mareConfiguration.GetValueOrDefault(nameof(AuthServiceConfiguration.GeoIPDbCityFile), string.Empty);
-                var lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
-                if (useGeoIP && (!string.Equals(cityFile, _cityFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime != _dbLastWriteTime))
+                DateTime lastWriteTime = DateTime.MinValue;
+                if (File.Exists(cityFile))
+                {
+                    lastWriteTime = new FileInfo(cityFile).LastWriteTimeUtc;
+                }
+
+                if (useGeoIP && (!string.Equals(cityFile, _cityFile, StringComparison.OrdinalIgnoreCase) || lastWriteTime > _dbLastWriteTime))
                 {
                     _cityFile = cityFile;
                     if (!File.Exists(_cityFile)) throw new FileNotFoundException($"Could not open GeoIP City Database, path does not exist: {_cityFile}");
