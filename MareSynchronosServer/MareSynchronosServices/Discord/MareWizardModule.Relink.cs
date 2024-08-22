@@ -209,7 +209,7 @@ public partial class MareWizardModule
         if (services.DiscordRelinkLodestoneMapping.ContainsKey(userid))
         {
             var randomServer = services.LodestoneServers[random.Next(services.LodestoneServers.Length)];
-            var url = $"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordLodestoneMapping[userid]}";
+            var url = $"https://{randomServer}.finalfantasyxiv.com/lodestone/character/{services.DiscordRelinkLodestoneMapping[userid]}";
             _logger.LogInformation("Verifying {userid} with URL {url}", userid, url);
             using var response = await req.GetAsync(url).ConfigureAwait(false);
             if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
@@ -218,14 +218,14 @@ public partial class MareWizardModule
                 if (content.Contains(authString))
                 {
                     services.DiscordVerifiedUsers[userid] = true;
-                    _logger.LogInformation("Verified {userid} from lodestone {lodestone}", userid, services.DiscordLodestoneMapping[userid]);
+                    _logger.LogInformation("Relink: Verified {userid} from lodestone {lodestone}", userid, services.DiscordRelinkLodestoneMapping[userid]);
                     services.DiscordRelinkLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
                 {
                     services.DiscordVerifiedUsers[userid] = false;
-                    _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
-                        userid, services.DiscordLodestoneMapping[userid], authString, response.StatusCode);
+                    _logger.LogInformation("Relink: Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
+                        userid, services.DiscordRelinkLodestoneMapping[userid], authString, response.StatusCode);
                 }
             }
             else
