@@ -335,7 +335,7 @@ public class ServerFilesController : ControllerBase
                 UploaderUID = MareUser,
                 Size = compressedMungedStream.Length,
                 Uploaded = true,
-                RawSize = data.Length
+                RawSize = data.LongLength
             }).ConfigureAwait(false);
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
 
