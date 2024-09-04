@@ -1,4 +1,5 @@
 ﻿using ByteSizeLib;
+using LZ4;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -258,6 +259,16 @@ public class MainFileCleanupService : IHostedService
                 _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
                 fileCache.Size = file.Length;
                 // commit every 1000 files to db
+                if (fileCounter % 1000 == 0)
+                    await dbContext.SaveChangesAsync().ConfigureAwait(false);
+            }
+
+            // only used if file in db has no raw size for whatever reason
+            if (!deleteCurrentFile && file != null && fileCache.RawSize == 0)
+            {
+                var length = LZ4Codec.Unwrap(File.ReadAllBytes(file.FullName)).LongLength;
+                _logger.LogInformation("Setting Raw File Size of " + fileCache.Hash + " to " + length);
+                fileCache.RawSize = length;
                 if (fileCounter % 1000 == 0)
                     await dbContext.SaveChangesAsync().ConfigureAwait(false);
             }

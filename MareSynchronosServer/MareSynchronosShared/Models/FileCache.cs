@@ -15,4 +15,5 @@ public class FileCache
     [Timestamp]
     public byte[] Timestamp { get; set; }
     public long Size { get; set; }
+    public long RawSize { get; set; }
 }

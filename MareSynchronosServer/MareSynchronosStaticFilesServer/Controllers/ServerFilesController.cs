@@ -232,7 +232,8 @@ public class ServerFilesController : ControllerBase
                 UploadDate = DateTime.UtcNow,
                 UploaderUID = MareUser,
                 Size = compressedFileStream.Length,
-                Uploaded = true
+                Uploaded = true,
+                RawSize = data.LongLength
             }).ConfigureAwait(false);
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -333,7 +334,8 @@ public class ServerFilesController : ControllerBase
                 UploadDate = DateTime.UtcNow,
                 UploaderUID = MareUser,
                 Size = compressedMungedStream.Length,
-                Uploaded = true
+                Uploaded = true,
+                RawSize = data.Length
             }).ConfigureAwait(false);
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
 
@@ -440,7 +442,8 @@ public class ServerFilesController : ControllerBase
                 UploadDate = DateTime.UtcNow,
                 UploaderUID = MareUser,
                 Size = compressedStream.Length,
-                Uploaded = true
+                Uploaded = true,
+                RawSize = rawFileStream.Length
             }).ConfigureAwait(false);
             await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
 
