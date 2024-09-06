@@ -99,6 +99,8 @@ public partial class MareWizardModule
                 AddHome(cb);
 
                 await ModifyModalInteraction(eb, cb).ConfigureAwait(false);
+
+                await _botServices.LogToChannel($"{Context.User.Mention} DELETE SUCCESS: {uid}").ConfigureAwait(false);
             }
         }
         catch (Exception ex)

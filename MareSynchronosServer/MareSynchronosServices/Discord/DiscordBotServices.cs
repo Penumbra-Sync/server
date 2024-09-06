@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using Discord.Rest;
 using MareSynchronosShared.Metrics;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils.Configuration;
 
 namespace MareSynchronosServices.Discord;
 
@@ -15,12 +17,18 @@ public class DiscordBotServices
     public ConcurrentDictionary<ulong, ulong> ValidInteractions { get; } = new();
     public Dictionary<RestRole, string> VanityRoles { get; set; } = new();
     private readonly IServiceProvider _serviceProvider;
+    private readonly IConfigurationService<ServicesConfiguration> _configuration;
     private CancellationTokenSource verificationTaskCts;
+    private RestGuild? _guild;
+    private ulong? _logChannelId;
+    private RestTextChannel? _logChannel;
 
-    public DiscordBotServices(ILogger<DiscordBotServices> logger, MareMetrics metrics)
+    public DiscordBotServices(ILogger<DiscordBotServices> logger, MareMetrics metrics,
+        IConfigurationService<ServicesConfiguration> configuration)
     {
         Logger = logger;
         Metrics = metrics;
+        _configuration = configuration;
     }
 
     public ILogger<DiscordBotServices> Logger { get; init; }
@@ -37,6 +45,29 @@ public class DiscordBotServices
     {
         verificationTaskCts?.Cancel();
         return Task.CompletedTask;
+    }
+
+    public async Task LogToChannel(string msg)
+    {
+        if (_guild == null) return;
+        var logChannelId = _configuration.GetValueOrDefault<ulong?>(nameof(ServicesConfiguration.DiscordChannelForBotLog), null);
+        if (logChannelId == null) return;
+        if (logChannelId != _logChannelId)
+        {
+            try
+            {
+                _logChannelId = logChannelId;
+                _logChannel = await _guild.GetTextChannelAsync(logChannelId.Value).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Could not get bot log channel");
+            }
+        }
+
+        if (_logChannel == null) return;
+
+        await _logChannel.SendMessageAsync(msg).ConfigureAwait(false);
     }
 
     private async Task ProcessVerificationQueue()
@@ -64,5 +95,10 @@ public class DiscordBotServices
 
             await Task.Delay(TimeSpan.FromSeconds(2), verificationTaskCts.Token).ConfigureAwait(false);
         }
+    }
+
+    internal void UpdateGuild(RestGuild guild)
+    {
+        _guild = guild;
     }
 }

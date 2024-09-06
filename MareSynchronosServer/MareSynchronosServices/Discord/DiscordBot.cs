@@ -11,10 +11,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
-using System.Text;
-using System.Threading.Channels;
 
 namespace MareSynchronosServices.Discord;
 
@@ -208,6 +205,8 @@ internal class DiscordBot : IHostedService
         await _interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
 
         await CreateOrUpdateModal(guild).ConfigureAwait(false);
+        _botServices.UpdateGuild(guild);
+        await _botServices.LogToChannel("Bot startup complete.").ConfigureAwait(false);
         _ = UpdateVanityRoles(guild);
         _ = RemoveUsersNotInVanityRole();
     }
@@ -332,6 +331,7 @@ internal class DiscordBot : IHostedService
             try
             {
                 _logger.LogInformation($"Cleaning up Vanity UIDs");
+                await _botServices.LogToChannel("Cleaning up Vanity UIDs").ConfigureAwait(false);
                 _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
                 var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id);
 
@@ -356,6 +356,7 @@ internal class DiscordBot : IHostedService
                             if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                             {
                                 _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
+                                await _botServices.LogToChannel($"VANITY UID REMOVAL: {discordUser.Mention} - {lodestoneAuth.User.UID}").ConfigureAwait(false);
                                 lodestoneAuth.User.Alias = null;
                                 var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
                                 foreach (var secondaryUser in secondaryUsers)
@@ -385,6 +386,8 @@ internal class DiscordBot : IHostedService
 
                             if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                             {
+                                await _botServices.LogToChannel($"VANITY GID REMOVAL: {discordUser.Mention} - {group.GID}").ConfigureAwait(false);
+
                                 _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
                                 group.Alias = null;
                                 db.Update(group);

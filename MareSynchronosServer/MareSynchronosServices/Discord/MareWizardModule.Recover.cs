@@ -82,5 +82,6 @@ public partial class MareWizardModule
         await db.SaveChangesAsync().ConfigureAwait(false);
 
         _botServices.Logger.LogInformation("User recovered: {userUID}:{hashedKey}", previousAuth.UserUID, hashedKey);
+        await _botServices.LogToChannel($"{Context.User.Mention} RECOVER SUCCESS: {previousAuth.UserUID}").ConfigureAwait(false);
     }
 }

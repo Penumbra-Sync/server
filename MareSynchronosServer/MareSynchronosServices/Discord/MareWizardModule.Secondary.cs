@@ -84,6 +84,8 @@ public partial class MareWizardModule
         embed.WithDescription("A secondary UID for you was created, use the information below and add the secret key to the Mare setings in the Service Settings tab.");
         embed.AddField("UID", newUser.UID);
         embed.AddField("Secret Key", computedHash);
+
+        await _botServices.LogToChannel($"{Context.User.Mention} SECONDARY SUCCESS: {newUser.UID}").ConfigureAwait(false);
     }
 
 }

@@ -8,6 +8,7 @@ public class ServicesConfiguration : MareConfigurationBase
     public ulong? DiscordChannelForMessages { get; set; } = null;
     public ulong? DiscordChannelForCommands { get; set; } = null;
     public ulong? DiscordRoleAprilFools2024 { get; set; } = null;
+    public ulong? DiscordChannelForBotLog { get; set; } = null!;
     public Uri MainServerAddress { get; set; } = null;
     public Dictionary<ulong, string> VanityRoles { get; set; } = new Dictionary<ulong, string>();
 
