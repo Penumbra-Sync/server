@@ -219,7 +219,7 @@ public partial class MareWizardModule
                 {
                     services.DiscordVerifiedUsers[userid] = true;
                     _logger.LogInformation("Relink: Verified {userid} from lodestone {lodestone}", userid, services.DiscordRelinkLodestoneMapping[userid]);
-                    await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Success. ({url})").ConfigureAwait(false);
+                    await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Success.").ConfigureAwait(false);
                     services.DiscordRelinkLodestoneMapping.TryRemove(userid, out _);
                 }
                 else
@@ -227,13 +227,13 @@ public partial class MareWizardModule
                     services.DiscordVerifiedUsers[userid] = false;
                     _logger.LogInformation("Relink: Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
                         userid, services.DiscordRelinkLodestoneMapping[userid], authString, response.StatusCode);
-                    await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Failed: No Authstring. ({url})").ConfigureAwait(false);
+                    await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Failed: No Authstring. (<{url}>)").ConfigureAwait(false);
                 }
             }
             else
             {
                 _logger.LogWarning("Could not verify {userid}, HttpStatusCode: {code}", userid, response.StatusCode);
-                await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Failed: HttpStatusCode {response.StatusCode}. ({url})").ConfigureAwait(false);
+                await _botServices.LogToChannel($"<@{userid}> RELINK VERIFY: Failed: HttpStatusCode {response.StatusCode}. (<{url}>)").ConfigureAwait(false);
             }
         }
     }
