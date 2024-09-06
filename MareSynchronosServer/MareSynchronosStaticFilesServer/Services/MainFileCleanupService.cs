@@ -243,6 +243,23 @@ public class MainFileCleanupService : IHostedService
                 deleteCurrentFile = true;
             }
 
+            // only used if file in db has no raw size for whatever reason
+            if (!deleteCurrentFile && file != null && fileCache.RawSize == 0)
+            {
+                try
+                {
+                    var length = LZ4Codec.Unwrap(File.ReadAllBytes(file.FullName)).LongLength;
+                    _logger.LogInformation("Setting Raw File Size of " + fileCache.Hash + " to " + length);
+                    fileCache.RawSize = length;
+                    if (fileCounter % 1000 == 0)
+                        await dbContext.SaveChangesAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Could not unpack {fileName}", file.FullName);
+                }
+            }
+
             // do actual deletion of file and remove also from db if needed
             if (deleteCurrentFile)
             {
@@ -259,16 +276,6 @@ public class MainFileCleanupService : IHostedService
                 _logger.LogInformation("Setting File Size of " + fileCache.Hash + " to " + file.Length);
                 fileCache.Size = file.Length;
                 // commit every 1000 files to db
-                if (fileCounter % 1000 == 0)
-                    await dbContext.SaveChangesAsync().ConfigureAwait(false);
-            }
-
-            // only used if file in db has no raw size for whatever reason
-            if (!deleteCurrentFile && file != null && fileCache.RawSize == 0)
-            {
-                var length = LZ4Codec.Unwrap(File.ReadAllBytes(file.FullName)).LongLength;
-                _logger.LogInformation("Setting Raw File Size of " + fileCache.Hash + " to " + length);
-                fileCache.RawSize = length;
                 if (fileCounter % 1000 == 0)
                     await dbContext.SaveChangesAsync().ConfigureAwait(false);
             }
