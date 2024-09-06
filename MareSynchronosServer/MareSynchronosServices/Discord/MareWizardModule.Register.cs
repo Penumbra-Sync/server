@@ -233,7 +233,7 @@ public partial class MareWizardModule
                     services.DiscordVerifiedUsers[userid] = false;
                     _logger.LogInformation("Could not verify {userid} from lodestone {lodestone}, did not find authString: {authString}, status code was: {code}",
                         userid, services.DiscordLodestoneMapping[userid], authString, response.StatusCode);
-                    await _botServices.LogToChannel($"<@{userid}> REGISTER VERIFY: Failed: No Authstring. (<{url}>)").ConfigureAwait(false);
+                    await _botServices.LogToChannel($"<@{userid}> REGISTER VERIFY: Failed: No Authstring ({authString}). (<{url}>)").ConfigureAwait(false);
                 }
             }
             else
