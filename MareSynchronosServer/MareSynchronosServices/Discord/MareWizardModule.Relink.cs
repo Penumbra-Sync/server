@@ -137,7 +137,7 @@ public partial class MareWizardModule
                 eb.WithTitle("Failed to verify relink");
                 eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." + Environment.NewLine + Environment.NewLine
                     + "Please restart your relink process, make sure to save your profile _twice_ for it to be properly saved." + Environment.NewLine + Environment.NewLine
-                    + "The code the bot is looking for is" + Environment.NewLine + Environment.NewLine
+                    + "The code the bot is looking for is**" + Environment.NewLine + Environment.NewLine
                     + "**" + verificationCode + "**");
                 cb.WithButton("Cancel", "wizard-relink", emote: new Emoji("❌"));
                 cb.WithButton("Retry", "wizard-relink-verify:" + verificationCode + "," + uid, ButtonStyle.Primary, emote: new Emoji("🔁"));
