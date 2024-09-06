@@ -78,7 +78,7 @@ public class ServerFilesController : ControllerBase
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
-        var cacheFile = await _mareDbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size }).AsNoTracking().ToListAsync().ConfigureAwait(false);
+        var cacheFile = await _mareDbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size, k.RawSize }).AsNoTracking().ToListAsync().ConfigureAwait(false);
 
         var allFileShards = new List<CdnShardConfiguration>(_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()));
 
@@ -118,6 +118,7 @@ public class ServerFilesController : ControllerBase
                 Hash = file.Hash,
                 Size = file.Size,
                 Url = baseUrl?.ToString() ?? string.Empty,
+                RawSize = file.RawSize
             });
         }
 
