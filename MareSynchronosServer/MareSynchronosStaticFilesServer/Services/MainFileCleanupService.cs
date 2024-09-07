@@ -151,36 +151,20 @@ public class MainFileCleanupService : IHostedService
     {
         while (!ct.IsCancellationRequested)
         {
+            var cleanupCheckMinutes = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CleanupCheckInMinutes), 15);
+            bool useColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
+            var hotStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
+            var coldStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.ColdStorageDirectory));
+            using var scope = _services.CreateScope();
+            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+
             try
             {
-                using var scope = _services.CreateScope();
-                using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+                using CancellationTokenSource timedCts = new();
+                timedCts.CancelAfter(TimeSpan.FromMinutes(cleanupCheckMinutes - 1));
+                using var linkedTokenCts = CancellationTokenSource.CreateLinkedTokenSource(timedCts.Token, ct);
+                var linkedToken = linkedTokenCts.Token;
 
-                bool useColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
-
-                if (useColdStorage)
-                {
-                    var coldStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.ColdStorageDirectory));
-
-                    DirectoryInfo dirColdStorage = new(coldStorageDir);
-                    var allFilesInColdStorageDir = dirColdStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
-
-                    var coldStorageRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageUnusedFileRetentionPeriodInDays), 60);
-                    var coldStorageSize = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
-
-                    // clean up cold storage
-                    var remainingColdFiles = await CleanUpOutdatedFiles(coldStorageDir, allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
-                        deleteFromDb: true, dbContext: dbContext,
-                        ct: ct).ConfigureAwait(false);
-                    var finalRemainingColdFiles = CleanUpFilesBeyondSizeLimit(remainingColdFiles, coldStorageSize,
-                        deleteFromDb: true, dbContext: dbContext,
-                        ct: ct);
-
-                    _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSizeColdStorage, finalRemainingColdFiles.Sum(f => f.Length));
-                    _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalColdStorage, finalRemainingColdFiles.Count);
-                }
-
-                var hotStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
                 DirectoryInfo dirHotStorage = new(hotStorageDir);
                 var allFilesInHotStorage = dirHotStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
 
@@ -190,25 +174,55 @@ public class MainFileCleanupService : IHostedService
 
                 var remainingHotFiles = await CleanUpOutdatedFiles(hotStorageDir, allFilesInHotStorage, unusedRetention, forcedDeletionAfterHours,
                     deleteFromDb: !useColdStorage, dbContext: dbContext,
-                    ct: ct).ConfigureAwait(false);
+                    ct: linkedToken).ConfigureAwait(false);
 
                 var finalRemainingHotFiles = CleanUpFilesBeyondSizeLimit(remainingHotFiles, sizeLimit,
                     deleteFromDb: !useColdStorage, dbContext: dbContext,
-                    ct: ct);
+                    ct: linkedToken);
 
-                CleanUpStuckUploads(dbContext);
+                if (useColdStorage)
+                {
+                    DirectoryInfo dirColdStorage = new(coldStorageDir);
+                    var allFilesInColdStorageDir = dirColdStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
 
-                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                    var coldStorageRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageUnusedFileRetentionPeriodInDays), 60);
+                    var coldStorageSize = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
 
-                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, finalRemainingHotFiles.Sum(f => { try { return f.Length; } catch { return 0; } }));
-                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, finalRemainingHotFiles.Count);
+                    // clean up cold storage
+                    var remainingColdFiles = await CleanUpOutdatedFiles(coldStorageDir, allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
+                        deleteFromDb: true, dbContext: dbContext,
+                        ct: linkedToken).ConfigureAwait(false);
+                    var finalRemainingColdFiles = CleanUpFilesBeyondSizeLimit(remainingColdFiles, coldStorageSize,
+                        deleteFromDb: true, dbContext: dbContext,
+                        ct: linkedToken);
+                }
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error during cleanup task");
             }
+            finally
+            {
+                CleanUpStuckUploads(dbContext);
 
-            var cleanupCheckMinutes = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CleanupCheckInMinutes), 15);
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+            }
+
+            if (useColdStorage)
+            {
+                DirectoryInfo dirColdStorageAfterCleanup = new(coldStorageDir);
+                var allFilesInColdStorageAfterCleanup = dirColdStorageAfterCleanup.GetFiles("*", SearchOption.AllDirectories).ToList();
+
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSizeColdStorage, allFilesInColdStorageAfterCleanup.Sum(f => { try { return f.Length; } catch { return 0; } }));
+                _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalColdStorage, allFilesInColdStorageAfterCleanup.Count);
+            }
+
+            DirectoryInfo dirHotStorageAfterCleanup = new(hotStorageDir);
+            var allFilesInHotStorageAfterCleanup = dirHotStorageAfterCleanup.GetFiles("*", SearchOption.AllDirectories).ToList();
+
+            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotalSize, allFilesInHotStorageAfterCleanup.Sum(f => { try { return f.Length; } catch { return 0; } }));
+            _metrics.SetGaugeTo(MetricsAPI.GaugeFilesTotal, allFilesInHotStorageAfterCleanup.Count);
+
             var now = DateTime.Now;
             TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
             TimeOnly futureTime = new(now.Hour, now.Minute - now.Minute % cleanupCheckMinutes, 0);
