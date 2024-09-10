@@ -98,11 +98,13 @@ public static class SharedDbFunctions
         var groupPermissions = await dbContext.GroupPairPreferredPermissions.Where(u => u.UserUID == user.UID).ToListAsync().ConfigureAwait(false);
         var individualPermissions = await dbContext.Permissions.Where(u => u.UserUID == user.UID || u.OtherUserUID == user.UID).ToListAsync().ConfigureAwait(false);
         var bannedinGroups = await dbContext.GroupBans.Where(u => u.BannedUserUID == user.UID).ToListAsync().ConfigureAwait(false);
+        var hasBannedInGroups = await dbContext.GroupBans.Where(u => u.BannedByUID == user.UID).ToListAsync().ConfigureAwait(false);
 
         dbContext.GroupPairPreferredPermissions.RemoveRange(groupPermissions);
         dbContext.UserDefaultPreferredPermissions.RemoveRange(defaultPermissions);
         dbContext.Permissions.RemoveRange(individualPermissions);
         dbContext.GroupBans.RemoveRange(bannedinGroups);
+        dbContext.GroupBans.RemoveRange(hasBannedInGroups);
 
         _logger.LogInformation("User purged: {uid}", user.UID);
 
