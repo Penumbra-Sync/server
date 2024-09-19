@@ -120,6 +120,7 @@ public partial class MareWizardModule
             eb.WithTitle("Vanity UID successfully set");
             eb.WithDescription($"Your Vanity UID for \"{uid}\" was successfully changed to \"{desiredVanityUid}\"." + Environment.NewLine + Environment.NewLine
                 + "For changes to take effect you need to reconnect to the Mare service.");
+            await _botServices.LogToChannel($"{Context.User.Mention} VANITY UID SET: UID: {user.UID}, Vanity: {desiredVanityUid}").ConfigureAwait(false);
             AddHome(cb);
         }
 
@@ -164,12 +165,12 @@ public partial class MareWizardModule
 
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
-        var desiredVanityUid = modal.DesiredVanityGID;
+        var desiredVanityGid = modal.DesiredVanityGID;
         using var db = GetDbContext();
         bool canAddVanityId = !db.Groups.Any(u => u.GID == modal.DesiredVanityGID || u.Alias == modal.DesiredVanityGID);
 
         Regex rgx = new(@"^[_\-a-zA-Z0-9]{5,20}$", RegexOptions.ECMAScript);
-        if (!rgx.Match(desiredVanityUid).Success)
+        if (!rgx.Match(desiredVanityGid).Success)
         {
             eb.WithColor(Color.Red);
             eb.WithTitle("Invalid Vanity Syncshell ID");
@@ -181,21 +182,22 @@ public partial class MareWizardModule
         {
             eb.WithColor(Color.Red);
             eb.WithTitle("Vanity Syncshell ID already taken");
-            eb.WithDescription($"The Vanity Synshell ID \"{desiredVanityUid}\" has already been claimed. Please pick a different one.");
+            eb.WithDescription($"The Vanity Synshell ID \"{desiredVanityGid}\" has already been claimed. Please pick a different one.");
             cb.WithButton("Cancel", "wizard-vanity", ButtonStyle.Secondary, emote: new Emoji("❌"));
             cb.WithButton("Pick Different ID", "wizard-vanity-gid-set:" + gid, ButtonStyle.Primary, new Emoji("💅"));
         }
         else
         {
             var group = await db.Groups.SingleAsync(u => u.GID == gid).ConfigureAwait(false);
-            group.Alias = desiredVanityUid;
+            group.Alias = desiredVanityGid;
             db.Update(group);
             await db.SaveChangesAsync().ConfigureAwait(false);
             eb.WithColor(Color.Green);
             eb.WithTitle("Vanity Syncshell ID successfully set");
-            eb.WithDescription($"Your Vanity Syncshell ID for {gid} was successfully changed to \"{desiredVanityUid}\"." + Environment.NewLine + Environment.NewLine
+            eb.WithDescription($"Your Vanity Syncshell ID for {gid} was successfully changed to \"{desiredVanityGid}\"." + Environment.NewLine + Environment.NewLine
                 + "For changes to take effect you need to reconnect to the Mare service.");
             AddHome(cb);
+            await _botServices.LogToChannel($"{Context.User.Mention} VANITY GID SET: GID: {group.GID}, Vanity: {desiredVanityGid}").ConfigureAwait(false);
         }
 
         await ModifyModalInteraction(eb, cb).ConfigureAwait(false);
