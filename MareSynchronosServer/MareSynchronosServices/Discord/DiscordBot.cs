@@ -7,6 +7,7 @@ using MareSynchronos.API.Dto.User;
 using MareSynchronos.API.SignalR;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
+using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.SignalR;
@@ -353,7 +354,7 @@ internal class DiscordBot : IHostedService
                         if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                         {
                             _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
-                            await _botServices.LogToChannel($"VANITY UID REMOVAL: {discordUser.Mention} - {lodestoneAuth.User.UID}").ConfigureAwait(false);
+                            await _botServices.LogToChannel($"VANITY UID REMOVAL: <@{lodestoneAuth.DiscordId}> - UID: {lodestoneAuth.User.UID}, Vanity: {lodestoneAuth.User.Alias}").ConfigureAwait(false);
                             lodestoneAuth.User.Alias = null;
                             var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
                             foreach (var secondaryUser in secondaryUsers)
@@ -383,7 +384,7 @@ internal class DiscordBot : IHostedService
 
                         if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                         {
-                            await _botServices.LogToChannel($"VANITY GID REMOVAL: {discordUser.Mention} - {group.GID}").ConfigureAwait(false);
+                            await _botServices.LogToChannel($"VANITY GID REMOVAL: <@{lodestoneUser.DiscordId}> ({lodestoneUser.User.UID}) - GID: {group.GID}, Vanity: {group.Alias}").ConfigureAwait(false);
 
                             _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
                             group.Alias = null;
