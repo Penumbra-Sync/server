@@ -27,7 +27,6 @@ internal class DiscordBot : IHostedService
     private InteractionService _interactionModule;
     private CancellationTokenSource? _processReportQueueCts;
     private CancellationTokenSource? _updateStatusCts;
-    private CancellationTokenSource? _vanityUpdateCts;
 
     public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration,
         IHubContext<MareHub> mareHubContext,
@@ -72,7 +71,6 @@ internal class DiscordBot : IHostedService
             };
 
             await _botServices.Start().ConfigureAwait(false);
-            _ = UpdateStatusAsync();
         }
     }
 
@@ -85,7 +83,6 @@ internal class DiscordBot : IHostedService
             await _botServices.Stop().ConfigureAwait(false);
             _processReportQueueCts?.Cancel();
             _updateStatusCts?.Cancel();
-            _vanityUpdateCts?.Cancel();
 
             await _discordClient.LogoutAsync().ConfigureAwait(false);
             await _discordClient.StopAsync().ConfigureAwait(false);
@@ -203,17 +200,21 @@ internal class DiscordBot : IHostedService
     {
         var guild = (await _discordClient.Rest.GetGuildsAsync().ConfigureAwait(false)).First();
         await _interactionModule.RegisterCommandsToGuildAsync(guild.Id, true).ConfigureAwait(false);
+        _updateStatusCts?.Cancel();
+        _updateStatusCts?.Dispose();
+        _updateStatusCts = new();
+        _ = UpdateStatusAsync(_updateStatusCts.Token);
 
         await CreateOrUpdateModal(guild).ConfigureAwait(false);
         _botServices.UpdateGuild(guild);
         await _botServices.LogToChannel("Bot startup complete.").ConfigureAwait(false);
-        _ = UpdateVanityRoles(guild);
-        _ = RemoveUsersNotInVanityRole();
+        _ = UpdateVanityRoles(guild, _updateStatusCts.Token);
+        _ = RemoveUsersNotInVanityRole(_updateStatusCts.Token);
     }
 
-    private async Task UpdateVanityRoles(RestGuild guild)
+    private async Task UpdateVanityRoles(RestGuild guild, CancellationToken token)
     {
-        while (!_updateStatusCts.IsCancellationRequested)
+        while (!token.IsCancellationRequested)
         {
             try
             {
@@ -231,7 +232,7 @@ internal class DiscordBot : IHostedService
                     }
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(30), _updateStatusCts.Token).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(30), token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -317,13 +318,9 @@ internal class DiscordBot : IHostedService
         return Task.CompletedTask;
     }
 
-    private async Task RemoveUsersNotInVanityRole()
+    private async Task RemoveUsersNotInVanityRole(CancellationToken token)
     {
-        _vanityUpdateCts?.Cancel();
-        _vanityUpdateCts?.Dispose();
-        _vanityUpdateCts = new();
-        var token = _vanityUpdateCts.Token;
-        var guild = (await _discordClient.Rest.GetGuildsAsync()).First();
+        var guild = (await _discordClient.Rest.GetGuildsAsync().ConfigureAwait(false)).First();
         var appId = await _discordClient.GetApplicationInfoAsync().ConfigureAwait(false);
 
         while (!token.IsCancellationRequested)
@@ -333,7 +330,7 @@ internal class DiscordBot : IHostedService
                 _logger.LogInformation($"Cleaning up Vanity UIDs");
                 await _botServices.LogToChannel("Cleaning up Vanity UIDs").ConfigureAwait(false);
                 _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
-                var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id);
+                var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id).ConfigureAwait(false);
 
                 Dictionary<ulong, string> allowedRoleIds = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), new Dictionary<ulong, string>());
                 _logger.LogInformation($"Allowed role ids: {string.Join(", ", allowedRoleIds)}");
@@ -341,61 +338,60 @@ internal class DiscordBot : IHostedService
                 if (allowedRoleIds.Any())
                 {
                     await using var scope = _services.CreateAsyncScope();
-                    await using (var db = scope.ServiceProvider.GetRequiredService<MareDbContext>())
+                    await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
+
+                    var aliasedUsers = await db.LodeStoneAuth.Include("User")
+                        .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias)).ToListAsync().ConfigureAwait(false);
+                    var aliasedGroups = await db.Groups.Include(u => u.Owner)
+                        .Where(c => !string.IsNullOrEmpty(c.Alias)).ToListAsync().ConfigureAwait(false);
+
+                    foreach (var lodestoneAuth in aliasedUsers)
                     {
-                        var aliasedUsers = await db.LodeStoneAuth.Include("User")
-                            .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias)).ToListAsync().ConfigureAwait(false);
-                        var aliasedGroups = await db.Groups.Include(u => u.Owner)
-                            .Where(c => !string.IsNullOrEmpty(c.Alias)).ToListAsync().ConfigureAwait(false);
+                        var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
+                        _logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
 
-                        foreach (var lodestoneAuth in aliasedUsers)
+                        if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
                         {
-                            var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
-                            _logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
-
-                            if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
+                            _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
+                            await _botServices.LogToChannel($"VANITY UID REMOVAL: {discordUser.Mention} - {lodestoneAuth.User.UID}").ConfigureAwait(false);
+                            lodestoneAuth.User.Alias = null;
+                            var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
+                            foreach (var secondaryUser in secondaryUsers)
                             {
-                                _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
-                                await _botServices.LogToChannel($"VANITY UID REMOVAL: {discordUser.Mention} - {lodestoneAuth.User.UID}").ConfigureAwait(false);
-                                lodestoneAuth.User.Alias = null;
-                                var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
-                                foreach (var secondaryUser in secondaryUsers)
-                                {
-                                    _logger.LogInformation($"Secondary User {secondaryUser.User.UID} not in allowed roles, deleting alias");
+                                _logger.LogInformation($"Secondary User {secondaryUser.User.UID} not in allowed roles, deleting alias");
 
-                                    secondaryUser.User.Alias = null;
-                                    db.Update(secondaryUser.User);
-                                }
-                                db.Update(lodestoneAuth.User);
+                                secondaryUser.User.Alias = null;
+                                db.Update(secondaryUser.User);
                             }
-
-                            await db.SaveChangesAsync().ConfigureAwait(false);
-                            await Task.Delay(1000);
+                            db.Update(lodestoneAuth.User);
+                            await db.SaveChangesAsync(token).ConfigureAwait(false);
                         }
 
-                        foreach (var group in aliasedGroups)
+                        await Task.Delay(1000, token).ConfigureAwait(false);
+                    }
+
+                    foreach (var group in aliasedGroups)
+                    {
+                        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
+                        RestGuildUser discordUser = null;
+                        if (lodestoneUser != null)
                         {
-                            var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
-                            RestGuildUser discordUser = null;
-                            if (lodestoneUser != null)
-                            {
-                                discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
-                            }
-
-                            _logger.LogInformation($"Checking Group: {group.GID}, owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
-
-                            if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
-                            {
-                                await _botServices.LogToChannel($"VANITY GID REMOVAL: {discordUser.Mention} - {group.GID}").ConfigureAwait(false);
-
-                                _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
-                                group.Alias = null;
-                                db.Update(group);
-                            }
-
-                            await db.SaveChangesAsync().ConfigureAwait(false);
-                            await Task.Delay(1000);
+                            discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
                         }
+
+                        _logger.LogInformation($"Checking Group: {group.GID}, owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+
+                        if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
+                        {
+                            await _botServices.LogToChannel($"VANITY GID REMOVAL: {discordUser.Mention} - {group.GID}").ConfigureAwait(false);
+
+                            _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
+                            group.Alias = null;
+                            db.Update(group);
+                            await db.SaveChangesAsync(token).ConfigureAwait(false);
+                        }
+
+                        await Task.Delay(1000, token).ConfigureAwait(false);
                     }
                 }
                 else
@@ -409,17 +405,16 @@ internal class DiscordBot : IHostedService
             }
 
             _logger.LogInformation("Vanity UID cleanup complete");
-            await Task.Delay(TimeSpan.FromHours(12), _vanityUpdateCts.Token).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromHours(12), token).ConfigureAwait(false);
         }
     }
 
-    private async Task UpdateStatusAsync()
+    private async Task UpdateStatusAsync(CancellationToken token)
     {
-        _updateStatusCts = new();
-        while (!_updateStatusCts.IsCancellationRequested)
+        while (!token.IsCancellationRequested)
         {
             var endPoint = _connectionMultiplexer.GetEndPoints().First();
-            var onlineUsers = await _connectionMultiplexer.GetServer(endPoint).KeysAsync(pattern: "UID:*").CountAsync();
+            var onlineUsers = await _connectionMultiplexer.GetServer(endPoint).KeysAsync(pattern: "UID:*").CountAsync().ConfigureAwait(false);
 
             _logger.LogInformation("Users online: " + onlineUsers);
             await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
