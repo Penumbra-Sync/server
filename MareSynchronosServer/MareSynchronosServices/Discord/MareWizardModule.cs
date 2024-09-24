@@ -35,11 +35,83 @@ public partial class MareWizardModule : InteractionModuleBase
         _connectionMultiplexer = connectionMultiplexer;
     }
 
+    [ComponentInteraction("wizard-captcha:*")]
+    public async Task WizardCaptcha(bool init = false)
+    {
+        if (!init && !(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        if (_botServices.VerifiedCaptchaUsers.Contains(Context.Interaction.User.Id))
+        {
+            await StartWizard(true).ConfigureAwait(false);
+            return;
+        }
+
+        EmbedBuilder eb = new();
+
+        Random rnd = new Random();
+        var correctButton = rnd.Next(4) + 1;
+        string nthButtonText = correctButton switch
+        {
+            1 => "first",
+            2 => "second",
+            3 => "third",
+            4 => "fourth",
+            _ => "unknown",
+        };
+
+        eb.WithTitle("Mare Bot Services Captcha");
+        eb.WithDescription("You are seeing this embed because you interact with this bot for the first time since the bot has been restarted." + Environment.NewLine + Environment.NewLine
+            + "This bot __requires__ embeds for its function. To proceed, please verify you have embeds enabled." + Environment.NewLine + Environment.NewLine
+            + $"To verify you have embeds enabled __press on the **{nthButtonText}** ({correctButton}) button.__");
+        eb.WithColor(Color.LightOrange);
+
+        ComponentBuilder cb = new();
+        cb.WithButton("This", correctButton == 1 ? "wizard-home:false" : "wizard-captcha-fail:1", emote: new Emoji("⬅️"));
+        cb.WithButton("Bot", correctButton == 2 ? "wizard-home:false" : "wizard-captcha-fail:2", emote: new Emoji("🤖"));
+        cb.WithButton("Requires", correctButton == 3 ? "wizard-home:false" : "wizard-captcha-fail:3", emote: new Emoji("‼️"));
+        cb.WithButton("Embeds", correctButton == 4 ? "wizard-home:false" : "wizard-captcha-fail:4", emote: new Emoji("✉️"));
+
+        await InitOrUpdateInteraction(init, eb, cb).ConfigureAwait(false);
+    }
+
+    private async Task InitOrUpdateInteraction(bool init, EmbedBuilder eb, ComponentBuilder cb)
+    {
+        if (init)
+        {
+            await RespondAsync(embed: eb.Build(), components: cb.Build(), ephemeral: true).ConfigureAwait(false);
+            var resp = await GetOriginalResponseAsync().ConfigureAwait(false);
+            _botServices.ValidInteractions[Context.User.Id] = resp.Id;
+            _logger.LogInformation("Init Msg: {id}", resp.Id);
+        }
+        else
+        {
+            await ModifyInteraction(eb, cb).ConfigureAwait(false);
+        }
+    }
+
+    [ComponentInteraction("wizard-captcha-fail:*")]
+    public async Task WizardCaptchaFail(int button)
+    {
+        ComponentBuilder cb = new();
+        cb.WithButton("Restart (with Embeds enabled)", "wizard-captcha:false", emote: new Emoji("↩️"));
+        await ((Context.Interaction) as IComponentInteraction).UpdateAsync(m =>
+        {
+            m.Embed = null;
+            m.Content = "You pressed the wrong button. You likely have embeds disabled. Enable embeds in your Discord client (Settings -> Chat -> \"Show embeds and preview website links pasted into chat\") and try again.";
+            m.Components = cb.Build();
+        }).ConfigureAwait(false);
+
+        await _botServices.LogToChannel($"{Context.User.Mention} FAILED CAPTCHA").ConfigureAwait(false);
+    }
+
 
     [ComponentInteraction("wizard-home:*")]
     public async Task StartWizard(bool init = false)
     {
         if (!init && !(await ValidateInteraction().ConfigureAwait(false))) return;
+
+        if (!_botServices.VerifiedCaptchaUsers.Contains(Context.Interaction.User.Id))
+            _botServices.VerifiedCaptchaUsers.Add(Context.Interaction.User.Id);
 
         _logger.LogInformation("{method}:{userId}", nameof(StartWizard), Context.Interaction.User.Id);
 
@@ -97,17 +169,8 @@ public partial class MareWizardModule : InteractionModuleBase
             }
             cb.WithButton("Delete", "wizard-delete", ButtonStyle.Danger, new Emoji("⚠️"));
         }
-        if (init)
-        {
-            await RespondAsync(embed: eb.Build(), components: cb.Build(), ephemeral: true).ConfigureAwait(false);
-            var resp = await GetOriginalResponseAsync().ConfigureAwait(false);
-            _botServices.ValidInteractions[Context.User.Id] = resp.Id;
-            _logger.LogInformation("Init Msg: {id}", resp.Id);
-        }
-        else
-        {
-            await ModifyInteraction(eb, cb).ConfigureAwait(false);
-        }
+
+        await InitOrUpdateInteraction(init, eb, cb).ConfigureAwait(false);
     }
 
     public class VanityUidModal : IModal
@@ -180,6 +243,7 @@ public partial class MareWizardModule : InteractionModuleBase
     {
         await ((Context.Interaction) as IComponentInteraction).UpdateAsync(m =>
         {
+            m.Content = null;
             m.Embed = eb.Build();
             m.Components = cb.Build();
         }).ConfigureAwait(false);
