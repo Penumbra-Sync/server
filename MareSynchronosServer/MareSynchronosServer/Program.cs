@@ -68,6 +68,20 @@ public class Program
         return Host.CreateDefaultBuilder(args)
             .UseSystemd()
             .UseConsoleLifetime()
+            .ConfigureAppConfiguration((ctx, config) =>
+            {
+                var appSettingsPath = Environment.GetEnvironmentVariable("APPSETTINGS_PATH");
+                if (!string.IsNullOrEmpty(appSettingsPath))
+                {
+                    config.AddJsonFile(appSettingsPath, optional: true, reloadOnChange: true);
+                }
+                else
+                {
+                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                }
+
+                config.AddEnvironmentVariables();
+            })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);

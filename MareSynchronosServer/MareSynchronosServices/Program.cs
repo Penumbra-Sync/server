@@ -31,6 +31,20 @@ public class Program
         Host.CreateDefaultBuilder(args)
             .UseSystemd()
             .UseConsoleLifetime()
+            .ConfigureAppConfiguration((ctx, config) =>
+            {
+                var appSettingsPath = Environment.GetEnvironmentVariable("APPSETTINGS_PATH");
+                if (!string.IsNullOrEmpty(appSettingsPath))
+                {
+                    config.AddJsonFile(appSettingsPath, optional: true, reloadOnChange: true);
+                }
+                else
+                {
+                    config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                }
+
+                config.AddEnvironmentVariables();
+            })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);
@@ -38,6 +52,9 @@ public class Program
                 {
                     builder.AddConfiguration(ctx.Configuration.GetSection("Logging"));
                     builder.AddFile(o => o.RootPath = AppContext.BaseDirectory);
+                });
+                webBuilder.ConfigureKestrel((opt) =>
+                {
                 });
                 webBuilder.UseStartup<Startup>();
             });
