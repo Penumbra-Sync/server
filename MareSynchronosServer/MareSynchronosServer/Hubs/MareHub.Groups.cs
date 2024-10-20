@@ -385,6 +385,8 @@ public partial class MareHub
 
         _logger.LogCallInfo(MareHubLogger.Args(aliasOrGid, "Success"));
 
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
+
         var groupInfos = await DbContext.GroupPairs.Where(u => u.GroupGID == group.GID && (u.IsPinned || u.IsModerator)).ToListAsync().ConfigureAwait(false);
         await Clients.User(UserUID).Client_GroupSendFullInfo(new GroupFullInfoDto(group.ToGroupData(), group.Owner.ToUserData(),
             group.ToEnum(), preferredPermissions.ToEnum(), newPair.ToEnum(),
