@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace MareSynchronosShared.RequirementHandlers;
 
+
 public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubInvocationContext>
 {
     private readonly MareDbContext _dbContext;

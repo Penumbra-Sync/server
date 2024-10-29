@@ -87,7 +87,7 @@ public class Startup
         services.AddControllers().ConfigureApplicationPartManager(a =>
         {
             a.FeatureProviders.Remove(a.FeatureProviders.OfType<ControllerFeatureProvider>().First());
-            a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(JwtController)));
+            a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(JwtController), typeof(OAuthController)));
         });
     }
 
@@ -95,6 +95,7 @@ public class Startup
     {
         services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, ExistingUserRequirementHandler>();
 
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IConfigurationService<MareConfigurationBase>>((options, config) =>
@@ -121,6 +122,13 @@ public class Startup
             options.DefaultPolicy = new AuthorizationPolicyBuilder()
                 .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                 .RequireAuthenticatedUser().Build();
+            options.AddPolicy("OAuthToken", policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.AddRequirements(new ValidTokenRequirement());
+                policy.AddRequirements(new ExistingUserRequirement());
+                policy.RequireClaim(MareClaimTypes.OAuthLoginToken, "True");
+            });
             options.AddPolicy("Authenticated", policy =>
             {
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
