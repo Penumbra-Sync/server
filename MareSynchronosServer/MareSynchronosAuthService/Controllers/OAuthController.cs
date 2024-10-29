@@ -214,10 +214,10 @@ public class OAuthController : AuthControllerBase
     {
         string primaryUid = HttpContext.User.Claims.Single(c => string.Equals(c.Type, MareClaimTypes.Uid, StringComparison.Ordinal))!.Value;
 
-        var mareUser = await MareDbContext.Auth.Include(u => u.User).FirstOrDefaultAsync(f => f.UserUID == primaryUid);
+        var mareUser = await MareDbContext.Auth.AsNoTracking().Include(u => u.User).FirstOrDefaultAsync(f => f.UserUID == primaryUid).ConfigureAwait(false);
         if (mareUser == null || mareUser.User == null) return [];
         var uid = mareUser.User.UID;
-        var allUids = await MareDbContext.Auth.Include(u => u.User).Where(a => a.UserUID == uid || a.PrimaryUserUID == uid).ToListAsync();
+        var allUids = await MareDbContext.Auth.AsNoTracking().Include(u => u.User).Where(a => a.UserUID == uid || a.PrimaryUserUID == uid).ToListAsync().ConfigureAwait(false);
         var result = allUids.OrderBy(u => u.UserUID == uid ? 0 : 1).ThenBy(u => u.UserUID).Select(u => (u.UserUID, u.User.Alias)).ToDictionary();
         return result;
     }
