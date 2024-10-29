@@ -21,13 +21,13 @@ public abstract class AuthControllerBase : Controller
     protected readonly ILogger Logger;
     protected readonly IHttpContextAccessor HttpAccessor;
     protected readonly IConfigurationService<AuthServiceConfiguration> Configuration;
-    protected readonly MareDbContext MareDbContext;
+    protected readonly IDbContextFactory<MareDbContext> MareDbContextFactory;
     protected readonly SecretKeyAuthenticatorService SecretKeyAuthenticatorService;
     private readonly IRedisDatabase _redis;
     private readonly GeoIPService _geoIPProvider;
 
     protected AuthControllerBase(ILogger logger,
-    IHttpContextAccessor accessor, MareDbContext mareDbContext,
+    IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContext,
     SecretKeyAuthenticatorService secretKeyAuthenticatorService,
     IConfigurationService<AuthServiceConfiguration> configuration,
     IRedisDatabase redisDb, GeoIPService geoIPProvider)
@@ -36,14 +36,14 @@ public abstract class AuthControllerBase : Controller
         HttpAccessor = accessor;
         _redis = redisDb;
         _geoIPProvider = geoIPProvider;
-        MareDbContext = mareDbContext;
+        MareDbContextFactory = mareDbContext;
         SecretKeyAuthenticatorService = secretKeyAuthenticatorService;
         Configuration = configuration;
     }
 
-    protected async Task<IActionResult> GenericAuthResponse(string charaIdent, SecretKeyAuthReply authResult)
+    protected async Task<IActionResult> GenericAuthResponse(MareDbContext dbContext, string charaIdent, SecretKeyAuthReply authResult)
     {
-        if (await IsIdentBanned(charaIdent))
+        if (await IsIdentBanned(dbContext, charaIdent))
         {
             Logger.LogWarning("Authenticate:IDENTBAN:{id}:{ident}", authResult.Uid, charaIdent);
             return Unauthorized("Your XIV service account is banned from using the service.");
@@ -114,9 +114,10 @@ public abstract class AuthControllerBase : Controller
 
     protected async Task EnsureBan(string uid, string? primaryUid, string charaIdent)
     {
-        if (!MareDbContext.BannedUsers.Any(c => c.CharacterIdentification == charaIdent))
+        using var dbContext = await MareDbContextFactory.CreateDbContextAsync();
+        if (!dbContext.BannedUsers.Any(c => c.CharacterIdentification == charaIdent))
         {
-            MareDbContext.BannedUsers.Add(new Banned()
+            dbContext.BannedUsers.Add(new Banned()
             {
                 CharacterIdentification = charaIdent,
                 Reason = "Autobanned CharacterIdent (" + uid + ")",
@@ -125,35 +126,35 @@ public abstract class AuthControllerBase : Controller
 
         var uidToLookFor = primaryUid ?? uid;
 
-        var primaryUserAuth = await MareDbContext.Auth.FirstAsync(f => f.UserUID == uidToLookFor);
+        var primaryUserAuth = await dbContext.Auth.FirstAsync(f => f.UserUID == uidToLookFor);
         primaryUserAuth.MarkForBan = false;
         primaryUserAuth.IsBanned = true;
 
-        var lodestone = await MareDbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == uidToLookFor);
+        var lodestone = await dbContext.LodeStoneAuth.Include(a => a.User).FirstOrDefaultAsync(c => c.User.UID == uidToLookFor);
 
         if (lodestone != null)
         {
-            if (!MareDbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.HashedLodestoneId))
+            if (!dbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.HashedLodestoneId))
             {
-                MareDbContext.BannedRegistrations.Add(new BannedRegistrations()
+                dbContext.BannedRegistrations.Add(new BannedRegistrations()
                 {
                     DiscordIdOrLodestoneAuth = lodestone.HashedLodestoneId,
                 });
             }
-            if (!MareDbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.DiscordId.ToString()))
+            if (!dbContext.BannedRegistrations.Any(c => c.DiscordIdOrLodestoneAuth == lodestone.DiscordId.ToString()))
             {
-                MareDbContext.BannedRegistrations.Add(new BannedRegistrations()
+                dbContext.BannedRegistrations.Add(new BannedRegistrations()
                 {
                     DiscordIdOrLodestoneAuth = lodestone.DiscordId.ToString(),
                 });
             }
         }
 
-        await MareDbContext.SaveChangesAsync();
+        await dbContext.SaveChangesAsync();
     }
 
-    protected async Task<bool> IsIdentBanned(string charaIdent)
+    protected async Task<bool> IsIdentBanned(MareDbContext dbContext, string charaIdent)
     {
-        return await MareDbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
+        return await dbContext.BannedUsers.AsNoTracking().AnyAsync(u => u.CharacterIdentification == charaIdent).ConfigureAwait(false);
     }
 }

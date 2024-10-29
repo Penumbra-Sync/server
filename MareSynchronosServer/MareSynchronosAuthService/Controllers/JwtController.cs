@@ -16,7 +16,7 @@ namespace MareSynchronosAuthService.Controllers;
 public class JwtController : AuthControllerBase
 {
     public JwtController(ILogger<JwtController> logger,
-        IHttpContextAccessor accessor, MareDbContext mareDbContext,
+        IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContext,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<AuthServiceConfiguration> configuration,
         IRedisDatabase redisDb, GeoIPService geoIPProvider)
@@ -29,28 +29,30 @@ public class JwtController : AuthControllerBase
     [HttpPost(MareAuth.Auth_CreateIdent)]
     public async Task<IActionResult> CreateToken(string auth, string charaIdent)
     {
-        return await AuthenticateInternal(auth, charaIdent).ConfigureAwait(false);
+        using var dbContext = await MareDbContextFactory.CreateDbContextAsync();
+        return await AuthenticateInternal(dbContext, auth, charaIdent).ConfigureAwait(false);
     }
 
     [Authorize(Policy = "Authenticated")]
     [HttpGet(MareAuth.Auth_RenewToken)]
     public async Task<IActionResult> RenewToken()
     {
+        using var dbContext = await MareDbContextFactory.CreateDbContextAsync();
         try
         {
             var uid = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.Uid, StringComparison.Ordinal))!.Value;
             var ident = HttpContext.User.Claims.Single(p => string.Equals(p.Type, MareClaimTypes.CharaIdent, StringComparison.Ordinal))!.Value;
             var alias = HttpContext.User.Claims.SingleOrDefault(p => string.Equals(p.Type, MareClaimTypes.Alias))?.Value ?? string.Empty;
 
-            if (await MareDbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.MarkForBan))
+            if (await dbContext.Auth.Where(u => u.UserUID == uid || u.PrimaryUserUID == uid).AnyAsync(a => a.MarkForBan))
             {
-                var userAuth = await MareDbContext.Auth.SingleAsync(u => u.UserUID == uid);
+                var userAuth = await dbContext.Auth.SingleAsync(u => u.UserUID == uid);
                 await EnsureBan(uid, userAuth.PrimaryUserUID, ident);
 
                 return Unauthorized("Your Mare account is banned.");
             }
 
-            if (await IsIdentBanned(ident))
+            if (await IsIdentBanned(dbContext, ident))
             {
                 return Unauthorized("Your XIV service account is banned from using the service.");
             }
@@ -65,7 +67,7 @@ public class JwtController : AuthControllerBase
         }
     }
 
-    protected async Task<IActionResult> AuthenticateInternal(string auth, string charaIdent)
+    protected async Task<IActionResult> AuthenticateInternal(MareDbContext dbContext, string auth, string charaIdent)
     {
         try
         {
@@ -76,7 +78,7 @@ public class JwtController : AuthControllerBase
 
             var authResult = await SecretKeyAuthenticatorService.AuthorizeAsync(ip, auth);
 
-            return await GenericAuthResponse(charaIdent, authResult);
+            return await GenericAuthResponse(dbContext, charaIdent, authResult);
         }
         catch (Exception ex)
         {
