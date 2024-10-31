@@ -170,6 +170,29 @@ public class OAuthController : AuthControllerBase
     }
 
     [Authorize(Policy = "OAuthToken")]
+    [HttpPost(MareAuth.OAuth_GetUIDsBasedOnSecretKeys)]
+    public async Task<Dictionary<string, string>> GetUIDsBasedOnSecretKeys([FromBody] List<string> secretKeys)
+    {
+        if (!secretKeys.Any())
+            return [];
+
+        using var dbContext = await MareDbContextFactory.CreateDbContextAsync();
+
+        Dictionary<string, string> secretKeysToUIDDict = secretKeys.Distinct().ToDictionary(k => k, _ => string.Empty, StringComparer.Ordinal);
+        foreach (var key in secretKeys)
+        {
+            var shaKey = StringUtils.Sha256String(key);
+            var associatedAuth = await dbContext.Auth.AsNoTracking().SingleOrDefaultAsync(a => a.HashedKey == shaKey);
+            if (associatedAuth != null)
+            {
+                secretKeysToUIDDict[key] = associatedAuth.UserUID;
+            }
+        }
+
+        return secretKeysToUIDDict;
+    }
+
+    [Authorize(Policy = "OAuthToken")]
     [HttpPost(MareAuth.OAuth_RenewOAuthToken)]
     public IActionResult RenewOAuthToken()
     {
