@@ -12,8 +12,31 @@ public sealed class BlockFileDataSubstream : IDisposable
 
     public BlockFileDataSubstream(FileInfo file)
     {
-        _dataStreamLazy = new(() => File.Open(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Inheritable));
+        _dataStreamLazy = new(() => File.Open(file.FullName, GetFileStreamOptions(file.Length)));
         _headerStream = new MemoryStream(Encoding.ASCII.GetBytes("#" + file.Name + ":" + file.Length.ToString(CultureInfo.InvariantCulture) + "#"));
+    }
+
+    private static FileStreamOptions GetFileStreamOptions(long fileSize)
+    {
+        int bufferSize = fileSize switch
+        {
+            <= 128 * 1024 => 0,
+            <= 512 * 1024 => 4096,
+            <= 1 * 1024 * 1024 => 65536,
+            <= 10 * 1024 * 1024 => 131072,
+            <= 100 * 1024 * 1024 => 524288,
+            _ => 1048576
+        };
+
+        FileStreamOptions opts = new()
+        {
+            Mode = FileMode.Open,
+            Access = FileAccess.Read,
+            Share = FileShare.Read | FileShare.Inheritable,
+            BufferSize = bufferSize
+        };
+
+        return opts;
     }
 
     public int Read(byte[] inputBuffer, int offset, int count)
