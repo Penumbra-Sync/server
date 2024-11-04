@@ -17,11 +17,11 @@ public class DistributionController : ControllerBase
 
     [HttpGet(MareFiles.Distribution_Get)]
     [Authorize(Policy = "Internal")]
-    public async Task<IActionResult> GetFile(string fileHash)
+    public async Task<IActionResult> GetFile(string file)
     {
-        _logger.LogInformation($"GetFile:{MareUser}:{fileHash}");
+        _logger.LogInformation($"GetFile:{MareUser}:{file}");
 
-        var fs = await _cachedFileProvider.DownloadAndGetLocalFileInfo(fileHash);
+        var fs = await _cachedFileProvider.DownloadAndGetLocalFileInfo(file);
         if (fs == null) return NotFound();
 
         return PhysicalFile(fs.FullName, "application/octet-stream");
