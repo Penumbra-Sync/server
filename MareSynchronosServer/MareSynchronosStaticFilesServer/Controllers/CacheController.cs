@@ -36,9 +36,9 @@ public class CacheController : ControllerBase
         long requestSize = 0;
         List<BlockFileDataSubstream> substreams = new();
 
-        foreach (var file in request.FileIds)
+        foreach (var fileHash in request.FileIds)
         {
-            var fs = await _cachedFileProvider.GetAndDownloadFileStream(file);
+            var fs = await _cachedFileProvider.DownloadAndGetLocalFileInfo(fileHash).ConfigureAwait(false);
             if (fs == null) continue;
 
             substreams.Add(new(fs));

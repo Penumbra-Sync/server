@@ -167,7 +167,7 @@ public sealed class CachedFileProvider : IDisposable
         _downloadSemaphore.Release();
     }
 
-    public FileStream? GetLocalFileStream(string hash)
+    public FileInfo? GetLocalFilePath(string hash)
     {
         var fi = FilePathUtil.GetFileInfoForHash(_hotStoragePath, hash);
         if (fi == null) return null;
@@ -176,10 +176,10 @@ public sealed class CachedFileProvider : IDisposable
 
         _fileStatisticsService.LogFile(hash, fi.Length);
 
-        return new FileStream(fi.FullName, FileMode.Open, FileAccess.Read, FileShare.Inheritable | FileShare.Read);
+        return new FileInfo(fi.FullName);
     }
 
-    public async Task<FileStream?> GetAndDownloadFileStream(string hash)
+    public async Task<FileInfo?> DownloadAndGetLocalFileInfo(string hash)
     {
         await DownloadFileWhenRequired(hash).ConfigureAwait(false);
 
@@ -203,7 +203,7 @@ public sealed class CachedFileProvider : IDisposable
             }
         }
 
-        return GetLocalFileStream(hash);
+        return GetLocalFilePath(hash);
     }
 
     public bool AnyFilesDownloading(List<string> hashes)

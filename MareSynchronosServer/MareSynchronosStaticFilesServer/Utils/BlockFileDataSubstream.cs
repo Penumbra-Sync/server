@@ -6,70 +6,87 @@ namespace MareSynchronosStaticFilesServer.Utils;
 public sealed class BlockFileDataSubstream : IDisposable
 {
     private readonly MemoryStream _headerStream;
-    private readonly BinaryWriter _headerStreamWriter;
-    private readonly FileStream _dataStream;
-    private int _headerPosition = 0;
-    private long _dataPosition = 0;
     private bool _disposed = false;
+    private readonly Lazy<FileStream> _dataStreamLazy;
+    private FileStream DataStream => _dataStreamLazy.Value;
 
-    private long RemainingHeaderLength => _headerStream.Length - _headerPosition;
-    private long RemainingDataLength => _dataStream.Length - _dataPosition;
-
-    public BlockFileDataSubstream(FileStream dataStream)
+    public BlockFileDataSubstream(FileInfo file)
     {
-        _headerStream = new MemoryStream();
-        _headerStreamWriter = new BinaryWriter(_headerStream);
-        _headerStreamWriter.Write(Encoding.ASCII.GetBytes("#" + new FileInfo(dataStream.Name).Name + ":" + dataStream.Length.ToString(CultureInfo.InvariantCulture) + "#"));
-        _headerStreamWriter.Flush();
-        _headerStream.Position = 0;
-        _dataStream = dataStream;
+        _dataStreamLazy = new(() => File.Open(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Inheritable));
+        _headerStream = new MemoryStream(Encoding.ASCII.GetBytes("#" + file.Name + ":" + file.Length.ToString(CultureInfo.InvariantCulture) + "#"));
     }
 
     public int Read(byte[] inputBuffer, int offset, int count)
     {
-        int currentOffset = offset;
-        int currentCount = count;
-        int readHeaderBytes = 0;
+        int bytesRead = 0;
 
-        if (RemainingHeaderLength > 0)
+        // Read from header stream if it has remaining data
+        if (_headerStream.Position < _headerStream.Length)
         {
-            bool readOnlyHeader = currentCount <= RemainingHeaderLength;
-            byte[] readHeaderBuffer = new byte[Math.Min(currentCount, RemainingHeaderLength)];
-
-            readHeaderBytes = _headerStream.Read(readHeaderBuffer, 0, readHeaderBuffer.Length);
-            _headerPosition += readHeaderBytes;
-
-            Buffer.BlockCopy(readHeaderBuffer, 0, inputBuffer, currentOffset, readHeaderBytes);
-
-            if (readOnlyHeader)
-            {
-                return readHeaderBytes;
-            }
-
-            currentOffset += readHeaderBytes;
-            currentCount -= readHeaderBytes;
+            int headerBytesToRead = (int)Math.Min(count, _headerStream.Length - _headerStream.Position);
+            bytesRead += _headerStream.Read(inputBuffer, offset, headerBytesToRead);
+            offset += bytesRead;
+            count -= bytesRead;
         }
 
-        if (RemainingDataLength > 0)
+        // Read from data stream if there is still space in buffer
+        if (count > 0 && DataStream.Position < DataStream.Length)
         {
-            byte[] readDataBuffer = new byte[currentCount];
-            var readDataBytes = _dataStream.Read(readDataBuffer, 0, readDataBuffer.Length);
-            _dataPosition += readDataBytes;
-
-            Buffer.BlockCopy(readDataBuffer, 0, inputBuffer, currentOffset, readDataBytes);
-
-            return readDataBytes + readHeaderBytes;
+            bytesRead += DataStream.Read(inputBuffer, offset, count);
         }
 
-        return 0;
+        return bytesRead;
+    }
+
+    public async Task<int> ReadAsync(byte[] inputBuffer, int offset, int count, CancellationToken cancellationToken = default)
+    {
+        int bytesRead = 0;
+
+        // Async read from header stream
+        if (_headerStream.Position < _headerStream.Length)
+        {
+            int headerBytesToRead = (int)Math.Min(count, _headerStream.Length - _headerStream.Position);
+            bytesRead += await _headerStream.ReadAsync(inputBuffer.AsMemory(offset, headerBytesToRead), cancellationToken).ConfigureAwait(false);
+            offset += bytesRead;
+            count -= bytesRead;
+        }
+
+        // Async read from data stream
+        if (count > 0 && DataStream.Position < DataStream.Length)
+        {
+            bytesRead += await DataStream.ReadAsync(inputBuffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
+        }
+
+        return bytesRead;
+    }
+
+    public async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        int bytesRead = 0;
+
+        // Async read from header stream
+        if (_headerStream.Position < _headerStream.Length)
+        {
+            int headerBytesToRead = (int)Math.Min(buffer.Length, _headerStream.Length - _headerStream.Position);
+            bytesRead += await _headerStream.ReadAsync(buffer.Slice(0, headerBytesToRead), cancellationToken).ConfigureAwait(false);
+            buffer = buffer.Slice(headerBytesToRead);
+        }
+
+        // Async read from data stream
+        if (buffer.Length > 0 && DataStream.Position < DataStream.Length)
+        {
+            bytesRead += await DataStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+        }
+
+        return bytesRead;
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _headerStream.Dispose();
-        _headerStreamWriter.Dispose();
-        _dataStream.Dispose();
+        if (_dataStreamLazy.IsValueCreated)
+            DataStream.Dispose();
         _disposed = true;
     }
 }
