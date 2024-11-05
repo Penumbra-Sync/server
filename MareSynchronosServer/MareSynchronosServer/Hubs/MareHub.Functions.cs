@@ -90,7 +90,7 @@ public partial class MareHub
 
     private async Task<string> GetUserIdent(string uid)
     {
-        if (uid.IsNullOrEmpty()) return string.Empty;
+        if (string.IsNullOrEmpty(uid)) return string.Empty;
         return await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
     }
 
