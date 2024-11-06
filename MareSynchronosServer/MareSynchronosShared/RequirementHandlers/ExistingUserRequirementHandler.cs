@@ -30,7 +30,7 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
 
         if (!ulong.TryParse(discordIdString, out ulong discordId)) context.Fail();
 
-        var discordUser = dbContext.LodeStoneAuth.AsNoTracking().SingleOrDefaultAsync(b => b.DiscordId == discordId);
+        var discordUser = await dbContext.LodeStoneAuth.AsNoTracking().SingleOrDefaultAsync(b => b.DiscordId == discordId).ConfigureAwait(false);
         if (discordUser == null) context.Fail();
 
         context.Succeed(requirement);
