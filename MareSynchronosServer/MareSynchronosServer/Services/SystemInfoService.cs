@@ -11,7 +11,7 @@ using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosServer.Services;
 
-public class SystemInfoService : IHostedService, IDisposable
+public sealed class SystemInfoService : IHostedService, IDisposable
 {
     private readonly MareMetrics _mareMetrics;
     private readonly IConfigurationService<ServerConfiguration> _config;

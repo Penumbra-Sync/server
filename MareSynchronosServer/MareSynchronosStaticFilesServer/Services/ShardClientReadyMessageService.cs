@@ -22,27 +22,24 @@ public class ShardClientReadyMessageService : IClientReadyMessageService
         _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronosServer", "1.0.0.0"));
     }
 
-    public void SendDownloadReady(string uid, Guid requestId)
+    public async Task SendDownloadReady(string uid, Guid requestId)
     {
-        _ = Task.Run(async () =>
+        var mainUrl = _configurationService.GetValue<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress));
+        var path = MareFiles.MainSendReadyFullPath(mainUrl, uid, requestId);
+        using HttpRequestMessage msg = new()
         {
-            var mainUrl = _configurationService.GetValue<Uri>(nameof(StaticFilesServerConfiguration.MainFileServerAddress));
-            var path = MareFiles.MainSendReadyFullPath(mainUrl, uid, requestId);
-            using HttpRequestMessage msg = new()
-            {
-                RequestUri = path
-            };
-            msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _tokenGenerator.Token);
+            RequestUri = path
+        };
+        msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _tokenGenerator.Token);
 
-            _logger.LogInformation("Sending Client Ready for {uid}:{requestId} to {path}", uid, requestId, path);
-            try
-            {
-                using var result = await _httpClient.SendAsync(msg).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failure to send for {uid}:{requestId}", uid, requestId);
-            }
-        });
+        _logger.LogInformation("Sending Client Ready for {uid}:{requestId} to {path}", uid, requestId, path);
+        try
+        {
+            using var result = await _httpClient.SendAsync(msg).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failure to send for {uid}:{requestId}", uid, requestId);
+        }
     }
 }

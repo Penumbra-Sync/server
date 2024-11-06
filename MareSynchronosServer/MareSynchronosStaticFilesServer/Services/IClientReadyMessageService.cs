@@ -2,5 +2,5 @@
 
 public interface IClientReadyMessageService
 {
-    void SendDownloadReady(string uid, Guid requestId);
+    Task SendDownloadReady(string uid, Guid requestId);
 }

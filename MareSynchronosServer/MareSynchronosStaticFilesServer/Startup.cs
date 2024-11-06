@@ -106,6 +106,15 @@ public class Startup
                 }).UseSnakeCaseNamingConvention();
                 options.EnableThreadSafetyChecks(false);
             }, mareConfig.GetValue(nameof(MareConfigurationBase.DbContextPoolSize), 1024));
+            services.AddDbContextFactory<MareDbContext>(options =>
+            {
+                options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
+                {
+                    builder.MigrationsHistoryTable("_efmigrationshistory", "public");
+                    builder.MigrationsAssembly("MareSynchronosShared");
+                }).UseSnakeCaseNamingConvention();
+                options.EnableThreadSafetyChecks(false);
+            });
 
             var signalRServiceBuilder = services.AddSignalR(hubOptions =>
             {

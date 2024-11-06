@@ -49,6 +49,11 @@ public class Program
 
                 config.AddEnvironmentVariables();
             })
+            .ConfigureLogging((ctx, builder) =>
+            {
+                builder.AddConfiguration(ctx.Configuration.GetSection("Logging"));
+                builder.AddFile(o => o.RootPath = AppContext.BaseDirectory);
+            })
             .ConfigureWebHostDefaults(webBuilder =>
             {
                 webBuilder.UseContentRoot(AppContext.BaseDirectory);

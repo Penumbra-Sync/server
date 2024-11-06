@@ -17,9 +17,9 @@ public class MainController : ControllerBase
 
     [HttpGet(MareFiles.Main_SendReady)]
     [Authorize(Policy = "Internal")]
-    public IActionResult SendReadyToClients(string uid, Guid requestId)
+    public async Task<IActionResult> SendReadyToClients(string uid, Guid requestId)
     {
-        _messageService.SendDownloadReady(uid, requestId);
+        await _messageService.SendDownloadReady(uid, requestId).ConfigureAwait(false);
         return Ok();
     }
 }

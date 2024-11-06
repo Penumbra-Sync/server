@@ -29,13 +29,13 @@ public class ServerFilesController : ControllerBase
     private readonly CachedFileProvider _cachedFileProvider;
     private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
     private readonly IHubContext<MareHub> _hubContext;
-    private readonly MareDbContext _mareDbContext;
+    private readonly IDbContextFactory<MareDbContext> _mareDbContext;
     private readonly MareMetrics _metricsClient;
 
     public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider,
         IConfigurationService<StaticFilesServerConfiguration> configuration,
         IHubContext<MareHub> hubContext,
-        MareDbContext mareDbContext, MareMetrics metricsClient) : base(logger)
+        IDbContextFactory<MareDbContext> mareDbContext, MareMetrics metricsClient) : base(logger)
     {
         _basePath = configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false)
             ? configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.ColdStorageDirectory))
@@ -50,7 +50,8 @@ public class ServerFilesController : ControllerBase
     [HttpPost(MareFiles.ServerFiles_DeleteAll)]
     public async Task<IActionResult> FilesDeleteAll()
     {
-        var ownFiles = await _mareDbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == MareUser).ToListAsync().ConfigureAwait(false);
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+        var ownFiles = await dbContext.Files.Where(f => f.Uploaded && f.Uploader.UID == MareUser).ToListAsync().ConfigureAwait(false);
         bool isColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
 
         foreach (var dbFile in ownFiles)
@@ -65,8 +66,8 @@ public class ServerFilesController : ControllerBase
             }
         }
 
-        _mareDbContext.Files.RemoveRange(ownFiles);
-        await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+        dbContext.Files.RemoveRange(ownFiles);
+        await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
         return Ok();
     }
@@ -74,11 +75,15 @@ public class ServerFilesController : ControllerBase
     [HttpGet(MareFiles.ServerFiles_GetSizes)]
     public async Task<IActionResult> FilesGetSizes([FromBody] List<string> hashes)
     {
-        var forbiddenFiles = await _mareDbContext.ForbiddenUploadEntries.
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+        var forbiddenFiles = await dbContext.ForbiddenUploadEntries.
             Where(f => hashes.Contains(f.Hash)).ToListAsync().ConfigureAwait(false);
         List<DownloadFileDto> response = new();
 
-        var cacheFile = await _mareDbContext.Files.AsNoTracking().Where(f => hashes.Contains(f.Hash)).AsNoTracking().Select(k => new { k.Hash, k.Size, k.RawSize }).AsNoTracking().ToListAsync().ConfigureAwait(false);
+        var cacheFile = await dbContext.Files.AsNoTracking()
+            .Where(f => hashes.Contains(f.Hash))
+            .Select(k => new { k.Hash, k.Size, k.RawSize })
+            .ToListAsync().ConfigureAwait(false);
 
         var allFileShards = new List<CdnShardConfiguration>(_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()));
 
@@ -128,10 +133,12 @@ public class ServerFilesController : ControllerBase
     [HttpPost(MareFiles.ServerFiles_FilesSend)]
     public async Task<IActionResult> FilesSend([FromBody] FilesSendDto filesSendDto)
     {
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+
         var userSentHashes = new HashSet<string>(filesSendDto.FileHashes.Distinct(StringComparer.Ordinal).Select(s => string.Concat(s.Where(c => char.IsLetterOrDigit(c)))), StringComparer.Ordinal);
         var notCoveredFiles = new Dictionary<string, UploadFileDto>(StringComparer.Ordinal);
-        var forbiddenFiles = await _mareDbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
-        var existingFiles = await _mareDbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
+        var forbiddenFiles = await dbContext.ForbiddenUploadEntries.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
+        var existingFiles = await dbContext.Files.AsNoTracking().Where(f => userSentHashes.Contains(f.Hash)).AsNoTracking().ToDictionaryAsync(f => f.Hash, f => f).ConfigureAwait(false);
 
         List<FileCache> fileCachesToUpload = new();
         foreach (var hash in userSentHashes)
@@ -171,9 +178,11 @@ public class ServerFilesController : ControllerBase
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<IActionResult> UploadFile(string hash, CancellationToken requestAborted)
     {
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+
         _logger.LogInformation("{user} uploading file {file}", MareUser, hash);
         hash = hash.ToUpperInvariant();
-        var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+        var existingFile = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
         SemaphoreSlim? fileLock = null;
@@ -199,7 +208,7 @@ public class ServerFilesController : ControllerBase
 
         try
         {
-            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            var existingFileCheck2 = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
             if (existingFileCheck2 != null)
             {
                 return Ok();
@@ -227,7 +236,7 @@ public class ServerFilesController : ControllerBase
             await compressedFileStream.CopyToAsync(fileStream).ConfigureAwait(false);
 
             // update on db
-            await _mareDbContext.Files.AddAsync(new FileCache()
+            await dbContext.Files.AddAsync(new FileCache()
             {
                 Hash = hash,
                 UploadDate = DateTime.UtcNow,
@@ -236,7 +245,7 @@ public class ServerFilesController : ControllerBase
                 Uploaded = true,
                 RawSize = data.LongLength
             }).ConfigureAwait(false);
-            await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             bool isColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
 
@@ -274,9 +283,11 @@ public class ServerFilesController : ControllerBase
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<IActionResult> UploadFileMunged(string hash, CancellationToken requestAborted)
     {
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+
         _logger.LogInformation("{user} uploading munged file {file}", MareUser, hash);
         hash = hash.ToUpperInvariant();
-        var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+        var existingFile = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
         SemaphoreSlim? fileLock = null;
@@ -302,7 +313,7 @@ public class ServerFilesController : ControllerBase
 
         try
         {
-            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            var existingFileCheck2 = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
             if (existingFileCheck2 != null)
             {
                 return Ok();
@@ -329,7 +340,7 @@ public class ServerFilesController : ControllerBase
             await fileStream.WriteAsync(unmungedFile.AsMemory()).ConfigureAwait(false);
 
             // update on db
-            await _mareDbContext.Files.AddAsync(new FileCache()
+            await dbContext.Files.AddAsync(new FileCache()
             {
                 Hash = hash,
                 UploadDate = DateTime.UtcNow,
@@ -338,7 +349,7 @@ public class ServerFilesController : ControllerBase
                 Uploaded = true,
                 RawSize = data.LongLength
             }).ConfigureAwait(false);
-            await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             bool isColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
 
@@ -382,9 +393,11 @@ public class ServerFilesController : ControllerBase
     [RequestSizeLimit(200 * 1024 * 1024)]
     public async Task<IActionResult> UploadFileRaw(string hash, CancellationToken requestAborted)
     {
+        using var dbContext = await _mareDbContext.CreateDbContextAsync();
+
         _logger.LogInformation("{user} uploading raw file {file}", MareUser, hash);
         hash = hash.ToUpperInvariant();
-        var existingFile = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+        var existingFile = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
         if (existingFile != null) return Ok();
 
         SemaphoreSlim? fileLock = null;
@@ -410,7 +423,7 @@ public class ServerFilesController : ControllerBase
 
         try
         {
-            var existingFileCheck2 = await _mareDbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
+            var existingFileCheck2 = await dbContext.Files.SingleOrDefaultAsync(f => f.Hash == hash);
             if (existingFileCheck2 != null)
             {
                 return Ok();
@@ -437,7 +450,7 @@ public class ServerFilesController : ControllerBase
             await compressedStream.CopyToAsync(fileStream).ConfigureAwait(false);
 
             // update on db
-            await _mareDbContext.Files.AddAsync(new FileCache()
+            await dbContext.Files.AddAsync(new FileCache()
             {
                 Hash = hash,
                 UploadDate = DateTime.UtcNow,
@@ -446,7 +459,7 @@ public class ServerFilesController : ControllerBase
                 Uploaded = true,
                 RawSize = rawFileStream.Length
             }).ConfigureAwait(false);
-            await _mareDbContext.SaveChangesAsync().ConfigureAwait(false);
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
             bool isColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
 

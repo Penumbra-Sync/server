@@ -15,12 +15,9 @@ public class MainClientReadyMessageService : IClientReadyMessageService
         _mareHub = mareHub;
     }
 
-    public void SendDownloadReady(string uid, Guid requestId)
+    public async Task SendDownloadReady(string uid, Guid requestId)
     {
-        _ = Task.Run(async () =>
-        {
-            _logger.LogInformation("Sending Client Ready for {uid}:{requestId} to SignalR", uid, requestId);
-            await _mareHub.Clients.User(uid).SendAsync(nameof(IMareHub.Client_DownloadReady), requestId).ConfigureAwait(false);
-        });
+        _logger.LogInformation("Sending Client Ready for {uid}:{requestId} to SignalR", uid, requestId);
+        await _mareHub.Clients.User(uid).SendAsync(nameof(IMareHub.Client_DownloadReady), requestId).ConfigureAwait(false);
     }
 }

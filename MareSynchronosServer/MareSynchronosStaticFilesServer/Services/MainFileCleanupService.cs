@@ -13,18 +13,19 @@ namespace MareSynchronosStaticFilesServer.Services;
 public class MainFileCleanupService : IHostedService
 {
     private readonly IConfigurationService<StaticFilesServerConfiguration> _configuration;
+    private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly ILogger<MainFileCleanupService> _logger;
     private readonly MareMetrics _metrics;
-    private readonly IServiceProvider _services;
     private CancellationTokenSource _cleanupCts;
 
     public MainFileCleanupService(MareMetrics metrics, ILogger<MainFileCleanupService> logger,
-        IServiceProvider services, IConfigurationService<StaticFilesServerConfiguration> configuration)
+        IConfigurationService<StaticFilesServerConfiguration> configuration,
+        IDbContextFactory<MareDbContext> dbContextFactory)
     {
         _metrics = metrics;
         _logger = logger;
-        _services = services;
         _configuration = configuration;
+        _dbContextFactory = dbContextFactory;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -35,7 +36,7 @@ public class MainFileCleanupService : IHostedService
 
         _cleanupCts = new();
 
-        _ = CleanUpTask(_cleanupCts.Token);
+        _ = Task.Run(() => CleanUpTask(_cleanupCts.Token)).ConfigureAwait(false);
 
         return Task.CompletedTask;
     }
@@ -155,8 +156,9 @@ public class MainFileCleanupService : IHostedService
             bool useColdStorage = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false);
             var hotStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
             var coldStorageDir = _configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.ColdStorageDirectory));
-            using var scope = _services.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+
+            _logger.LogInformation("Running File Cleanup Task");
 
             try
             {
@@ -166,16 +168,19 @@ public class MainFileCleanupService : IHostedService
                 var linkedToken = linkedTokenCts.Token;
 
                 DirectoryInfo dirHotStorage = new(hotStorageDir);
+                _logger.LogInformation("File Cleanup Task gathering hot storage files");
                 var allFilesInHotStorage = dirHotStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
 
                 var unusedRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UnusedFileRetentionPeriodInDays), 14);
                 var forcedDeletionAfterHours = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ForcedDeletionOfFilesAfterHours), -1);
                 var sizeLimit = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.CacheSizeHardLimitInGiB), -1);
 
+                _logger.LogInformation("File Cleanup Task cleaning up outdated hot storage files");
                 var remainingHotFiles = await CleanUpOutdatedFiles(hotStorageDir, allFilesInHotStorage, unusedRetention, forcedDeletionAfterHours,
                     deleteFromDb: !useColdStorage, dbContext: dbContext,
                     ct: linkedToken).ConfigureAwait(false);
 
+                _logger.LogInformation("File Cleanup Task cleaning up hot storage file beyond size limit");
                 var finalRemainingHotFiles = CleanUpFilesBeyondSizeLimit(remainingHotFiles, sizeLimit,
                     deleteFromDb: !useColdStorage, dbContext: dbContext,
                     ct: linkedToken);
@@ -183,15 +188,18 @@ public class MainFileCleanupService : IHostedService
                 if (useColdStorage)
                 {
                     DirectoryInfo dirColdStorage = new(coldStorageDir);
+                    _logger.LogInformation("File Cleanup Task gathering cold storage files");
                     var allFilesInColdStorageDir = dirColdStorage.GetFiles("*", SearchOption.AllDirectories).ToList();
 
                     var coldStorageRetention = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.ColdStorageUnusedFileRetentionPeriodInDays), 60);
                     var coldStorageSize = _configuration.GetValueOrDefault<double>(nameof(StaticFilesServerConfiguration.ColdStorageSizeHardLimitInGiB), -1);
 
                     // clean up cold storage
+                    _logger.LogInformation("File Cleanup Task cleaning up outdated cold storage files");
                     var remainingColdFiles = await CleanUpOutdatedFiles(coldStorageDir, allFilesInColdStorageDir, coldStorageRetention, forcedDeletionAfterHours: -1,
                         deleteFromDb: true, dbContext: dbContext,
                         ct: linkedToken).ConfigureAwait(false);
+                    _logger.LogInformation("File Cleanup Task cleaning up cold storage file beyond size limit");
                     var finalRemainingColdFiles = CleanUpFilesBeyondSizeLimit(remainingColdFiles, coldStorageSize,
                         deleteFromDb: true, dbContext: dbContext,
                         ct: linkedToken);
