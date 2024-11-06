@@ -17,11 +17,11 @@ namespace MareSynchronosAuthService.Controllers;
 public class JwtController : AuthControllerBase
 {
     public JwtController(ILogger<JwtController> logger,
-        IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContext,
+        IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContextFactory,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<AuthServiceConfiguration> configuration,
         IRedisDatabase redisDb, GeoIPService geoIPProvider)
-            : base(logger, accessor, mareDbContext, secretKeyAuthenticatorService,
+            : base(logger, accessor, mareDbContextFactory, secretKeyAuthenticatorService,
                 configuration, redisDb, geoIPProvider)
     {
     }

@@ -12,13 +12,13 @@ namespace MareSynchronosShared.RequirementHandlers;
 
 public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubInvocationContext>
 {
-    private readonly MareDbContext _dbContext;
+    private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly ILogger<UserRequirementHandler> _logger;
     private readonly IRedisDatabase _redis;
 
-    public UserRequirementHandler(MareDbContext dbContext, ILogger<UserRequirementHandler> logger, IRedisDatabase redisDb)
+    public UserRequirementHandler(IDbContextFactory<MareDbContext> dbContextFactory, ILogger<UserRequirementHandler> logger, IRedisDatabase redisDb)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
         _redis = redisDb;
     }
@@ -37,14 +37,16 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
 
         if ((requirement.Requirements & UserRequirements.Administrator) is UserRequirements.Administrator)
         {
-            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
             if (user == null || !user.IsAdmin) context.Fail();
             _logger.LogInformation("Admin {uid} authenticated", uid);
         }
 
         if ((requirement.Requirements & UserRequirements.Moderator) is UserRequirements.Moderator)
         {
-            var user = await _dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
+            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
             if (user == null || !user.IsAdmin && !user.IsModerator) context.Fail();
             _logger.LogInformation("Admin/Moderator {uid} authenticated", uid);
         }

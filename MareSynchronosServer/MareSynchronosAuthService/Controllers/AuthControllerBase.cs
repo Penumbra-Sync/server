@@ -27,7 +27,7 @@ public abstract class AuthControllerBase : Controller
     private readonly GeoIPService _geoIPProvider;
 
     protected AuthControllerBase(ILogger logger,
-    IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContext,
+    IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContextFactory,
     SecretKeyAuthenticatorService secretKeyAuthenticatorService,
     IConfigurationService<AuthServiceConfiguration> configuration,
     IRedisDatabase redisDb, GeoIPService geoIPProvider)
@@ -36,7 +36,7 @@ public abstract class AuthControllerBase : Controller
         HttpAccessor = accessor;
         _redis = redisDb;
         _geoIPProvider = geoIPProvider;
-        MareDbContextFactory = mareDbContext;
+        MareDbContextFactory = mareDbContextFactory;
         SecretKeyAuthenticatorService = secretKeyAuthenticatorService;
         Configuration = configuration;
     }
