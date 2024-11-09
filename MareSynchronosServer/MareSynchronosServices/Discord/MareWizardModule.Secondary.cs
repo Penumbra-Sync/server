@@ -16,7 +16,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}", nameof(ComponentSecondary), Context.Interaction.User.Id);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         var primaryUID = (await mareDb.LodeStoneAuth.Include(u => u.User).SingleAsync(u => u.DiscordId == Context.User.Id).ConfigureAwait(false)).User.UID;
         var secondaryUids = await mareDb.Auth.CountAsync(p => p.PrimaryUserUID == primaryUID).ConfigureAwait(false);
         EmbedBuilder eb = new();
@@ -40,7 +40,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}:{primary}", nameof(ComponentSecondaryCreate), Context.Interaction.User.Id, primaryUid);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         EmbedBuilder eb = new();
         eb.WithTitle("Secondary UID created");
         eb.WithColor(Color.Green);

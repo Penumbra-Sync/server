@@ -14,7 +14,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}", nameof(ComponentUserinfo), Context.Interaction.User.Id);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         EmbedBuilder eb = new();
         eb.WithTitle("User Info");
         eb.WithColor(Color.Blue);
@@ -36,7 +36,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionUserinfo), Context.Interaction.User.Id, uid);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         EmbedBuilder eb = new();
         eb.WithTitle($"User Info for {uid}");
         await HandleUserInfo(eb, mareDb, uid).ConfigureAwait(false);

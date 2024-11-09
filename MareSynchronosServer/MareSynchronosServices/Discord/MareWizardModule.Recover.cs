@@ -16,7 +16,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}", nameof(ComponentRecover), Context.Interaction.User.Id);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         EmbedBuilder eb = new();
         eb.WithColor(Color.Blue);
         eb.WithTitle("Recover");
@@ -25,7 +25,8 @@ public partial class MareWizardModule
             + "Use the selection below to select the user account you want to recover." + Environment.NewLine + Environment.NewLine
             + "- 1️⃣ is your primary account/UID" + Environment.NewLine
             + "- 2️⃣ are all your secondary accounts/UIDs" + Environment.NewLine
-            + "If you are using Vanity UIDs the original UID is displayed in the second line of the account selection.");
+            + "If you are using Vanity UIDs the original UID is displayed in the second line of the account selection." + Environment.NewLine
+            + "# Note: instead of recovery and handling secret keys the switch to OAuth2 authentication is strongly suggested.");
         ComponentBuilder cb = new();
         await AddUserSelection(mareDb, cb, "wizard-recover-select").ConfigureAwait(false);
         AddHome(cb);
@@ -39,7 +40,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionRecovery), Context.Interaction.User.Id, uid);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         EmbedBuilder eb = new();
         eb.WithColor(Color.Green);
         await HandleRecovery(mareDb, eb, uid).ConfigureAwait(false);
@@ -75,6 +76,8 @@ public partial class MareWizardModule
                               + $"**{computedHash}**"
                               + Environment.NewLine
                               + "__NOTE: The Secret Key only contains the letters ABCDEF and numbers 0 - 9.__"
+                              + Environment.NewLine
+                              +" __NOTE: If you are using the suggested OAuth2 authentication, you do not need to use the Secret Key__"
                               + Environment.NewLine + Environment.NewLine
                               + "Enter this key in the Mare Synchronos Service Settings and reconnect to the service.");
 

@@ -22,8 +22,8 @@ public partial class MareWizardModule
         eb.WithDescription("Here you can start the registration process with the Mare Synchronos server of this Discord." + Environment.NewLine + Environment.NewLine
             + "- Have your Lodestone URL ready (i.e. https://eu.finalfantasyxiv.com/lodestone/character/XXXXXXXXX)" + Environment.NewLine
             + "  - The registration requires you to modify your Lodestone profile with a generated code for verification" + Environment.NewLine
-            + "  - You need to have a paid FFXIV account or someone who can assist you with registration if you can't edit your own Lodestone" + Environment.NewLine
-            + "- Do not use this on mobile because you will need to be able to copy the generated secret key" + Environment.NewLine);
+            + "- Do not use this on mobile because you will need to be able to copy the generated secret key" + Environment.NewLine
+            + "# Follow the bot instructions precisely. Slow down and read.");
         ComponentBuilder cb = new();
         AddHome(cb);
         cb.WithButton("Start Registration", "wizard-register-start", ButtonStyle.Primary, emote: new Emoji("🌒"));
@@ -37,7 +37,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}", nameof(ComponentRegisterStart), Context.Interaction.User.Id);
 
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         var entry = await db.LodeStoneAuth.SingleOrDefaultAsync(u => u.DiscordId == Context.User.Id && u.StartedAt != null).ConfigureAwait(false);
         if (entry != null)
         {
@@ -123,7 +123,7 @@ public partial class MareWizardModule
             if (verified)
             {
                 eb.WithColor(Color.Green);
-                using var db = _services.CreateScope().ServiceProvider.GetRequiredService<MareDbContext>();
+                using var db = await GetDbContext().ConfigureAwait(false);
                 var (uid, key) = await HandleAddUser(db).ConfigureAwait(false);
                 eb.WithTitle($"Registration successful, your UID: {uid}");
                 eb.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
@@ -134,6 +134,8 @@ public partial class MareWizardModule
                                              + Environment.NewLine
                                              + "__NOTE: The Secret Key only contains the letters ABCDEF and numbers 0 - 9.__"
                                              + Environment.NewLine
+                                             + " __NOTE: Secret keys are considered legacy. Using the suggested OAuth2 authentication, you do not need to use this Secret Key.__"
+                                             + Environment.NewLine
                                              + "You should connect as soon as possible to not get caught by the automatic cleanup process."
                                              + Environment.NewLine
                                              + "Have fun.");
@@ -143,10 +145,16 @@ public partial class MareWizardModule
             {
                 eb.WithColor(Color.Gold);
                 eb.WithTitle("Failed to verify registration");
-                eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." + Environment.NewLine + Environment.NewLine
-                    + "Please restart your verification process, make sure to save your profile _twice_ for it to be properly saved." + Environment.NewLine + Environment.NewLine
-                    + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**" + Environment.NewLine + Environment.NewLine
-                    + "The code the bot is looking for is" + Environment.NewLine + Environment.NewLine
+                eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." 
+                    + Environment.NewLine + Environment.NewLine
+                    + "Please restart your verification process, make sure to save your profile _twice_ for it to be properly saved." 
+                    + Environment.NewLine + Environment.NewLine
+                    + "If this link does not lead to your profile edit page, you __need__ to configure the privacy settings first: https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
+                    + Environment.NewLine + Environment.NewLine
+                    + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**" 
+                    + Environment.NewLine + Environment.NewLine
+                    + "## You __need__ to enter following the code this bot provided onto your lodestone in the character profile:" 
+                    + Environment.NewLine + Environment.NewLine
                     + "**" + verificationCode + "**");
                 cb.WithButton("Cancel", "wizard-register", emote: new Emoji("❌"));
                 cb.WithButton("Retry", "wizard-register-verify:" + verificationCode, ButtonStyle.Primary, emote: new Emoji("🔁"));
@@ -168,11 +176,9 @@ public partial class MareWizardModule
         }
 
         // check if userid is already in db
-        using var scope = _services.CreateScope();
-
         var hashedLodestoneId = StringUtils.Sha256String(lodestoneId.ToString());
 
-        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        using var db = await GetDbContext().ConfigureAwait(false);
 
         // check if discord id or lodestone id is banned
         if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == hashedLodestoneId))
@@ -192,6 +198,8 @@ public partial class MareWizardModule
         // check if lodestone id is already in db
         embed.WithTitle("Authorize your character");
         embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
+                              + Environment.NewLine
+                              + "__NOTE: If the link does not lead you to your character edit profile page, you need to log in and set up your privacy settings!__"
                               + Environment.NewLine + Environment.NewLine
                               + $"**{lodestoneAuth}**"
                               + Environment.NewLine + Environment.NewLine

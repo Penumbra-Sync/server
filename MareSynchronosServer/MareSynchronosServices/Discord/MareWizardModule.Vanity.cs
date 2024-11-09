@@ -41,7 +41,7 @@ public partial class MareWizardModule
         AddHome(cb);
         if (userIsInVanityRole)
         {
-            using var db = GetDbContext();
+            using var db = await GetDbContext().ConfigureAwait(false);
             await AddUserSelection(db, cb, "wizard-vanity-uid").ConfigureAwait(false);
             await AddGroupSelection(db, cb, "wizard-vanity-gid").ConfigureAwait(false);
         }
@@ -56,7 +56,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionVanityUid), Context.Interaction.User.Id, uid);
 
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         var user = db.Users.Single(u => u.UID == uid);
         EmbedBuilder eb = new();
         eb.WithColor(Color.Purple);
@@ -90,7 +90,7 @@ public partial class MareWizardModule
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
         var desiredVanityUid = modal.DesiredVanityUID;
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         bool canAddVanityId = !db.Users.Any(u => u.UID == modal.DesiredVanityUID || u.Alias == modal.DesiredVanityUID);
 
         Regex rgx = new(@"^[_\-a-zA-Z0-9]{5,15}$", RegexOptions.ECMAScript);
@@ -132,7 +132,7 @@ public partial class MareWizardModule
     {
         _logger.LogInformation("{method}:{userId}:{uid}", nameof(SelectionVanityGid), Context.Interaction.User.Id, gid);
 
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         var group = db.Groups.Single(u => u.GID == gid);
         EmbedBuilder eb = new();
         eb.WithColor(Color.Purple);
@@ -166,7 +166,7 @@ public partial class MareWizardModule
         EmbedBuilder eb = new();
         ComponentBuilder cb = new();
         var desiredVanityGid = modal.DesiredVanityGID;
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         bool canAddVanityId = !db.Groups.Any(u => u.GID == modal.DesiredVanityGID || u.Alias == modal.DesiredVanityGID);
 
         Regex rgx = new(@"^[_\-a-zA-Z0-9]{5,20}$", RegexOptions.ECMAScript);

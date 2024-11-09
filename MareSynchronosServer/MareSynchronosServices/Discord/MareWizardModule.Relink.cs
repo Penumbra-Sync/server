@@ -4,7 +4,6 @@ using MareSynchronosShared.Data;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Policy;
 
 namespace MareSynchronosServices.Discord;
 
@@ -37,7 +36,7 @@ public partial class MareWizardModule
 
         _logger.LogInformation("{method}:{userId}", nameof(ComponentRelinkStart), Context.Interaction.User.Id);
 
-        using var db = GetDbContext();
+        using var db = await GetDbContext().ConfigureAwait(false);
         db.LodeStoneAuth.RemoveRange(db.LodeStoneAuth.Where(u => u.DiscordId == Context.User.Id));
         _botServices.DiscordVerifiedUsers.TryRemove(Context.User.Id, out _);
         _botServices.DiscordRelinkLodestoneMapping.TryRemove(Context.User.Id, out _);
@@ -119,7 +118,7 @@ public partial class MareWizardModule
             if (verified)
             {
                 eb.WithColor(Color.Green);
-                using var db = _services.CreateScope().ServiceProvider.GetRequiredService<MareDbContext>();
+                using var db = await GetDbContext().ConfigureAwait(false);
                 var (_, key) = await HandleRelinkUser(db, uid).ConfigureAwait(false);
                 eb.WithTitle($"Relink successful, your UID is again: {uid}");
                 eb.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
@@ -161,11 +160,9 @@ public partial class MareWizardModule
             return (false, string.Empty, string.Empty);
         }
         // check if userid is already in db
-        using var scope = _services.CreateScope();
-
         var hashedLodestoneId = StringUtils.Sha256String(lodestoneId.ToString());
 
-        using var db = scope.ServiceProvider.GetService<MareDbContext>();
+        using var db = await GetDbContext().ConfigureAwait(false);
 
         // check if discord id or lodestone id is banned
         if (db.BannedRegistrations.Any(a => a.DiscordIdOrLodestoneAuth == hashedLodestoneId))

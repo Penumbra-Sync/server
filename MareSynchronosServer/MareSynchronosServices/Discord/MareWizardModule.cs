@@ -15,24 +15,24 @@ namespace MareSynchronosServices.Discord;
 public partial class MareWizardModule : InteractionModuleBase
 {
     private ILogger<MareModule> _logger;
-    private IServiceProvider _services;
     private DiscordBotServices _botServices;
     private IConfigurationService<ServerConfiguration> _mareClientConfigurationService;
     private IConfigurationService<ServicesConfiguration> _mareServicesConfiguration;
     private IConnectionMultiplexer _connectionMultiplexer;
+    private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private Random random = new();
 
-    public MareWizardModule(ILogger<MareModule> logger, IServiceProvider services, DiscordBotServices botServices,
+    public MareWizardModule(ILogger<MareModule> logger, DiscordBotServices botServices,
         IConfigurationService<ServerConfiguration> mareClientConfigurationService,
         IConfigurationService<ServicesConfiguration> mareServicesConfiguration,
-        IConnectionMultiplexer connectionMultiplexer)
+        IConnectionMultiplexer connectionMultiplexer, IDbContextFactory<MareDbContext> dbContextFactory)
     {
         _logger = logger;
-        _services = services;
         _botServices = botServices;
         _mareClientConfigurationService = mareClientConfigurationService;
         _mareServicesConfiguration = mareServicesConfiguration;
         _connectionMultiplexer = connectionMultiplexer;
+        _dbContextFactory = dbContextFactory;
     }
 
     [ComponentInteraction("wizard-captcha:*")]
@@ -115,7 +115,7 @@ public partial class MareWizardModule : InteractionModuleBase
 
         _logger.LogInformation("{method}:{userId}", nameof(StartWizard), Context.Interaction.User.Id);
 
-        using var mareDb = GetDbContext();
+        using var mareDb = await GetDbContext().ConfigureAwait(false);
         bool hasAccount = await mareDb.LodeStoneAuth.AnyAsync(u => u.DiscordId == Context.User.Id && u.StartedAt == null).ConfigureAwait(false);
 
         if (init)
@@ -200,9 +200,9 @@ public partial class MareWizardModule : InteractionModuleBase
         public string Delete { get; set; }
     }
 
-    private MareDbContext GetDbContext()
+    private async Task<MareDbContext> GetDbContext()
     {
-        return _services.CreateScope().ServiceProvider.GetService<MareDbContext>();
+        return await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
     }
 
     private async Task<bool> ValidateInteraction()

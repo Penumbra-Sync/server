@@ -1,5 +1,4 @@
 using MareSynchronosServices;
-using MareSynchronosShared.Data;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
 
@@ -12,9 +11,6 @@ public class Program
 
         using (var scope = host.Services.CreateScope())
         {
-            var services = scope.ServiceProvider;
-            using var dbContext = services.GetRequiredService<MareDbContext>();
-
             var options = host.Services.GetService<IConfigurationService<ServicesConfiguration>>();
             var optionsServer = host.Services.GetService<IConfigurationService<ServerConfiguration>>();
             var logger = host.Services.GetService<ILogger<Program>>();

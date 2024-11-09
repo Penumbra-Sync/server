@@ -2,15 +2,10 @@
 using Discord.Interactions;
 using Discord.Rest;
 using Discord.WebSocket;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.API.Dto.User;
-using MareSynchronos.API.SignalR;
-using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
@@ -23,20 +18,20 @@ internal class DiscordBot : IHostedService
     private readonly IConnectionMultiplexer _connectionMultiplexer;
     private readonly DiscordSocketClient _discordClient;
     private readonly ILogger<DiscordBot> _logger;
-    private readonly IHubContext<MareHub> _mareHubContext;
+    private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly IServiceProvider _services;
     private InteractionService _interactionModule;
-    private CancellationTokenSource? _processReportQueueCts;
+    private readonly CancellationTokenSource? _processReportQueueCts;
     private CancellationTokenSource? _updateStatusCts;
 
     public DiscordBot(DiscordBotServices botServices, IServiceProvider services, IConfigurationService<ServicesConfiguration> configuration,
-        IHubContext<MareHub> mareHubContext,
+        IDbContextFactory<MareDbContext> dbContextFactory,
         ILogger<DiscordBot> logger, IConnectionMultiplexer connectionMultiplexer)
     {
         _botServices = botServices;
         _services = services;
         _configurationService = configuration;
-        _mareHubContext = mareHubContext;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
         _connectionMultiplexer = connectionMultiplexer;
         _discordClient = new(new DiscordSocketConfig()
@@ -55,6 +50,7 @@ internal class DiscordBot : IHostedService
             _logger.LogInformation("Starting DiscordBot");
             _logger.LogInformation("Using Configuration: " + _configurationService.ToString());
 
+            _interactionModule?.Dispose();
             _interactionModule = new InteractionService(_discordClient);
             _interactionModule.Log += Log;
             await _interactionModule.AddModuleAsync(typeof(MareModule), _services).ConfigureAwait(false);
@@ -64,7 +60,6 @@ internal class DiscordBot : IHostedService
             await _discordClient.StartAsync().ConfigureAwait(false);
 
             _discordClient.Ready += DiscordClient_Ready;
-            _discordClient.ButtonExecuted += ButtonExecutedHandler;
             _discordClient.InteractionCreated += async (x) =>
             {
                 var ctx = new SocketInteractionContext(_discordClient, x);
@@ -79,122 +74,14 @@ internal class DiscordBot : IHostedService
     {
         if (!string.IsNullOrEmpty(_configurationService.GetValueOrDefault(nameof(ServicesConfiguration.DiscordBotToken), string.Empty)))
         {
-            _discordClient.ButtonExecuted -= ButtonExecutedHandler;
-
             await _botServices.Stop().ConfigureAwait(false);
             _processReportQueueCts?.Cancel();
             _updateStatusCts?.Cancel();
 
             await _discordClient.LogoutAsync().ConfigureAwait(false);
             await _discordClient.StopAsync().ConfigureAwait(false);
+            _interactionModule?.Dispose();
         }
-    }
-
-    private async Task ButtonExecutedHandler(SocketMessageComponent arg)
-    {
-        var id = arg.Data.CustomId;
-        if (!id.StartsWith("mare-report-button", StringComparison.Ordinal)) return;
-
-        var userId = arg.User.Id;
-        using var scope = _services.CreateScope();
-        using var dbContext = scope.ServiceProvider.GetRequiredService<MareDbContext>();
-        var user = await dbContext.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == userId).ConfigureAwait(false);
-
-        if (user == null || (!user.User.IsModerator && !user.User.IsAdmin))
-        {
-            EmbedBuilder eb = new();
-            eb.WithTitle($"Cannot resolve report");
-            eb.WithDescription($"<@{userId}>: You have no rights to resolve this report");
-            await arg.RespondAsync(embed: eb.Build()).ConfigureAwait(false);
-            return;
-        }
-
-        id = id.Remove(0, "mare-report-button-".Length);
-        var split = id.Split('-', StringSplitOptions.RemoveEmptyEntries);
-
-        var profile = await dbContext.UserProfileData.SingleAsync(u => u.UserUID == split[1]).ConfigureAwait(false);
-
-        var embed = arg.Message.Embeds.First();
-
-        var builder = embed.ToEmbedBuilder();
-        var otherPairs = await dbContext.ClientPairs.Where(p => p.UserUID == split[1]).Select(p => p.OtherUserUID).ToListAsync().ConfigureAwait(false);
-        switch (split[0])
-        {
-            case "dismiss":
-                builder.AddField("Resolution", $"Dismissed by <@{userId}>");
-                builder.WithColor(Color.Green);
-                profile.FlaggedForReport = false;
-                await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
-                        MessageSeverity.Warning, "The Mare profile report against you has been evaluated and your profile re-enabled.")
-                    .ConfigureAwait(false);
-                break;
-
-            case "banreporting":
-                builder.AddField("Resolution", $"Dismissed by <@{userId}>, Reporting user banned");
-                builder.WithColor(Color.DarkGreen);
-                profile.FlaggedForReport = false;
-                var reportingUser = await dbContext.Auth.SingleAsync(u => u.UserUID == split[2]).ConfigureAwait(false);
-                reportingUser.MarkForBan = true;
-                var regReporting = await dbContext.LodeStoneAuth.SingleAsync(u => u.User.UID == reportingUser.UserUID).ConfigureAwait(false);
-                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
-                {
-                    DiscordIdOrLodestoneAuth = regReporting.HashedLodestoneId
-                });
-                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
-                {
-                    DiscordIdOrLodestoneAuth = regReporting.DiscordId.ToString()
-                });
-                await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
-                        MessageSeverity.Warning, "The Mare profile report against you has been evaluated and your profile re-enabled.")
-                    .ConfigureAwait(false);
-                break;
-
-            case "banprofile":
-                builder.AddField("Resolution", $"Profile has been banned by <@{userId}>");
-                builder.WithColor(Color.Red);
-                profile.Base64ProfileImage = null;
-                profile.UserDescription = null;
-                profile.ProfileDisabled = true;
-                profile.FlaggedForReport = false;
-                await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
-                    MessageSeverity.Warning, "The Mare profile report against you has been evaluated and the profile functionality permanently disabled.")
-                    .ConfigureAwait(false);
-                break;
-
-            case "banuser":
-                builder.AddField("Resolution", $"User has been banned by <@{userId}>");
-                builder.WithColor(Color.DarkRed);
-                var offendingUser = await dbContext.Auth.SingleAsync(u => u.UserUID == split[1]).ConfigureAwait(false);
-                offendingUser.MarkForBan = true;
-                profile.Base64ProfileImage = null;
-                profile.UserDescription = null;
-                profile.ProfileDisabled = true;
-                var reg = await dbContext.LodeStoneAuth.SingleAsync(u => u.User.UID == offendingUser.UserUID).ConfigureAwait(false);
-                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
-                {
-                    DiscordIdOrLodestoneAuth = reg.HashedLodestoneId
-                });
-                dbContext.BannedRegistrations.Add(new MareSynchronosShared.Models.BannedRegistrations()
-                {
-                    DiscordIdOrLodestoneAuth = reg.DiscordId.ToString()
-                });
-                await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_ReceiveServerMessage),
-                    MessageSeverity.Warning, "The Mare profile report against you has been evaluated and your account permanently banned.")
-                    .ConfigureAwait(false);
-                break;
-        }
-
-        await dbContext.SaveChangesAsync().ConfigureAwait(false);
-
-        await _mareHubContext.Clients.Users(otherPairs).SendAsync(nameof(IMareHub.Client_UserUpdateProfile), new UserDto(new(split[1]))).ConfigureAwait(false);
-        await _mareHubContext.Clients.User(split[1]).SendAsync(nameof(IMareHub.Client_UserUpdateProfile), new UserDto(new(split[1]))).ConfigureAwait(false);
-
-        await arg.Message.ModifyAsync(msg =>
-        {
-            msg.Content = arg.Message.Content;
-            msg.Components = null;
-            msg.Embed = new Optional<Embed>(builder.Build());
-        }).ConfigureAwait(false);
     }
 
     private async Task DiscordClient_Ready()
@@ -229,7 +116,8 @@ internal class DiscordBot : IHostedService
                         _logger.LogInformation("Adding Role: {id} => {desc}", role.Key, role.Value);
 
                         var restrole = guild.GetRole(role.Key);
-                        if (restrole != null) _botServices.VanityRoles.Add(restrole, role.Value);
+                        if (restrole != null)
+                            _botServices.VanityRoles[restrole] = role.Value;
                     }
                 }
 
@@ -330,7 +218,7 @@ internal class DiscordBot : IHostedService
             {
                 _logger.LogInformation($"Cleaning up Vanity UIDs");
                 await _botServices.LogToChannel("Cleaning up Vanity UIDs").ConfigureAwait(false);
-                _logger.LogInformation("Getting application commands from guild {guildName}", guild.Name);
+                _logger.LogInformation("Getting rest guild {guildName}", guild.Name);
                 var restGuild = await _discordClient.Rest.GetGuildAsync(guild.Id).ConfigureAwait(false);
 
                 Dictionary<ulong, string> allowedRoleIds = _configurationService.GetValueOrDefault(nameof(ServicesConfiguration.VanityRoles), new Dictionary<ulong, string>());
@@ -338,8 +226,7 @@ internal class DiscordBot : IHostedService
 
                 if (allowedRoleIds.Any())
                 {
-                    await using var scope = _services.CreateAsyncScope();
-                    await using var db = scope.ServiceProvider.GetRequiredService<MareDbContext>();
+                    using var db = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
 
                     var aliasedUsers = await db.LodeStoneAuth.Include("User")
                         .Where(c => c.User != null && !string.IsNullOrEmpty(c.User.Alias)).ToListAsync().ConfigureAwait(false);
@@ -348,49 +235,14 @@ internal class DiscordBot : IHostedService
 
                     foreach (var lodestoneAuth in aliasedUsers)
                     {
-                        var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
-                        _logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
-
-                        if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
-                        {
-                            _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
-                            await _botServices.LogToChannel($"VANITY UID REMOVAL: <@{lodestoneAuth.DiscordId}> - UID: {lodestoneAuth.User.UID}, Vanity: {lodestoneAuth.User.Alias}").ConfigureAwait(false);
-                            lodestoneAuth.User.Alias = null;
-                            var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
-                            foreach (var secondaryUser in secondaryUsers)
-                            {
-                                _logger.LogInformation($"Secondary User {secondaryUser.User.UID} not in allowed roles, deleting alias");
-
-                                secondaryUser.User.Alias = null;
-                                db.Update(secondaryUser.User);
-                            }
-                            db.Update(lodestoneAuth.User);
-                            await db.SaveChangesAsync(token).ConfigureAwait(false);
-                        }
+                        await CheckVanityForUser(restGuild, allowedRoleIds, db, lodestoneAuth, token).ConfigureAwait(false);
 
                         await Task.Delay(1000, token).ConfigureAwait(false);
                     }
 
                     foreach (var group in aliasedGroups)
                     {
-                        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
-                        RestGuildUser discordUser = null;
-                        if (lodestoneUser != null)
-                        {
-                            discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
-                        }
-
-                        _logger.LogInformation($"Checking Group: {group.GID}, owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
-
-                        if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
-                        {
-                            await _botServices.LogToChannel($"VANITY GID REMOVAL: <@{lodestoneUser.DiscordId}> ({lodestoneUser.User.UID}) - GID: {group.GID}, Vanity: {group.Alias}").ConfigureAwait(false);
-
-                            _logger.LogInformation($"User {lodestoneUser.User.UID} not in allowed roles, deleting group alias");
-                            group.Alias = null;
-                            db.Update(group);
-                            await db.SaveChangesAsync(token).ConfigureAwait(false);
-                        }
+                        await CheckVanityForGroup(restGuild, allowedRoleIds, db, group, token).ConfigureAwait(false);
 
                         await Task.Delay(1000, token).ConfigureAwait(false);
                     }
@@ -410,6 +262,51 @@ internal class DiscordBot : IHostedService
         }
     }
 
+    private async Task CheckVanityForGroup(RestGuild restGuild, Dictionary<ulong, string> allowedRoleIds, MareDbContext db, Group group, CancellationToken token)
+    {
+        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
+        RestGuildUser discordUser = null;
+        if (lodestoneUser != null)
+        {
+            discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
+        }
+
+        _logger.LogInformation($"Checking Group: {group.GID} [{group.Alias}], owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+
+        if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(allowedRoleIds.Keys.Contains))
+        {
+            await _botServices.LogToChannel($"VANITY GID REMOVAL: <@{lodestoneUser?.DiscordId ?? 0}> ({lodestoneUser?.User?.UID}) - GID: {group.GID}, Vanity: {group.Alias}").ConfigureAwait(false);
+
+            _logger.LogInformation($"User {lodestoneUser?.User?.UID ?? "unknown"} not in allowed roles, deleting group alias for {group.GID}");
+            group.Alias = null;
+            db.Update(group);
+            await db.SaveChangesAsync(token).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CheckVanityForUser(RestGuild restGuild, Dictionary<ulong, string> allowedRoleIds, MareDbContext db, LodeStoneAuth lodestoneAuth, CancellationToken token)
+    {
+        var discordUser = await restGuild.GetUserAsync(lodestoneAuth.DiscordId).ConfigureAwait(false);
+        _logger.LogInformation($"Checking User: {lodestoneAuth.DiscordId}, {lodestoneAuth.User.UID} ({lodestoneAuth.User.Alias}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+
+        if (discordUser == null || !discordUser.RoleIds.Any(u => allowedRoleIds.Keys.Contains(u)))
+        {
+            _logger.LogInformation($"User {lodestoneAuth.User.UID} not in allowed roles, deleting alias");
+            await _botServices.LogToChannel($"VANITY UID REMOVAL: <@{lodestoneAuth.DiscordId}> - UID: {lodestoneAuth.User.UID}, Vanity: {lodestoneAuth.User.Alias}").ConfigureAwait(false);
+            lodestoneAuth.User.Alias = null;
+            var secondaryUsers = await db.Auth.Include(u => u.User).Where(u => u.PrimaryUserUID == lodestoneAuth.User.UID).ToListAsync().ConfigureAwait(false);
+            foreach (var secondaryUser in secondaryUsers)
+            {
+                _logger.LogInformation($"Secondary User {secondaryUser.User.UID} not in allowed roles, deleting alias");
+
+                secondaryUser.User.Alias = null;
+                db.Update(secondaryUser.User);
+            }
+            db.Update(lodestoneAuth.User);
+            await db.SaveChangesAsync(token).ConfigureAwait(false);
+        }
+    }
+
     private async Task UpdateStatusAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -419,7 +316,7 @@ internal class DiscordBot : IHostedService
 
             _logger.LogInformation("Users online: " + onlineUsers);
             await _discordClient.SetActivityAsync(new Game("Mare for " + onlineUsers + " Users")).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
         }
     }
 }

@@ -8,18 +8,17 @@ namespace MareSynchronosServices.Discord;
 
 public class DiscordBotServices
 {
-    public readonly string[] LodestoneServers = new[] { "eu", "na", "jp", "fr", "de" };
+    public readonly string[] LodestoneServers = ["eu", "na", "jp", "fr", "de"];
     public ConcurrentDictionary<ulong, string> DiscordLodestoneMapping = new();
     public ConcurrentDictionary<ulong, string> DiscordRelinkLodestoneMapping = new();
     public ConcurrentDictionary<ulong, bool> DiscordVerifiedUsers { get; } = new();
     public ConcurrentDictionary<ulong, DateTime> LastVanityChange = new();
-    public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new();
+    public ConcurrentDictionary<string, DateTime> LastVanityGidChange = new(StringComparer.Ordinal);
     public ConcurrentDictionary<ulong, ulong> ValidInteractions { get; } = new();
-    public Dictionary<RestRole, string> VanityRoles { get; set; } = new();
+    public ConcurrentDictionary<RestRole, string> VanityRoles { get; set; } = new();
     public ConcurrentBag<ulong> VerifiedCaptchaUsers { get; } = new();
-    private readonly IServiceProvider _serviceProvider;
     private readonly IConfigurationService<ServicesConfiguration> _configuration;
-    private CancellationTokenSource verificationTaskCts;
+    private readonly CancellationTokenSource verificationTaskCts = new();
     private RestGuild? _guild;
     private ulong? _logChannelId;
     private RestTextChannel? _logChannel;
@@ -44,7 +43,8 @@ public class DiscordBotServices
 
     public Task Stop()
     {
-        verificationTaskCts?.Cancel();
+        verificationTaskCts.Cancel();
+        verificationTaskCts.Dispose();
         return Task.CompletedTask;
     }
 
@@ -73,7 +73,6 @@ public class DiscordBotServices
 
     private async Task ProcessVerificationQueue()
     {
-        verificationTaskCts = new CancellationTokenSource();
         while (!verificationTaskCts.IsCancellationRequested)
         {
             Logger.LogDebug("Processing Verification Queue, Entries: {entr}", VerificationQueue.Count);
