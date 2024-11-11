@@ -26,7 +26,7 @@ public class SpeedTestController : ControllerBase
     public async Task<IActionResult> DownloadTest(CancellationToken cancellationToken)
     {
         var user = HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
-        var speedtestLimit = _configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.SpeedTestHoursRateLimit), 6);
+        var speedtestLimit = _configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.SpeedTestHoursRateLimit), 0.5);
         if (_memoryCache.TryGetValue<DateTime>(user, out var value))
         {
             var hoursRemaining = value.Subtract(DateTime.UtcNow).TotalHours;
