@@ -264,14 +264,21 @@ internal class DiscordBot : IHostedService
 
     private async Task CheckVanityForGroup(RestGuild restGuild, Dictionary<ulong, string> allowedRoleIds, MareDbContext db, Group group, CancellationToken token)
     {
-        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == group.OwnerUID).ConfigureAwait(false);
+        var groupPrimaryUser = group.OwnerUID;
+        var primaryUser = await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.PrimaryUserUID == group.OwnerUID).ConfigureAwait(false);
+        if (primaryUser != null)
+        {
+            groupPrimaryUser = primaryUser.User.UID;
+        }
+
+        var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == groupPrimaryUser).ConfigureAwait(false);
         RestGuildUser discordUser = null;
         if (lodestoneUser != null)
         {
             discordUser = await restGuild.GetUserAsync(lodestoneUser.DiscordId).ConfigureAwait(false);
         }
 
-        _logger.LogInformation($"Checking Group: {group.GID} [{group.Alias}], owned by {lodestoneUser?.User?.UID ?? string.Empty} ({lodestoneUser?.User?.Alias ?? string.Empty}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
+        _logger.LogInformation($"Checking Group: {group.GID} [{group.Alias}], owned by {group.OwnerUID} ({groupPrimaryUser}), User in Roles: {string.Join(", ", discordUser?.RoleIds ?? new List<ulong>())}");
 
         if (lodestoneUser == null || discordUser == null || !discordUser.RoleIds.Any(allowedRoleIds.Keys.Contains))
         {
