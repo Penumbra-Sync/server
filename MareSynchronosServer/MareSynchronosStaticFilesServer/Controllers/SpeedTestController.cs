@@ -1,6 +1,6 @@
 ﻿using MareSynchronos.API.Routes;
-using MareSynchronosShared;
 using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils;
 using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -11,26 +11,23 @@ namespace MareSynchronosStaticFilesServer.Controllers;
 public class SpeedTestController : ControllerBase
 {
     private readonly IMemoryCache _memoryCache;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IConfigurationService<StaticFilesServerConfiguration> _configurationService;
     private const string RandomByteDataName = "SpeedTestRandomByteData";
     private static readonly SemaphoreSlim _speedtestSemaphore = new(10, 10);
 
-    public SpeedTestController(ILogger<SpeedTestController> logger,
-        IMemoryCache memoryCache, IHttpContextAccessor httpContextAccessor,
+    public SpeedTestController(ILogger<SpeedTestController> logger, IMemoryCache memoryCache,
         IConfigurationService<StaticFilesServerConfiguration> configurationService) : base(logger)
     {
         _memoryCache = memoryCache;
-        _httpContextAccessor = httpContextAccessor;
         _configurationService = configurationService;
     }
 
     [HttpGet(MareFiles.Speedtest_Run)]
     public async Task<IActionResult> DownloadTest(CancellationToken cancellationToken)
     {
-        var ip = _httpContextAccessor.GetIpAddress();
+        var user = HttpContext.User.Claims.First(f => string.Equals(f.Type, MareClaimTypes.Uid, StringComparison.Ordinal)).Value;
         var speedtestLimit = _configurationService.GetValueOrDefault(nameof(StaticFilesServerConfiguration.SpeedTestHoursRateLimit), 6);
-        if (_memoryCache.TryGetValue<DateTime>(ip, out var value))
+        if (_memoryCache.TryGetValue<DateTime>(user, out var value))
         {
             var hoursRemaining = value.Subtract(DateTime.UtcNow).TotalHours;
             return StatusCode(429, $"Can perform speedtest every {speedtestLimit} hours. {hoursRemaining:F2} hours remain.");
@@ -41,7 +38,7 @@ public class SpeedTestController : ControllerBase
         try
         {
             var expiry = DateTime.UtcNow.Add(TimeSpan.FromHours(speedtestLimit));
-            _memoryCache.Set(ip, expiry, TimeSpan.FromHours(speedtestLimit));
+            _memoryCache.Set(user, expiry, TimeSpan.FromHours(speedtestLimit));
 
             var randomByteData = _memoryCache.GetOrCreate(RandomByteDataName, (entry) =>
             {
