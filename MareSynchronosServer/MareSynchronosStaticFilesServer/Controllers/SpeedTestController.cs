@@ -42,7 +42,7 @@ public class SpeedTestController : ControllerBase
 
             var randomByteData = _memoryCache.GetOrCreate(RandomByteDataName, (entry) =>
             {
-                byte[] data = new byte[10 * 1024 * 1024];
+                byte[] data = new byte[100 * 1024 * 1024];
                 new Random().NextBytes(data);
                 return data;
             });
