@@ -130,6 +130,20 @@ public class ServerFilesController : ControllerBase
         return Ok(JsonSerializer.Serialize(response));
     }
 
+    [HttpGet(MareFiles.ServerFiles_DownloadServers)]
+    public async Task<IActionResult> GetDownloadServers()
+    {
+        var allFileShards = new List<CdnShardConfiguration>(_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()))
+            .DistinctBy(f => f.CdnFullUrl).ToList();
+        if (!allFileShards.Any())
+        {
+            return Ok(JsonSerializer.Serialize(new List<string> { _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl)).ToString() }));
+        }
+        var selectedShards = allFileShards.Where(c => c.Continents.Contains(Continent, StringComparer.OrdinalIgnoreCase)).ToList();
+        if (!selectedShards.Any()) selectedShards = allFileShards.Where(c => c.Continents.Contains("*", StringComparer.Ordinal)).ToList();
+        return Ok(JsonSerializer.Serialize(selectedShards.Select(t => t.CdnFullUrl.ToString())));
+    }
+
     [HttpPost(MareFiles.ServerFiles_FilesSend)]
     public async Task<IActionResult> FilesSend([FromBody] FilesSendDto filesSendDto)
     {

@@ -186,6 +186,8 @@ public class Startup
             services.AddHostedService(p => (MareConfigurationServiceClient<StaticFilesServerConfiguration>)p.GetService<IConfigurationService<StaticFilesServerConfiguration>>());
         }
 
+        services.AddMemoryCache();
+
         // controller setup
         services.AddControllers().ConfigureApplicationPartManager(a =>
         {
@@ -194,15 +196,15 @@ public class Startup
             {
                 a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(MareStaticFilesServerConfigurationController),
                     typeof(CacheController), typeof(RequestController), typeof(ServerFilesController),
-                    typeof(DistributionController), typeof(MainController)));
+                    typeof(DistributionController), typeof(MainController), typeof(SpeedTestController)));
             }
             else if (_isDistributionNode)
             {
-                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(CacheController), typeof(RequestController), typeof(DistributionController)));
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(CacheController), typeof(RequestController), typeof(DistributionController), typeof(SpeedTestController)));
             }
             else
             {
-                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(CacheController), typeof(RequestController)));
+                a.FeatureProviders.Add(new AllowedControllersFeatureProvider(typeof(CacheController), typeof(RequestController), typeof(SpeedTestController)));
             }
         });
 

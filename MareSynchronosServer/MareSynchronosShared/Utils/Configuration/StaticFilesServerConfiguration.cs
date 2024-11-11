@@ -20,6 +20,7 @@ public class StaticFilesServerConfiguration : MareConfigurationBase
     public bool UseColdStorage { get; set; } = false;
     public string ColdStorageDirectory { get; set; } = null;
     public double ColdStorageSizeHardLimitInGiB { get; set; } = -1;
+    public int SpeedTestHoursRateLimit { get; set; } = 6;
     public int ColdStorageUnusedFileRetentionPeriodInDays { get; set; } = 30;
     [RemoteConfiguration]
     public Uri CdnFullUrl { get; set; } = null;
