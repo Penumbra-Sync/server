@@ -17,8 +17,8 @@ public sealed class MareConfigurationServiceServer<T> : IDisposable, IConfigurat
 
     public MareConfigurationServiceServer(IOptionsMonitor<T> config)
     {
-        _onChanged = _config.OnChange((c) => { ConfigChangedEvent?.Invoke(this, EventArgs.Empty); });
         _config = config;
+        _onChanged = config.OnChange((c) => { ConfigChangedEvent?.Invoke(this, EventArgs.Empty); });
     }
 
     public T1 GetValueOrDefault<T1>(string key, T1 defaultValue)

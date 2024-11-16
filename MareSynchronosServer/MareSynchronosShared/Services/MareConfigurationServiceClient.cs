@@ -41,11 +41,11 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
 
     public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptionsMonitor<T> config, ServerTokenGenerator serverTokenGenerator)
     {
-        _onChanged = _config.OnChange((c) => { ConfigChangedEvent?.Invoke(this, EventArgs.Empty); });
         _config = config;
         _logger = logger;
         _serverTokenGenerator = serverTokenGenerator;
         _httpClient = new();
+        _onChanged = config.OnChange((c) => { ConfigChangedEvent?.Invoke(this, EventArgs.Empty); });
     }
 
     public bool IsMain => false;
