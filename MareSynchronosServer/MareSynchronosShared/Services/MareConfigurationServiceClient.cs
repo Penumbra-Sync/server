@@ -22,6 +22,8 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
     private readonly CancellationTokenSource _updateTaskCts = new();
     private bool _initialized = false;
     private readonly HttpClient _httpClient;
+    public event EventHandler ConfigChangedEvent;
+    private IDisposable _onChanged;
 
     private Uri GetRoute(string key, string value)
     {
@@ -39,6 +41,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
 
     public MareConfigurationServiceClient(ILogger<MareConfigurationServiceClient<T>> logger, IOptionsMonitor<T> config, ServerTokenGenerator serverTokenGenerator)
     {
+        _onChanged = _config.OnChange((c) => { ConfigChangedEvent?.Invoke(this, EventArgs.Empty); });
         _config = config;
         _logger = logger;
         _serverTokenGenerator = serverTokenGenerator;
@@ -184,6 +187,7 @@ public class MareConfigurationServiceClient<T> : IHostedService, IConfigurationS
     {
         _updateTaskCts.Cancel();
         _httpClient.Dispose();
+        _onChanged?.Dispose();
         return Task.CompletedTask;
     }
 }

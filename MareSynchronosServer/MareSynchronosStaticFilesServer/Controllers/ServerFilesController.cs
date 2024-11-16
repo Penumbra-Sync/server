@@ -31,11 +31,13 @@ public class ServerFilesController : ControllerBase
     private readonly IHubContext<MareHub> _hubContext;
     private readonly IDbContextFactory<MareDbContext> _mareDbContext;
     private readonly MareMetrics _metricsClient;
+    private readonly MainServerShardRegistrationService _shardRegistrationService;
 
     public ServerFilesController(ILogger<ServerFilesController> logger, CachedFileProvider cachedFileProvider,
         IConfigurationService<StaticFilesServerConfiguration> configuration,
         IHubContext<MareHub> hubContext,
-        IDbContextFactory<MareDbContext> mareDbContext, MareMetrics metricsClient) : base(logger)
+        IDbContextFactory<MareDbContext> mareDbContext, MareMetrics metricsClient,
+        MainServerShardRegistrationService shardRegistrationService) : base(logger)
     {
         _basePath = configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.UseColdStorage), false)
             ? configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.ColdStorageDirectory))
@@ -45,6 +47,7 @@ public class ServerFilesController : ControllerBase
         _hubContext = hubContext;
         _mareDbContext = mareDbContext;
         _metricsClient = metricsClient;
+        _shardRegistrationService = shardRegistrationService;
     }
 
     [HttpPost(MareFiles.ServerFiles_DeleteAll)]
@@ -85,7 +88,7 @@ public class ServerFilesController : ControllerBase
             .Select(k => new { k.Hash, k.Size, k.RawSize })
             .ToListAsync().ConfigureAwait(false);
 
-        var allFileShards = new List<CdnShardConfiguration>(_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()));
+        var allFileShards = _shardRegistrationService.GetConfigurationsByContinent(Continent);
 
         foreach (var file in cacheFile)
         {
@@ -94,25 +97,12 @@ public class ServerFilesController : ControllerBase
 
             if (forbiddenFile == null)
             {
-                List<CdnShardConfiguration> selectedShards = new();
                 var matchingShards = allFileShards.Where(f => new Regex(f.FileMatch).IsMatch(file.Hash)).ToList();
 
-                if (string.Equals(Continent, "*", StringComparison.Ordinal))
-                {
-                    selectedShards = matchingShards;
-                }
-                else
-                {
-                    selectedShards = matchingShards.Where(c => c.Continents.Contains(Continent, StringComparer.OrdinalIgnoreCase)).ToList();
-                    if (!selectedShards.Any()) selectedShards = matchingShards;
-                }
+                var shard = matchingShards.SelectMany(g => g.RegionUris)
+                    .OrderBy(g => Guid.NewGuid()).FirstOrDefault();
 
-                var shard = selectedShards
-                    .OrderBy(s => !s.Continents.Any() ? 0 : 1)
-                    .ThenBy(s => s.Continents.Contains("*", StringComparer.Ordinal) ? 0 : 1)
-                    .ThenBy(g => Guid.NewGuid()).FirstOrDefault();
-
-                baseUrl = shard?.CdnFullUrl ?? _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl));
+                baseUrl = shard.Value ?? _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl));
             }
 
             response.Add(new DownloadFileDto
@@ -133,15 +123,8 @@ public class ServerFilesController : ControllerBase
     [HttpGet(MareFiles.ServerFiles_DownloadServers)]
     public async Task<IActionResult> GetDownloadServers()
     {
-        var allFileShards = new List<CdnShardConfiguration>(_configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CdnShardConfiguration), new List<CdnShardConfiguration>()))
-            .DistinctBy(f => f.CdnFullUrl).ToList();
-        if (!allFileShards.Any())
-        {
-            return Ok(JsonSerializer.Serialize(new List<string> { _configuration.GetValue<Uri>(nameof(StaticFilesServerConfiguration.CdnFullUrl)).ToString() }));
-        }
-        var selectedShards = allFileShards.Where(c => c.Continents.Contains(Continent, StringComparer.OrdinalIgnoreCase)).ToList();
-        if (!selectedShards.Any()) selectedShards = allFileShards.Where(c => c.Continents.Contains("*", StringComparer.Ordinal)).ToList();
-        return Ok(JsonSerializer.Serialize(selectedShards.Select(t => t.CdnFullUrl.ToString())));
+        var allFileShards = _shardRegistrationService.GetConfigurationsByContinent(Continent);
+        return Ok(JsonSerializer.Serialize(allFileShards.SelectMany(t => t.RegionUris.Select(v => v.Value.ToString()))));
     }
 
     [HttpPost(MareFiles.ServerFiles_FilesSend)]

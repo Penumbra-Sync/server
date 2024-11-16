@@ -98,6 +98,8 @@ public class Startup
             services.AddSingleton<IClientReadyMessageService, MainClientReadyMessageService>();
             services.AddHostedService<MainFileCleanupService>();
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>, MareConfigurationServiceServer<StaticFilesServerConfiguration>>();
+            services.AddSingleton<MainServerShardRegistrationService>();
+            services.AddHostedService(s => s.GetRequiredService<MainServerShardRegistrationService>());
             services.AddDbContextPool<MareDbContext>(options =>
             {
                 options.UseNpgsql(Configuration.GetConnectionString("DefaultConnection"), builder =>
@@ -180,6 +182,8 @@ public class Startup
         }
         else
         {
+            services.AddSingleton<ShardRegistrationService>();
+            services.AddHostedService(s => s.GetRequiredService<ShardRegistrationService>());
             services.AddSingleton<IClientReadyMessageService, ShardClientReadyMessageService>();
             services.AddHostedService<ShardFileCleanupService>();
             services.AddSingleton<IConfigurationService<StaticFilesServerConfiguration>, MareConfigurationServiceClient<StaticFilesServerConfiguration>>();
