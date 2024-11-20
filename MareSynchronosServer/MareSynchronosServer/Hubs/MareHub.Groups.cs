@@ -417,7 +417,7 @@ public partial class MareHub
                         DisableAnimations = preferredPermissions.DisableAnimations,
                         DisableSounds = preferredPermissions.DisableSounds,
                         DisableVFX = preferredPermissions.DisableVFX,
-                        IsPaused = false,
+                        IsPaused = preferredPermissions.IsPaused,
                         Sticky = false
                     };
 
@@ -470,6 +470,16 @@ public partial class MareHub
                     };
 
                     await DbContext.AddAsync(existingPermissionsOnDb).ConfigureAwait(false);
+                }
+                else if (!allUserPairs.ContainsKey(pair.GroupUserUID))
+                {
+                    var otherPreferred = await DbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
+                    existingPermissionsOnDb.DisableAnimations = otherPreferred.DisableAnimations;
+                    existingPermissionsOnDb.DisableSounds = otherPreferred.DisableSounds;
+                    existingPermissionsOnDb.DisableVFX = otherPreferred.DisableVFX;
+                    existingPermissionsOnDb.IsPaused = otherPreferred.IsPaused;
+
+                    DbContext.Update(existingPermissionsOnDb);
                 }
 
                 otherPermissionToSelf = existingPermissionsOnDb;
