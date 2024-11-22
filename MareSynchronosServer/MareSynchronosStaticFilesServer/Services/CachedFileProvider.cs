@@ -39,6 +39,7 @@ public sealed class CachedFileProvider : IDisposable
         _hotStoragePath = configuration.GetValue<string>(nameof(StaticFilesServerConfiguration.CacheDirectory));
         _httpClient = new();
         _httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronosServer", "1.0.0.0"));
+        _httpClient.Timeout = TimeSpan.FromSeconds(300);
     }
 
     public void Dispose()
