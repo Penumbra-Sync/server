@@ -189,7 +189,7 @@ public sealed class CachedFileProvider : IDisposable
             try
             {
                 using CancellationTokenSource cts = new();
-                cts.CancelAfter(TimeSpan.FromSeconds(120));
+                cts.CancelAfter(TimeSpan.FromSeconds(300));
                 _metrics.IncGauge(MetricsAPI.GaugeFilesTasksWaitingForDownloadFromCache);
                 await downloadTask.WaitAsync(cts.Token).ConfigureAwait(false);
             }
