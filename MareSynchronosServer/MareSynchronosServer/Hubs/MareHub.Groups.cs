@@ -453,12 +453,12 @@ public partial class MareHub
             var otherPermissionToSelf = userinfo?.OtherPermissions ?? null;
             if (otherPermissionToSelf == null)
             {
-                var existingPermissionsOnDb = await DbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == pair.GroupUserUID && p.OtherUserUID == UserUID).ConfigureAwait(false);
+                var otherExistingPermsOnDb = await DbContext.Permissions.SingleOrDefaultAsync(p => p.UserUID == pair.GroupUserUID && p.OtherUserUID == UserUID).ConfigureAwait(false);
 
-                if (existingPermissionsOnDb == null)
+                if (otherExistingPermsOnDb == null)
                 {
                     var otherPreferred = await DbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
-                    existingPermissionsOnDb = new()
+                    otherExistingPermsOnDb = new()
                     {
                         UserUID = pair.GroupUserUID,
                         OtherUserUID = UserUID,
@@ -469,27 +469,37 @@ public partial class MareHub
                         Sticky = false
                     };
 
-                    await DbContext.AddAsync(existingPermissionsOnDb).ConfigureAwait(false);
+                    await DbContext.AddAsync(otherExistingPermsOnDb).ConfigureAwait(false);
                 }
-                else if (!allUserPairs.ContainsKey(pair.GroupUserUID))
+                else if (!otherExistingPermsOnDb.Sticky)
                 {
                     var otherPreferred = await DbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
-                    existingPermissionsOnDb.DisableAnimations = otherPreferred.DisableAnimations;
-                    existingPermissionsOnDb.DisableSounds = otherPreferred.DisableSounds;
-                    existingPermissionsOnDb.DisableVFX = otherPreferred.DisableVFX;
-                    existingPermissionsOnDb.IsPaused = otherPreferred.IsPaused;
+                    otherExistingPermsOnDb.DisableAnimations = otherPreferred.DisableAnimations;
+                    otherExistingPermsOnDb.DisableSounds = otherPreferred.DisableSounds;
+                    otherExistingPermsOnDb.DisableVFX = otherPreferred.DisableVFX;
+                    otherExistingPermsOnDb.IsPaused = otherPreferred.IsPaused;
 
-                    DbContext.Update(existingPermissionsOnDb);
+                    DbContext.Update(otherExistingPermsOnDb);
                 }
 
-                otherPermissionToSelf = existingPermissionsOnDb;
+                otherPermissionToSelf = otherExistingPermsOnDb;
+            }
+            else if (!otherPermissionToSelf.Sticky)
+            {
+                var otherPreferred = await DbContext.GroupPairPreferredPermissions.SingleAsync(u => u.GroupGID == group.GID && u.UserUID == pair.GroupUserUID).ConfigureAwait(false);
+                otherPermissionToSelf.DisableAnimations = otherPreferred.DisableAnimations;
+                otherPermissionToSelf.DisableSounds = otherPreferred.DisableSounds;
+                otherPermissionToSelf.DisableVFX = otherPreferred.DisableVFX;
+                otherPermissionToSelf.IsPaused = otherPreferred.IsPaused;
+
+                DbContext.Update(otherPermissionToSelf);
             }
 
             await Clients.User(UserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
                 pair.ToUserData(), ownPermissionsToOther.ToUserPermissions(setSticky: ownPermissionsToOther.Sticky),
                 otherPermissionToSelf.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
             await Clients.User(pair.GroupUserUID).Client_GroupPairJoined(new GroupPairFullInfoDto(group.ToGroupData(),
-                self.ToUserData(), otherPermissionToSelf.ToUserPermissions(setSticky: false),
+                self.ToUserData(), otherPermissionToSelf.ToUserPermissions(setSticky: otherPermissionToSelf.Sticky),
                 ownPermissionsToOther.ToUserPermissions(setSticky: false))).ConfigureAwait(false);
 
             // if not paired prior and neither has the permissions set to paused, send online
