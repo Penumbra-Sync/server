@@ -45,6 +45,8 @@ public class OAuthController : AuthControllerBase
         if (discordClientSecret == null || discordClientId == null || discordOAuthUri == null)
             return BadRequest("Server does not support OAuth2");
 
+        Logger.LogDebug("Starting OAuth Process for {session}", sessionId);
+
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
@@ -86,6 +88,8 @@ public class OAuthController : AuthControllerBase
         if (string.IsNullOrEmpty(reqId)) return BadRequest("No session cookie found");
         if (string.IsNullOrEmpty(code)) return BadRequest("No Discord OAuth2 code found");
 
+        Logger.LogDebug("Discord OAuth Callback for {session}", reqId);
+
         var query = HttpUtility.ParseQueryString(discordOAuthUri.Query);
         using var client = new HttpClient();
         var parameters = new Dictionary<string, string>
@@ -103,6 +107,7 @@ public class OAuthController : AuthControllerBase
 
         if (!response.IsSuccessStatusCode)
         {
+            Logger.LogDebug("Failed to get Discord token for {session}", reqId);
             return BadRequest("Failed to get Discord token");
         }
 
@@ -116,6 +121,7 @@ public class OAuthController : AuthControllerBase
 
         if (!meResponse.IsSuccessStatusCode)
         {
+            Logger.LogDebug("Failed to get Discord user info for {session}", reqId);
             return BadRequest("Failed to get Discord user info");
         }
 
@@ -129,6 +135,7 @@ public class OAuthController : AuthControllerBase
         }
         catch (Exception ex)
         {
+            Logger.LogDebug(ex, "Failed to parse Discord user info for {session}", reqId);
             return BadRequest("Failed to parse user id from @me response for token");
         }
 
@@ -139,15 +146,19 @@ public class OAuthController : AuthControllerBase
 
         var mareUser = await dbContext.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == discordUserId);
         if (mareUser == null)
+        {
+            Logger.LogDebug("Failed to get Mare user for {session}, DiscordId: {id}", reqId, discordUserId);
+
             return BadRequest("Could not find a Mare user associated to this Discord account.");
+        }
 
         var jwt = CreateJwt([
-            new Claim(MareClaimTypes.Uid, mareUser.User!.UID),
+        new Claim(MareClaimTypes.Uid, mareUser.User!.UID),
             new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddDays(14).Ticks.ToString(CultureInfo.InvariantCulture)),
             new Claim(MareClaimTypes.DiscordId, discordUserId.ToString()),
             new Claim(MareClaimTypes.DiscordUser, discordUserName),
             new Claim(MareClaimTypes.OAuthLoginToken, true.ToString())
-            ]);
+        ]);
 
         _cookieOAuthResponse[reqId] = jwt.RawData;
         _ = Task.Run(async () =>
@@ -166,6 +177,7 @@ public class OAuthController : AuthControllerBase
                 _cookieOAuthResponse.TryRemove(reqId, out _);
         });
 
+        Logger.LogDebug("Setting JWT response for {session}, process complete", reqId);
         return Ok("The OAuth2 token was generated. The plugin will grab it automatically. You can close this browser tab.");
     }
 
@@ -205,19 +217,25 @@ public class OAuthController : AuthControllerBase
     [HttpGet(MareAuth.OAuth_GetDiscordOAuthToken)]
     public async Task<IActionResult> GetDiscordOAuthToken([FromQuery] string sessionId)
     {
+        Logger.LogDebug("Starting to wait for GetDiscordOAuthToken for {session}", sessionId);
         using CancellationTokenSource cts = new();
-        cts.CancelAfter(TimeSpan.FromSeconds(60));
+        cts.CancelAfter(TimeSpan.FromSeconds(55));
         while (!_cookieOAuthResponse.ContainsKey(sessionId) && !cts.Token.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(1), cts.Token);
         }
         if (cts.IsCancellationRequested)
         {
+            Logger.LogDebug("Timeout elapsed for {session}", sessionId);
             return BadRequest("Did not find Discord OAuth2 response");
         }
         _cookieOAuthResponse.TryRemove(sessionId, out var token);
         if (token == null)
+        {
+            Logger.LogDebug("No token found for {session}", sessionId);
             return BadRequest("OAuth session was never established");
+        }
+        Logger.LogDebug("Returning JWT for {session}, process complete", sessionId);
         return Content(token);
     }
 
