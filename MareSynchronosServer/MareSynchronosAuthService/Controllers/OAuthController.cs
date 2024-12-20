@@ -12,6 +12,7 @@ using StackExchange.Redis;
 using StackExchange.Redis.Extensions.Core.Abstractions;
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Web;
@@ -145,26 +146,35 @@ public class OAuthController : AuthControllerBase
         using var dbContext = await MareDbContextFactory.CreateDbContextAsync();
 
         var mareUser = await dbContext.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.DiscordId == discordUserId);
-        if (mareUser == null)
+        if (mareUser == default)
         {
             Logger.LogDebug("Failed to get Mare user for {session}, DiscordId: {id}", reqId, discordUserId);
 
             return BadRequest("Could not find a Mare user associated to this Discord account.");
         }
 
-        var jwt = CreateJwt([
-        new Claim(MareClaimTypes.Uid, mareUser.User!.UID),
-            new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddDays(14).Ticks.ToString(CultureInfo.InvariantCulture)),
-            new Claim(MareClaimTypes.DiscordId, discordUserId.ToString()),
-            new Claim(MareClaimTypes.DiscordUser, discordUserName),
-            new Claim(MareClaimTypes.OAuthLoginToken, true.ToString())
-        ]);
+        JwtSecurityToken? jwt = null;
+        try
+        {
+            jwt = CreateJwt([
+                new Claim(MareClaimTypes.Uid, mareUser.User!.UID),
+                new Claim(MareClaimTypes.Expires, DateTime.UtcNow.AddDays(14).Ticks.ToString(CultureInfo.InvariantCulture)),
+                new Claim(MareClaimTypes.DiscordId, discordUserId.ToString()),
+                new Claim(MareClaimTypes.DiscordUser, discordUserName),
+                new Claim(MareClaimTypes.OAuthLoginToken, true.ToString())
+            ]);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to create the OAuth2 token for session {session} and Discord user {user}", reqId, discordUserId);
+            return BadRequest("Failed to create the OAuth2 token. Please contact the developer for more information.");
+        }
 
         _cookieOAuthResponse[reqId] = jwt.RawData;
         _ = Task.Run(async () =>
         {
             bool isRemoved = false;
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < 30; i++)
             {
                 await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
                 if (!_cookieOAuthResponse.ContainsKey(reqId))
