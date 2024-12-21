@@ -265,7 +265,7 @@ internal class DiscordBot : IHostedService
     private async Task CheckVanityForGroup(RestGuild restGuild, Dictionary<ulong, string> allowedRoleIds, MareDbContext db, Group group, CancellationToken token)
     {
         var groupPrimaryUser = group.OwnerUID;
-        var primaryUser = await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.PrimaryUserUID == group.OwnerUID).ConfigureAwait(false);
+        var primaryUser = await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.UserUID == group.OwnerUID).ConfigureAwait(false);
         if (primaryUser != null)
         {
             groupPrimaryUser = primaryUser.User.UID;
