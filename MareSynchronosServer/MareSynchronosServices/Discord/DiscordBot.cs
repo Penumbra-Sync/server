@@ -265,10 +265,10 @@ internal class DiscordBot : IHostedService
     private async Task CheckVanityForGroup(RestGuild restGuild, Dictionary<ulong, string> allowedRoleIds, MareDbContext db, Group group, CancellationToken token)
     {
         var groupPrimaryUser = group.OwnerUID;
-        var primaryUser = await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.PrimaryUserUID == group.OwnerUID).ConfigureAwait(false);
-        if (primaryUser != null)
+        var groupOwner = await db.Auth.Include(u => u.User).SingleOrDefaultAsync(u => u.UserUID == group.OwnerUID).ConfigureAwait(false);
+        if (groupOwner != null && !string.IsNullOrEmpty(groupOwner.PrimaryUserUID))
         {
-            groupPrimaryUser = primaryUser.User.UID;
+            groupPrimaryUser = groupOwner.PrimaryUserUID;
         }
 
         var lodestoneUser = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(f => f.User.UID == groupPrimaryUser).ConfigureAwait(false);
