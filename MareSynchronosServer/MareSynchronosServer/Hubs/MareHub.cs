@@ -109,6 +109,8 @@ public partial class MareHub : Hub<IMareHub>, IMareHub
                 MaxGroupsJoinedByUser = _maxJoinedGroupsByUser,
                 MaxGroupUserCount = _maxGroupUserCount,
                 FileServerAddress = _fileServerAddress,
+                MaxCharaData = 10,
+                MaxCharaDataVanity = 30,
             },
             DefaultPreferredPermissions = new DefaultPermissionsDto()
             {

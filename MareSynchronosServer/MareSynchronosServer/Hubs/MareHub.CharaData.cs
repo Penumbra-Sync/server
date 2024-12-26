@@ -12,6 +12,8 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<CharaDataFullDto?> CharaDataCreate()
     {
+        _logger.LogCallInfo();
+
         int uploadCount = DbContext.CharaData.Count(c => c.UploaderUID == UserUID);
         User user = DbContext.Users.Single(u => u.UID == UserUID);
         int maximumUploads = string.IsNullOrEmpty(user.Alias) ? 10 : 30;
@@ -49,6 +51,8 @@ public partial class MareHub
         await DbContext.CharaData.AddAsync(charaData).ConfigureAwait(false);
         await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", charaDataId));
+
         return GetCharaDataFullDto(charaData);
     }
 
@@ -61,13 +65,15 @@ public partial class MareHub
 
         try
         {
+            _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", id));
+
             DbContext.Remove(existingData);
             await DbContext.SaveChangesAsync().ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogCallWarning(MareHubLogger.Args(UserUID, id, ex.Message));
+            _logger.LogCallWarning(MareHubLogger.Args("FAILURE", id, ex.Message));
             return false;
         }
     }
@@ -86,6 +92,12 @@ public partial class MareHub
         if (!await CheckCharaDataAllowance(charaData).ConfigureAwait(false))
             return null;
 
+        if (!string.Equals(charaData.UploaderUID, UserUID, StringComparison.Ordinal))
+        {
+            charaData.DownloadCount++;
+            await DbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
+
         return GetCharaDataDownloadDto(charaData);
     }
 
@@ -102,6 +114,8 @@ public partial class MareHub
 
         if (!await CheckCharaDataAllowance(charaData).ConfigureAwait(false))
             return null;
+
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", id));
 
         return GetCharaDataMetaInfoDto(charaData);
     }
@@ -125,6 +139,8 @@ public partial class MareHub
                 }
             }
         }
+
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", sharedCharaData.Count));
 
         return [.. sharedCharaData.Select(GetCharaDataMetaInfoDto)];
     }
@@ -218,9 +234,10 @@ public partial class MareHub
             }
         }
 
-
         if (anyChanges)
         {
+            _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", anyChanges));
+            charaData.UpdatedDate = DateTime.UtcNow;
             await DbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
@@ -231,6 +248,7 @@ public partial class MareHub
     public async Task<List<CharaDataFullDto>> CharaDataGetOwn()
     {
         var ownCharaData = await DbContext.CharaData.Where(c => c.UploaderUID == UserUID).ToListAsync().ConfigureAwait(false);
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS"));
         return [.. ownCharaData.Select(GetCharaDataFullDto)];
     }
 
