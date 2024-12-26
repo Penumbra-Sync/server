@@ -1,5 +1,4 @@
-﻿using MareSynchronos.API.Data.Enum;
-using MareSynchronos.API.SignalR;
+﻿using MareSynchronos.API.SignalR;
 using MareSynchronosServer.Hubs;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
