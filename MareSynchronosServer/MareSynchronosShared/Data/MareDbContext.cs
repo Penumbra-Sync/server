@@ -49,6 +49,7 @@ public class MareDbContext : DbContext
     public DbSet<UserDefaultPreferredPermission> UserDefaultPreferredPermissions { get; set; }
     public DbSet<CharaData> CharaData { get; set; }
     public DbSet<CharaDataFile> CharaDataFiles { get; set; }
+    public DbSet<CharaDataFileSwap> CharaDataFileSwaps { get; set; }
     public DbSet<CharaDataOriginalFile> CharaDataOriginalFiles { get; set; }
     public DbSet<CharaDataPose> CharaDataPoses { get; set; }
     public DbSet<CharaDataAllowance> CharaDataAllowances { get; set; }
@@ -113,12 +114,19 @@ public class MareDbContext : DbContext
             .HasMany(p => p.AllowedIndividiuals)
             .WithOne(p => p.Parent)
             .HasForeignKey(p => new { p.ParentId, p.ParentUploaderUID });
+        mb.Entity<CharaData>()
+            .HasMany(p => p.FileSwaps)
+            .WithOne(p => p.Parent)
+            .HasForeignKey(p => new { p.ParentId, p.ParentUploaderUID });
         mb.Entity<CharaData>().HasKey(p => new { p.Id, p.UploaderUID });
         mb.Entity<CharaData>().HasIndex(p => p.UploaderUID);
         mb.Entity<CharaData>().HasIndex(p => p.Id);
         mb.Entity<CharaDataFile>().ToTable("chara_data_files");
-        mb.Entity<CharaDataFile>().HasKey(c => new { c.ParentId, c.GamePath });
+        mb.Entity<CharaDataFile>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
         mb.Entity<CharaDataFile>().HasIndex(c => c.ParentId);
+        mb.Entity<CharaDataFileSwap>().ToTable("chara_data_file_swaps");
+        mb.Entity<CharaDataFileSwap>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
+        mb.Entity<CharaDataFileSwap>().HasIndex(c => c.ParentId);
         mb.Entity<CharaDataPose>().ToTable("chara_data_poses");
         mb.Entity<CharaDataPose>().Property(p => p.Id).ValueGeneratedOnAdd();
         mb.Entity<CharaDataPose>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.Id });

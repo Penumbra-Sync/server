@@ -44,7 +44,7 @@ public partial class MareHub
             ShareType = CharaDataShare.Private,
             CustomizeData = string.Empty,
             GlamourerData = string.Empty,
-            ExpiryDate = null,
+            ExpiryDate = DateTime.MaxValue,
             Description = string.Empty,
         };
 
@@ -59,7 +59,7 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<bool> CharaDataDelete(string id)
     {
-        var existingData = DbContext.CharaData.SingleOrDefaultAsync(u => u.Id == id && u.UploaderUID == UserUID);
+        var existingData = await DbContext.CharaData.SingleOrDefaultAsync(u => u.Id == id && u.UploaderUID == UserUID).ConfigureAwait(false);
         if (existingData == null)
             return false;
 
@@ -81,16 +81,7 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<CharaDataDownloadDto?> CharaDataDownload(string id)
     {
-        var splitid = id.Split(":", StringSplitOptions.None);
-        if (splitid.Length != 2)
-            return null;
-
-        var charaData = await DbContext.CharaData.SingleOrDefaultAsync(c => c.Id == splitid[1] && c.UploaderUID == splitid[0]).ConfigureAwait(false);
-        if (charaData == null)
-            return null;
-
-        if (!await CheckCharaDataAllowance(charaData).ConfigureAwait(false))
-            return null;
+        CharaData charaData = await GetCharaDataById(id, nameof(CharaDataDownload)).ConfigureAwait(false);
 
         if (!string.Equals(charaData.UploaderUID, UserUID, StringComparison.Ordinal))
         {
@@ -98,26 +89,34 @@ public partial class MareHub
             await DbContext.SaveChangesAsync().ConfigureAwait(false);
         }
 
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", id));
+
         return GetCharaDataDownloadDto(charaData);
     }
 
     [Authorize(Policy = "Identified")]
     public async Task<CharaDataMetaInfoDto?> CharaDataGetMetainfo(string id)
     {
-        var splitid = id.Split(":", StringSplitOptions.None);
-        if (splitid.Length != 2)
-            return null;
-
-        var charaData = await DbContext.CharaData.SingleOrDefaultAsync(c => c.Id == splitid[1] && c.UploaderUID == splitid[0]).ConfigureAwait(false);
-        if (charaData == null)
-            return null;
-
-        if (!await CheckCharaDataAllowance(charaData).ConfigureAwait(false))
-            return null;
+        var charaData = await GetCharaDataById(id, nameof(CharaDataGetMetainfo)).ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", id));
 
         return GetCharaDataMetaInfoDto(charaData);
+    }
+
+    [Authorize(Policy = "Identified")]
+    public async Task<List<CharaDataFullDto>> CharaDataGetOwn()
+    {
+        var ownCharaData = await DbContext.CharaData
+            .Include(u => u.Files)
+            .Include(u => u.FileSwaps)
+            .Include(u => u.OriginalFiles)
+            .Include(u => u.AllowedIndividiuals)
+            .Include(u => u.Poses)
+            .AsSplitQuery()
+            .Where(c => c.UploaderUID == UserUID).ToListAsync().ConfigureAwait(false);
+        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS"));
+        return [.. ownCharaData.Select(GetCharaDataFullDto)];
     }
 
     [Authorize(Policy = "Identified")]
@@ -127,7 +126,13 @@ public partial class MareHub
         List<CharaData> sharedCharaData = [];
         foreach (var pair in allPairs.Where(p => !p.Value.OwnPermissions.IsPaused && !p.Value.OtherPermissions.IsPaused))
         {
-            var allSharedDataByPair = await DbContext.CharaData.Where(p => p.ShareType == CharaDataShare.Shared && p.UploaderUID == pair.Key)
+            var allSharedDataByPair = await DbContext.CharaData
+                .Include(u => u.Files)
+                .Include(u => u.OriginalFiles)
+                .Include(u => u.AllowedIndividiuals)
+                .Include(u => u.Poses)
+                .AsSplitQuery()
+                .Where(p => p.ShareType == CharaDataShare.Shared && p.UploaderUID == pair.Key)
                 .ToListAsync()
                 .ConfigureAwait(false);
 
@@ -148,7 +153,14 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<CharaDataFullDto?> CharaDataUpdate(CharaDataUpdateDto updateDto)
     {
-        var charaData = await DbContext.CharaData.SingleOrDefaultAsync(u => u.Id == updateDto.Id && u.UploaderUID == UserUID).ConfigureAwait(false);
+        var charaData = await DbContext.CharaData
+            .Include(u => u.Files)
+            .Include(u => u.OriginalFiles)
+            .Include(u => u.AllowedIndividiuals)
+            .Include(u => u.Poses)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(u => u.Id == updateDto.Id && u.UploaderUID == UserUID).ConfigureAwait(false);
+
         if (charaData == null)
             return null;
 
@@ -160,7 +172,7 @@ public partial class MareHub
             anyChanges = true;
         }
 
-        if (updateDto.ExpiryDate != null || (updateDto.ExpiryDate == null && charaData.ExpiryDate != null))
+        if (updateDto.ExpiryDate != null)
         {
             charaData.ExpiryDate = updateDto.ExpiryDate;
             anyChanges = true;
@@ -232,6 +244,26 @@ public partial class MareHub
                     Parent = charaData
                 });
             }
+
+            anyChanges = true;
+        }
+
+        if (updateDto.FileSwaps != null)
+        {
+            var fileSwaps = charaData.FileSwaps.ToList();
+            charaData.FileSwaps.Clear();
+            DbContext.RemoveRange(fileSwaps);
+            foreach (var file in updateDto.FileSwaps)
+            {
+                charaData.FileSwaps.Add(new CharaDataFileSwap()
+                {
+                    FilePath = file.Key,
+                    GamePath = file.Value,
+                    Parent = charaData
+                });
+            }
+
+            anyChanges = true;
         }
 
         if (anyChanges)
@@ -243,15 +275,6 @@ public partial class MareHub
 
         return GetCharaDataFullDto(charaData);
     }
-
-    [Authorize(Policy = "Identified")]
-    public async Task<List<CharaDataFullDto>> CharaDataGetOwn()
-    {
-        var ownCharaData = await DbContext.CharaData.Where(c => c.UploaderUID == UserUID).ToListAsync().ConfigureAwait(false);
-        _logger.LogCallInfo(MareHubLogger.Args("SUCCESS"));
-        return [.. ownCharaData.Select(GetCharaDataFullDto)];
-    }
-
 
     private static CharaDataAccess GetAccessType(AccessTypeDto dataAccess) => dataAccess switch
     {
@@ -279,6 +302,7 @@ public partial class MareHub
             Description = charaData.Description,
             FileGamePaths = charaData.Files.GroupBy(f => f.FileCacheHash, StringComparer.Ordinal).ToDictionary(d => d.Key, d => d.Select(d => d.GamePath).ToList(), StringComparer.Ordinal),
             GlamourerData = charaData.GlamourerData,
+            FileSwaps = charaData.FileSwaps.ToDictionary(k => k.GamePath, k => k.FilePath, StringComparer.Ordinal)
         };
     }
 
@@ -294,7 +318,10 @@ public partial class MareHub
             ExpectedHashes = [.. charaData.OriginalFiles.Select(f => f.Hash)],
             ExpiryDate = charaData.ExpiryDate,
             FileGamePaths = charaData.Files.GroupBy(f => f.FileCacheHash, StringComparer.Ordinal).ToDictionary(d => d.Key, d => d.Select(d => d.GamePath).ToList(), StringComparer.Ordinal),
+            FileSwaps = charaData.FileSwaps.ToDictionary(k => k.FilePath, k => k.GamePath, StringComparer.Ordinal),
             GlamourerData = charaData.GlamourerData,
+            CreatedDate = charaData.CreatedDate,
+            UpdatedDate = charaData.UpdatedDate,
         };
     }
 
@@ -366,5 +393,37 @@ public partial class MareHub
         }
 
         return false;
+    }
+
+    private async Task<CharaData> GetCharaDataById(string id, string methodName)
+    {
+        var splitid = id.Split(":", StringSplitOptions.None);
+        if (splitid.Length != 2)
+        {
+            _logger.LogCallWarning(MareHubLogger.Args("INVALID", id));
+            throw new InvalidOperationException($"Id {id} not in expected format");
+        }
+
+        var charaData = await DbContext.CharaData
+                .Include(u => u.Files)
+                .Include(u => u.FileSwaps)
+                .Include(u => u.AllowedIndividiuals)
+                .Include(u => u.Poses)
+                .AsSplitQuery()
+                .SingleOrDefaultAsync(c => c.Id == splitid[1] && c.UploaderUID == splitid[0]).ConfigureAwait(false);
+
+        if (charaData == null)
+        {
+            _logger.LogCallWarning(MareHubLogger.Args("NOT FOUND", id));
+            throw new InvalidDataException($"No chara data with {id} found");
+        }
+
+        if (!await CheckCharaDataAllowance(charaData).ConfigureAwait(false))
+        {
+            _logger.LogCallWarning(MareHubLogger.Args("UNAUTHORIZED", id));
+            throw new UnauthorizedAccessException($"User is not allowed to download {id}");
+        }
+
+        return charaData;
     }
 }

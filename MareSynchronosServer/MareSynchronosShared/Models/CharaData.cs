@@ -32,6 +32,7 @@ public class CharaData
     public int DownloadCount { get; set; } = 0;
     public virtual ICollection<CharaDataPose> Poses { get; set; } = [];
     public virtual ICollection<CharaDataFile> Files { get; set; } = [];
+    public virtual ICollection<CharaDataFileSwap> FileSwaps { get; set; } = [];
     public virtual ICollection<CharaDataOriginalFile> OriginalFiles { get; set; } = [];
     public virtual ICollection<CharaDataAllowance> AllowedIndividiuals { get; set; } = [];
 }
@@ -61,6 +62,15 @@ public class CharaDataFile
     public virtual CharaData Parent { get; set; }
     public string ParentId { get; set; }
     public string ParentUploaderUID { get; set; }
+}
+
+public class CharaDataFileSwap
+{
+    public virtual CharaData Parent { get; set; }
+    public string ParentId { get; set; }
+    public string ParentUploaderUID { get; set; }
+    public string GamePath { get; set; }
+    public string FilePath { get; set; }
 }
 
 public class CharaDataPose
