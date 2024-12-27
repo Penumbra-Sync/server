@@ -1,4 +1,5 @@
-﻿using MareSynchronos.API.Dto.CharaData;
+﻿using MareSynchronos.API.Data;
+using MareSynchronos.API.Dto.CharaData;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
@@ -112,6 +113,7 @@ public partial class MareHub
             .Include(u => u.FileSwaps)
             .Include(u => u.OriginalFiles)
             .Include(u => u.AllowedIndividiuals)
+            .ThenInclude(u => u.AllowedUser)
             .Include(u => u.Poses)
             .AsSplitQuery()
             .Where(c => c.UploaderUID == UserUID).ToListAsync().ConfigureAwait(false);
@@ -207,13 +209,25 @@ public partial class MareHub
             var individuals = charaData.AllowedIndividiuals.ToList();
             charaData.AllowedIndividiuals.Clear();
             DbContext.RemoveRange(individuals);
+            var allowedUserList = updateDto.AllowedUsers.ToList();
             foreach (var user in updateDto.AllowedUsers)
             {
-                charaData.AllowedIndividiuals.Add(new CharaDataAllowance()
+                var dbUser = await DbContext.Users.SingleOrDefaultAsync(u => u.UID == user || u.Alias == user).ConfigureAwait(false);
+                if (dbUser != null)
                 {
-                    AllowedUserUID = user,
-                    Parent = charaData
-                });
+                    if (!allowedUserList.Contains(dbUser.UID, StringComparer.Ordinal) && !allowedUserList.Contains(dbUser.Alias, StringComparer.Ordinal))
+                    {
+                        continue;
+                    }
+                    allowedUserList.RemoveAll(u => string.Equals(u, dbUser.UID, StringComparison.Ordinal));
+                    allowedUserList.RemoveAll(u => string.Equals(u, dbUser.Alias, StringComparison.Ordinal));
+
+                    charaData.AllowedIndividiuals.Add(new CharaDataAllowance()
+                    {
+                        AllowedUser = dbUser,
+                        Parent = charaData
+                    });
+                }
             }
             anyChanges = true;
         }
@@ -312,7 +326,7 @@ public partial class MareHub
         {
             AccessType = GetAccessTypeDto(charaData.AccessType),
             ShareType = GetShareTypeDto(charaData.ShareType),
-            AllowedUsers = [.. charaData.AllowedIndividiuals.Select(u => u.AllowedUserUID)],
+            AllowedUsers = [.. charaData.AllowedIndividiuals.Select(u => new UserData(u.AllowedUser.UID, u.AllowedUser.Alias))],
             CustomizeData = charaData.CustomizeData,
             Description = charaData.Description,
             ExpectedHashes = [.. charaData.OriginalFiles.Select(f => f.Hash)],

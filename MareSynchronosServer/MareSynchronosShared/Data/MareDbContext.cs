@@ -124,6 +124,7 @@ public class MareDbContext : DbContext
         mb.Entity<CharaDataFile>().ToTable("chara_data_files");
         mb.Entity<CharaDataFile>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
         mb.Entity<CharaDataFile>().HasIndex(c => c.ParentId);
+        mb.Entity<CharaDataFile>().HasOne(f => f.FileCache).WithMany().HasForeignKey(f => f.FileCacheHash).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<CharaDataFileSwap>().ToTable("chara_data_file_swaps");
         mb.Entity<CharaDataFileSwap>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
         mb.Entity<CharaDataFileSwap>().HasIndex(c => c.ParentId);
