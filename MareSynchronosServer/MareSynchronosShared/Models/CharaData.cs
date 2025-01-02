@@ -29,6 +29,7 @@ public class CharaData
     public DateTime? ExpiryDate { get; set; }
     public string? GlamourerData { get; set; }
     public string? CustomizeData { get; set; }
+    public string? ManipulationData { get; set; }
     public int DownloadCount { get; set; } = 0;
     public virtual ICollection<CharaDataPose> Poses { get; set; } = [];
     public virtual ICollection<CharaDataFile> Files { get; set; } = [];
@@ -51,6 +52,7 @@ public class CharaDataOriginalFile
     public virtual CharaData Parent { get; set; }
     public string ParentId { get; set; }
     public string ParentUploaderUID { get; set; }
+    public string GamePath { get; set; }
     public string Hash { get; set; }
 }
 

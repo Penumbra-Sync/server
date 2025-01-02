@@ -133,7 +133,7 @@ public class MareDbContext : DbContext
         mb.Entity<CharaDataPose>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.Id });
         mb.Entity<CharaDataPose>().HasIndex(c => c.ParentId);
         mb.Entity<CharaDataOriginalFile>().ToTable("chara_data_orig_files");
-        mb.Entity<CharaDataOriginalFile>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.Hash });
+        mb.Entity<CharaDataOriginalFile>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
         mb.Entity<CharaDataOriginalFile>().HasIndex(c => c.ParentId);
         mb.Entity<CharaDataAllowance>().ToTable("chara_data_allowance");
         mb.Entity<CharaDataAllowance>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.AllowedUserUID });

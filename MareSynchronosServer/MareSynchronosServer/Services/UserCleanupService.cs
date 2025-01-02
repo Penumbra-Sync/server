@@ -12,15 +12,15 @@ public class UserCleanupService : IHostedService
 {
     private readonly MareMetrics metrics;
     private readonly ILogger<UserCleanupService> _logger;
-    private readonly IServiceProvider _services;
+    private readonly IDbContextFactory<MareDbContext> _mareDbContextFactory;
     private readonly IConfigurationService<ServerConfiguration> _configuration;
     private CancellationTokenSource _cleanupCts;
 
-    public UserCleanupService(MareMetrics metrics, ILogger<UserCleanupService> logger, IServiceProvider services, IConfigurationService<ServerConfiguration> configuration)
+    public UserCleanupService(MareMetrics metrics, ILogger<UserCleanupService> logger, IDbContextFactory<MareDbContext> mareDbContextFactory, IConfigurationService<ServerConfiguration> configuration)
     {
         this.metrics = metrics;
         _logger = logger;
-        _services = services;
+        _mareDbContextFactory = mareDbContextFactory;
         _configuration = configuration;
     }
 
@@ -38,16 +38,17 @@ public class UserCleanupService : IHostedService
     {
         while (!ct.IsCancellationRequested)
         {
-            using var scope = _services.CreateScope();
-            using var dbContext = scope.ServiceProvider.GetService<MareDbContext>()!;
+            using (var dbContext = await _mareDbContextFactory.CreateDbContextAsync(ct).ConfigureAwait(false))
+            {
 
-            CleanUpOutdatedLodestoneAuths(dbContext);
+                CleanUpOutdatedLodestoneAuths(dbContext);
 
-            await PurgeUnusedAccounts(dbContext).ConfigureAwait(false);
+                await PurgeUnusedAccounts(dbContext).ConfigureAwait(false);
 
-            await PurgeTempInvites(dbContext).ConfigureAwait(false);
+                await PurgeTempInvites(dbContext).ConfigureAwait(false);
 
-            dbContext.SaveChanges();
+                dbContext.SaveChanges();
+            }
 
             var now = DateTime.Now;
             TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);

@@ -5,6 +5,8 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Text;
+using System.Text.Json;
 
 namespace MareSynchronosServer.Hubs;
 
@@ -17,7 +19,7 @@ public partial class MareHub
 
         int uploadCount = DbContext.CharaData.Count(c => c.UploaderUID == UserUID);
         User user = DbContext.Users.Single(u => u.UID == UserUID);
-        int maximumUploads = string.IsNullOrEmpty(user.Alias) ? 10 : 30;
+        int maximumUploads = string.IsNullOrEmpty(user.Alias) ? _maxCharaDataByUser : _maxCharaDataByUserVanity;
         if (uploadCount >= maximumUploads)
         {
             return null;
@@ -124,6 +126,8 @@ public partial class MareHub
     [Authorize(Policy = "Identified")]
     public async Task<List<CharaDataMetaInfoDto>> CharaDataGetShared()
     {
+        _logger.LogCallInfo();
+
         var allPairs = await GetAllPairInfo(UserUID).ConfigureAwait(false);
         List<CharaData> sharedCharaData = [];
         foreach (var pair in allPairs.Where(p => !p.Value.OwnPermissions.IsPaused && !p.Value.OtherPermissions.IsPaused))
@@ -133,8 +137,10 @@ public partial class MareHub
                 .Include(u => u.OriginalFiles)
                 .Include(u => u.AllowedIndividiuals)
                 .Include(u => u.Poses)
-                .AsSplitQuery()
+                .Include(u => u.Uploader)
                 .Where(p => p.ShareType == CharaDataShare.Shared && p.UploaderUID == pair.Key)
+                .AsSplitQuery()
+                .AsNoTracking()
                 .ToListAsync()
                 .ConfigureAwait(false);
 
@@ -145,6 +151,25 @@ public partial class MareHub
                     sharedCharaData.Add(charaData);
                 }
             }
+        }
+
+        var charaDataDirectlyShared = await DbContext.CharaData.Include(u => u.Files)
+                .Include(u => u.OriginalFiles)
+                .Include(u => u.AllowedIndividiuals)
+                .Include(u => u.Poses)
+                .Include(u => u.Uploader)
+                .Where(p => p.ShareType == CharaDataShare.Shared && p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID))
+                .AsSplitQuery()
+                .AsNoTracking()
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+        foreach (var data in charaDataDirectlyShared)
+        {
+            if (sharedCharaData.Exists(d => string.Equals(d.Id, data.Id, StringComparison.Ordinal)
+                && string.Equals(d.UploaderUID, d.UploaderUID, StringComparison.Ordinal)))
+                continue;
+            sharedCharaData.Add(data);
         }
 
         _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", sharedCharaData.Count));
@@ -159,6 +184,8 @@ public partial class MareHub
             .Include(u => u.Files)
             .Include(u => u.OriginalFiles)
             .Include(u => u.AllowedIndividiuals)
+            .ThenInclude(u => u.AllowedUser)
+            .Include(u => u.FileSwaps)
             .Include(u => u.Poses)
             .AsSplitQuery()
             .SingleOrDefaultAsync(u => u.Id == updateDto.Id && u.UploaderUID == UserUID).ConfigureAwait(false);
@@ -189,6 +216,12 @@ public partial class MareHub
         if (updateDto.CustomizeData != null)
         {
             charaData.CustomizeData = updateDto.CustomizeData;
+            anyChanges = true;
+        }
+
+        if (updateDto.ManipulationData != null)
+        {
+            charaData.ManipulationData = updateDto.ManipulationData;
             anyChanges = true;
         }
 
@@ -242,20 +275,18 @@ public partial class MareHub
             DbContext.RemoveRange(files);
             foreach (var file in updateDto.FileGamePaths)
             {
-                foreach (var path in file.Value)
+                charaData.Files.Add(new CharaDataFile()
                 {
-                    charaData.Files.Add(new CharaDataFile()
-                    {
-                        FileCacheHash = file.Key,
-                        GamePath = path,
-                        Parent = charaData
-                    });
-                }
+                    FileCacheHash = file.HashOrFileSwap,
+                    GamePath = file.GamePath,
+                    Parent = charaData
+                });
 
                 charaData.OriginalFiles.Add(new CharaDataOriginalFile()
                 {
-                    Hash = file.Key,
-                    Parent = charaData
+                    Hash = file.HashOrFileSwap,
+                    Parent = charaData,
+                    GamePath = file.GamePath
                 });
             }
 
@@ -271,8 +302,8 @@ public partial class MareHub
             {
                 charaData.FileSwaps.Add(new CharaDataFileSwap()
                 {
-                    FilePath = file.Key,
-                    GamePath = file.Value,
+                    FilePath = file.HashOrFileSwap,
+                    GamePath = file.GamePath,
                     Parent = charaData
                 });
             }
@@ -280,11 +311,64 @@ public partial class MareHub
             anyChanges = true;
         }
 
+        if (updateDto.Poses != null)
+        {
+            foreach (var pose in updateDto.Poses)
+            {
+                if (pose.Id == null)
+                {
+                    charaData.Poses.Add(new CharaDataPose()
+                    {
+                        Description = pose.Description,
+                        Parent = charaData,
+                        ParentUploaderUID = UserUID,
+                        PoseData = pose.PoseData,
+                        WorldData = pose.WorldData == null ? string.Empty : JsonSerializer.Serialize(pose.WorldData),
+                    });
+
+                    anyChanges = true;
+                }
+                else
+                {
+                    var associatedPose = charaData.Poses.FirstOrDefault(p => p.Id == pose.Id);
+                    if (associatedPose == null)
+                        continue;
+
+                    if (pose.Description == null && pose.PoseData == null && pose.WorldData == null)
+                    {
+                        charaData.Poses.Remove(associatedPose);
+                        DbContext.Remove(associatedPose);
+                    }
+                    else
+                    {
+                        if (pose.Description != null)
+                            associatedPose.Description = pose.Description;
+                        if (pose.WorldData != null)
+                        {
+                            if (pose.WorldData.Value == default) associatedPose.WorldData = string.Empty;
+                            else associatedPose.WorldData = JsonSerializer.Serialize(pose.WorldData.Value);
+                        }
+                        if (pose.PoseData != null)
+                            associatedPose.PoseData = pose.PoseData;
+                    }
+
+                    anyChanges = true;
+                }
+
+                var overflowingPoses = charaData.Poses.Skip(10).ToList();
+                foreach (var overflowing in overflowingPoses)
+                {
+                    charaData.Poses.Remove(overflowing);
+                    DbContext.Remove(overflowing);
+                }
+            }
+        }
+
         if (anyChanges)
         {
-            _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", anyChanges));
             charaData.UpdatedDate = DateTime.UtcNow;
             await DbContext.SaveChangesAsync().ConfigureAwait(false);
+            _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", anyChanges));
         }
 
         return GetCharaDataFullDto(charaData);
@@ -310,32 +394,47 @@ public partial class MareHub
 
     private static CharaDataDownloadDto GetCharaDataDownloadDto(CharaData charaData)
     {
-        return new CharaDataDownloadDto(charaData.Id, charaData.UploaderUID)
+        return new CharaDataDownloadDto(charaData.Id, charaData.Uploader.ToUserData())
         {
             CustomizeData = charaData.CustomizeData,
             Description = charaData.Description,
-            FileGamePaths = charaData.Files.GroupBy(f => f.FileCacheHash, StringComparer.Ordinal).ToDictionary(d => d.Key, d => d.Select(d => d.GamePath).ToList(), StringComparer.Ordinal),
+            FileGamePaths = charaData.Files.Select(k => new GamePathEntry(k.FileCacheHash, k.GamePath)).ToList(),
             GlamourerData = charaData.GlamourerData,
-            FileSwaps = charaData.FileSwaps.ToDictionary(k => k.GamePath, k => k.FilePath, StringComparer.Ordinal)
+            FileSwaps = charaData.FileSwaps.Select(k => new GamePathEntry(k.FilePath, k.GamePath)).ToList(),
+            ManipulationData = charaData.ManipulationData,
         };
     }
 
-    private static CharaDataFullDto GetCharaDataFullDto(CharaData charaData)
+    private CharaDataFullDto GetCharaDataFullDto(CharaData charaData)
     {
-        return new CharaDataFullDto(charaData.Id, charaData.UploaderUID)
+        return new CharaDataFullDto(charaData.Id, new(UserUID))
         {
             AccessType = GetAccessTypeDto(charaData.AccessType),
             ShareType = GetShareTypeDto(charaData.ShareType),
             AllowedUsers = [.. charaData.AllowedIndividiuals.Select(u => new UserData(u.AllowedUser.UID, u.AllowedUser.Alias))],
             CustomizeData = charaData.CustomizeData,
             Description = charaData.Description,
-            ExpectedHashes = [.. charaData.OriginalFiles.Select(f => f.Hash)],
-            ExpiryDate = charaData.ExpiryDate,
-            FileGamePaths = charaData.Files.GroupBy(f => f.FileCacheHash, StringComparer.Ordinal).ToDictionary(d => d.Key, d => d.Select(d => d.GamePath).ToList(), StringComparer.Ordinal),
-            FileSwaps = charaData.FileSwaps.ToDictionary(k => k.FilePath, k => k.GamePath, StringComparer.Ordinal),
+            ExpiryDate = charaData.ExpiryDate ?? DateTime.MaxValue,
+            OriginalFiles = charaData.OriginalFiles.Select(k => new GamePathEntry(k.Hash, k.GamePath)).ToList(),
+            FileGamePaths = charaData.Files.Select(k => new GamePathEntry(k.FileCacheHash, k.GamePath)).ToList(),
+            FileSwaps = charaData.FileSwaps.Select(k => new GamePathEntry(k.FilePath, k.GamePath)).ToList(),
             GlamourerData = charaData.GlamourerData,
             CreatedDate = charaData.CreatedDate,
             UpdatedDate = charaData.UpdatedDate,
+            ManipulationData = charaData.ManipulationData,
+            DownloadCount = charaData.DownloadCount,
+            PoseData = [.. charaData.Poses.OrderBy(p => p.Id).Select(k =>
+            {
+                WorldData data = default;
+
+                if(!string.IsNullOrEmpty(k.WorldData)) data = JsonSerializer.Deserialize<WorldData>(k.WorldData);
+                return new PoseEntry(k.Id)
+                {
+                    Description = k.Description,
+                    PoseData = k.PoseData,
+                    WorldData = data
+                };
+            })],
         };
     }
 
@@ -344,12 +443,23 @@ public partial class MareHub
         var allOrigHashes = charaData.OriginalFiles.Select(k => k.Hash).ToList();
         var allFileHashes = charaData.Files.Select(f => f.FileCacheHash).ToList();
         var allHashesPresent = allOrigHashes.TrueForAll(h => allFileHashes.Contains(h, StringComparer.Ordinal));
-        var canBeDownloaded = allHashesPresent |= !string.IsNullOrEmpty(charaData.GlamourerData);
-        return new CharaDataMetaInfoDto(charaData.Id, charaData.UploaderUID)
+        var canBeDownloaded = allHashesPresent &= !string.IsNullOrEmpty(charaData.GlamourerData);
+        return new CharaDataMetaInfoDto(charaData.Id, charaData.Uploader.ToUserData())
         {
             CanBeDownloaded = canBeDownloaded,
             Description = charaData.Description,
-            UpdatedDate = charaData.UpdatedDate
+            UpdatedDate = charaData.UpdatedDate,
+            PoseData = [.. charaData.Poses.OrderBy(p => p.Id).Select(k =>
+            {
+                WorldData data = default;
+                if(!string.IsNullOrEmpty(k.WorldData)) data = JsonSerializer.Deserialize<WorldData>(k.WorldData);
+                return new PoseEntry(k.Id)
+                {
+                    Description = k.Description,
+                    PoseData = k.PoseData,
+                    WorldData = data
+                };
+            })],
         };
     }
 
@@ -423,6 +533,7 @@ public partial class MareHub
                 .Include(u => u.FileSwaps)
                 .Include(u => u.AllowedIndividiuals)
                 .Include(u => u.Poses)
+                .Include(u => u.Uploader)
                 .AsSplitQuery()
                 .SingleOrDefaultAsync(c => c.Id == splitid[1] && c.UploaderUID == splitid[0]).ConfigureAwait(false);
 
