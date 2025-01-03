@@ -270,12 +270,16 @@ internal class DiscordBot : IHostedService
             foreach (var user in userList)
             {
                 if (registeredUsers.Contains(user.Id))
-                    await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
-
-                if (kickUnregistered)
                 {
-                    if ((executionStartTime - user.JoinedAt.Value).TotalDays > 7)
-                        await _botServices.KickUserAsync(user).ConfigureAwait(false);
+                    await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
+                }
+                else
+                {
+                    if (kickUnregistered)
+                    {
+                        if ((executionStartTime - user.JoinedAt.Value).TotalDays > 7)
+                            await _botServices.KickUserAsync(user).ConfigureAwait(false);
+                    }
                 }
 
                 token.ThrowIfCancellationRequested();
