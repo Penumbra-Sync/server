@@ -2,6 +2,7 @@
 using Discord;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Utils.Configuration;
+using Discord.WebSocket;
 
 namespace MareSynchronosServices.Discord;
 
@@ -100,6 +101,8 @@ public partial class MareWizardModule
                 await ModifyModalInteraction(eb, cb).ConfigureAwait(false);
 
                 await _botServices.LogToChannel($"{Context.User.Mention} DELETE SUCCESS: {uid}").ConfigureAwait(false);
+
+                await _botServices.RemoveRegisteredRoleAsync(Context.Interaction.User).ConfigureAwait(false);
             }
         }
         catch (Exception ex)

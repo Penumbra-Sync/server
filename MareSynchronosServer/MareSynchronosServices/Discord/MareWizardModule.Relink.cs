@@ -129,6 +129,8 @@ public partial class MareWizardModule
                                              + Environment.NewLine
                                              + "Have fun.");
                 AddHome(cb);
+
+                await _botServices.AddRegisteredRoleAsync(Context.Interaction.User).ConfigureAwait(false);
             }
             else
             {

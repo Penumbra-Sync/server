@@ -4,6 +4,10 @@ using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosShared.Utils;
 using MareSynchronosShared.Models;
+using MareSynchronosShared.Services;
+using MareSynchronosShared.Utils.Configuration;
+using Discord.Rest;
+using Discord.WebSocket;
 
 namespace MareSynchronosServices.Discord;
 
@@ -140,20 +144,22 @@ public partial class MareWizardModule
                                              + Environment.NewLine
                                              + "Have fun.");
                 AddHome(cb);
+
+                await _botServices.AddRegisteredRoleAsync(Context.Interaction.User).ConfigureAwait(false);
             }
             else
             {
                 eb.WithColor(Color.Gold);
                 eb.WithTitle("Failed to verify registration");
-                eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." 
+                eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile."
                     + Environment.NewLine + Environment.NewLine
-                    + "Please restart your verification process, make sure to save your profile _twice_ for it to be properly saved." 
+                    + "Please restart your verification process, make sure to save your profile _twice_ for it to be properly saved."
                     + Environment.NewLine + Environment.NewLine
                     + "If this link does not lead to your profile edit page, you __need__ to configure the privacy settings first: https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
                     + Environment.NewLine + Environment.NewLine
-                    + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**" 
+                    + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**"
                     + Environment.NewLine + Environment.NewLine
-                    + "## You __need__ to enter following the code this bot provided onto your lodestone in the character profile:" 
+                    + "## You __need__ to enter following the code this bot provided onto your lodestone in the character profile:"
                     + Environment.NewLine + Environment.NewLine
                     + "**" + verificationCode + "**");
                 cb.WithButton("Cancel", "wizard-register", emote: new Emoji("❌"));
