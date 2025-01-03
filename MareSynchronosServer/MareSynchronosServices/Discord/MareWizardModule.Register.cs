@@ -104,6 +104,7 @@ public partial class MareWizardModule
         ComponentBuilder cb = new();
         bool stillEnqueued = _botServices.VerificationQueue.Any(k => k.Key == Context.User.Id);
         bool verificationRan = _botServices.DiscordVerifiedUsers.TryGetValue(Context.User.Id, out bool verified);
+        bool registerSuccess = false;
         if (!verificationRan)
         {
             if (stillEnqueued)
@@ -144,8 +145,7 @@ public partial class MareWizardModule
                                              + Environment.NewLine
                                              + "Have fun.");
                 AddHome(cb);
-
-                await _botServices.AddRegisteredRoleAsync(Context.Interaction.User).ConfigureAwait(false);
+                registerSuccess = true;
             }
             else
             {
@@ -168,6 +168,8 @@ public partial class MareWizardModule
         }
 
         await ModifyInteraction(eb, cb).ConfigureAwait(false);
+        if (registerSuccess)
+            await _botServices.AddRegisteredRoleAsync(Context.Interaction.User).ConfigureAwait(false);
     }
 
     private async Task<(bool, string)> HandleRegisterModalAsync(EmbedBuilder embed, LodestoneModal arg)
