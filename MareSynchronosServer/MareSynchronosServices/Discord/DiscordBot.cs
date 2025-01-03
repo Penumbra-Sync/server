@@ -295,9 +295,9 @@ internal class DiscordBot : IHostedService
                 token.ThrowIfCancellationRequested();
                 processedUsers++;
             }
-
-            await _botServices.LogToChannel($"Processing registered users finished. Processed {processedUsers} users, added {addedRoles} roles and kicked {kickedUsers}").ConfigureAwait(false);
         }
+
+        await _botServices.LogToChannel($"Processing registered users finished. Processed {processedUsers} users, added {addedRoles} roles and kicked {kickedUsers} users").ConfigureAwait(false);
     }
 
     private async Task RemoveUsersNotInVanityRole(CancellationToken token)
