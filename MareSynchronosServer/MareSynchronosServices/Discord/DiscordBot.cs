@@ -7,6 +7,7 @@ using MareSynchronosShared.Models;
 using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json.Linq;
 using StackExchange.Redis;
 
 namespace MareSynchronosServices.Discord;
@@ -66,8 +67,26 @@ internal class DiscordBot : IHostedService
                 var ctx = new SocketInteractionContext(_discordClient, x);
                 await _interactionModule.ExecuteCommandAsync(ctx, _services).ConfigureAwait(false);
             };
+            _discordClient.UserJoined += OnUserJoined;
 
             await _botServices.Start().ConfigureAwait(false);
+        }
+    }
+
+    private async Task OnUserJoined(SocketGuildUser arg)
+    {
+        try
+        {
+            using MareDbContext dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
+            var alreadyRegistered = await dbContext.LodeStoneAuth.AnyAsync(u => u.DiscordId == arg.Id).ConfigureAwait(false);
+            if (alreadyRegistered)
+            {
+                await _botServices.AddRegisteredRoleAsync(arg).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to set user role on join");
         }
     }
 
