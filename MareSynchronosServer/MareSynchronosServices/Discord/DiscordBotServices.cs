@@ -130,10 +130,11 @@ public class DiscordBotServices
         await RetryAsync(restUser.AddRoleAsync(registeredRole.Value), user, $"Add Registered Role").ConfigureAwait(false);
     }
 
-    public async Task AddRegisteredRoleAsync(RestGuildUser user, RestRole role)
+    public async Task<bool> AddRegisteredRoleAsync(RestGuildUser user, RestRole role)
     {
-        if (user.RoleIds.Contains(role.Id)) return;
+        if (user.RoleIds.Contains(role.Id)) return false;
         await RetryAsync(user.AddRoleAsync(role), user, $"Add Registered Role", false).ConfigureAwait(false);
+        return true;
     }
 
     public async Task KickUserAsync(RestGuildUser user)

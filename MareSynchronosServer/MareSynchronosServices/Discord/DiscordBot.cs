@@ -262,31 +262,42 @@ internal class DiscordBot : IHostedService
 
         var executionStartTime = DateTimeOffset.UtcNow;
 
+        int processedUsers = 0;
+        int addedRoles = 0;
+        int kickedUsers = 0;
+
         await _botServices.LogToChannel($"Starting to process registered users: Adding Role {registrationRole.Name}. Kick Stale Unregistered: {kickUnregistered}.").ConfigureAwait(false);
 
         await foreach (var userList in guild.GetUsersAsync(new RequestOptions { CancelToken = token }).ConfigureAwait(false))
         {
-            _logger.LogInformation("Processing chunk of {count} users", userList.Count);
+            _logger.LogInformation("Processing chunk of {count} users, total processed: {proc}, roles added: {added}, users kicked: {kicked}",
+                userList.Count, processedUsers, addedRoles, kickedUsers);
             foreach (var user in userList)
             {
                 if (registeredUsers.Contains(user.Id))
                 {
-                    await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
+                    bool roleAdded = await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
+                    if (roleAdded) addedRoles++;
                 }
                 else
                 {
                     if (kickUnregistered)
                     {
                         if ((executionStartTime - user.JoinedAt.Value).TotalDays > 7)
+                        {
                             await _botServices.KickUserAsync(user).ConfigureAwait(false);
+                            kickedUsers++;
+                        }
                     }
+
                 }
 
                 token.ThrowIfCancellationRequested();
+                processedUsers++;
             }
-        }
 
-        await _botServices.LogToChannel("Processing registered users finished").ConfigureAwait(false);
+            await _botServices.LogToChannel($"Processing registered users finished. Processed {processedUsers} users, added {addedRoles} roles and kicked {kickedUsers}").ConfigureAwait(false);
+        }
     }
 
     private async Task RemoveUsersNotInVanityRole(CancellationToken token)
