@@ -274,7 +274,7 @@ internal class DiscordBot : IHostedService
         await foreach (var userList in guild.GetUsersAsync(new RequestOptions { CancelToken = token }).ConfigureAwait(false))
         {
             _logger.LogInformation("Processing chunk of {count} users, total processed: {proc}, total roles: {total}, roles added: {added}, users kicked: {kicked}, users plan to kick: {planToKick}, fresh user: {fresh}",
-                userList.Count, processedUsers, totalRoles, addedRoles, kickedUsers, toRemoveUsers, freshUsers);
+                userList.Count, processedUsers, totalRoles + addedRoles, addedRoles, kickedUsers, toRemoveUsers, freshUsers);
             foreach (var user in userList)
             {
                 if (registeredUsers.Contains(user.Id))
