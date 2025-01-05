@@ -265,31 +265,42 @@ internal class DiscordBot : IHostedService
         int processedUsers = 0;
         int addedRoles = 0;
         int kickedUsers = 0;
+        int totalRoles = 0;
+        int toRemoveUsers = 0;
+        int freshUsers = 0;
 
         await _botServices.LogToChannel($"Starting to process registered users: Adding Role {registrationRole.Name}. Kick Stale Unregistered: {kickUnregistered}.").ConfigureAwait(false);
 
         await foreach (var userList in guild.GetUsersAsync(new RequestOptions { CancelToken = token }).ConfigureAwait(false))
         {
-            _logger.LogInformation("Processing chunk of {count} users, total processed: {proc}, roles added: {added}, users kicked: {kicked}",
-                userList.Count, processedUsers, addedRoles, kickedUsers);
+            _logger.LogInformation("Processing chunk of {count} users, total processed: {proc}, total roles: {total}, roles added: {added}, users kicked: {kicked}, users plan to kick: {planToKick}, fresh user: {fresh}",
+                userList.Count, processedUsers, addedRoles, kickedUsers, totalRoles, toRemoveUsers, freshUsers);
             foreach (var user in userList)
             {
                 if (registeredUsers.Contains(user.Id))
                 {
                     bool roleAdded = await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
                     if (roleAdded) addedRoles++;
+                    else totalRoles++;
                 }
                 else
                 {
-                    if (kickUnregistered)
+                    if ((executionStartTime - user.JoinedAt.Value).TotalDays > 7)
                     {
-                        if ((executionStartTime - user.JoinedAt.Value).TotalDays > 7)
+                        if (kickUnregistered)
                         {
                             await _botServices.KickUserAsync(user).ConfigureAwait(false);
                             kickedUsers++;
                         }
+                        else
+                        {
+                            toRemoveUsers++;
+                        }
                     }
-
+                    else
+                    {
+                        freshUsers++;
+                    }
                 }
 
                 token.ThrowIfCancellationRequested();
