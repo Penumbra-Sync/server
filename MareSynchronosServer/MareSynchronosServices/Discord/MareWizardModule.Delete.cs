@@ -91,7 +91,7 @@ public partial class MareWizardModule
 
                 using var db = await GetDbContext().ConfigureAwait(false);
                 var user = await db.Users.SingleAsync(u => u.UID == uid).ConfigureAwait(false);
-                var lodestone = await db.Users.SingleOrDefaultAsync(u => u.UID == uid).ConfigureAwait(false);
+                var lodestone = await db.LodeStoneAuth.Include(u => u.User).SingleOrDefaultAsync(u => u.User.UID == uid).ConfigureAwait(false);
                 await SharedDbFunctions.PurgeUser(_logger, user, db, maxGroupsByUser).ConfigureAwait(false);
 
                 EmbedBuilder eb = new();
