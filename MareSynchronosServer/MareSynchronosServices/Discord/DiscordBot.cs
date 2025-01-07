@@ -277,6 +277,8 @@ internal class DiscordBot : IHostedService
                 userList.Count, processedUsers, totalRoles + addedRoles, addedRoles, kickedUsers, toRemoveUsers, freshUsers);
             foreach (var user in userList)
             {
+                if (user.IsBot) continue;
+
                 if (registeredUsers.Contains(user.Id))
                 {
                     bool roleAdded = await _botServices.AddRegisteredRoleAsync(user, registrationRole).ConfigureAwait(false);
