@@ -1,4 +1,4 @@
-﻿using LZ4;
+﻿using K4os.Compression.LZ4.Legacy;
 using MareSynchronos.API.Dto.Files;
 using MareSynchronos.API.Routes;
 using MareSynchronos.API.SignalR;
@@ -216,7 +216,7 @@ public class ServerFilesController : ControllerBase
             await Request.Body.CopyToAsync(compressedFileStream, requestAborted).ConfigureAwait(false);
 
             // decompress and copy the decompressed stream to memory
-            var data = LZ4Codec.Unwrap(compressedFileStream.ToArray());
+            var data = LZ4Wrapper.Unwrap(compressedFileStream.ToArray());
 
             // reset streams
             compressedFileStream.Seek(0, SeekOrigin.Begin);
@@ -323,7 +323,7 @@ public class ServerFilesController : ControllerBase
             MungeBuffer(unmungedFile.AsSpan());
 
             // decompress and copy the decompressed stream to memory
-            var data = LZ4Codec.Unwrap(unmungedFile);
+            var data = LZ4Wrapper.Unwrap(unmungedFile);
 
             // compute hash to verify
             var hashString = BitConverter.ToString(SHA1.HashData(data))
@@ -442,7 +442,7 @@ public class ServerFilesController : ControllerBase
             // save file
             var path = FilePathUtil.GetFilePath(_basePath, hash);
             using var fileStream = new FileStream(path, FileMode.Create);
-            var lz4 = LZ4Codec.WrapHC(rawFileStream.ToArray(), 0, (int)rawFileStream.Length);
+            var lz4 = LZ4Wrapper.WrapHC(rawFileStream.ToArray(), 0, (int)rawFileStream.Length);
             using var compressedStream = new MemoryStream(lz4);
             await compressedStream.CopyToAsync(fileStream).ConfigureAwait(false);
 
