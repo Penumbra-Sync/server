@@ -2,12 +2,10 @@
 using Microsoft.EntityFrameworkCore;
 using MareSynchronosServer.Utils;
 using MareSynchronosShared.Utils;
-using Microsoft.IdentityModel.Tokens;
 using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.Group;
 using MareSynchronosShared.Metrics;
 using Microsoft.AspNetCore.SignalR;
-using MareSynchronosShared.Data;
 
 namespace MareSynchronosServer.Hubs;
 

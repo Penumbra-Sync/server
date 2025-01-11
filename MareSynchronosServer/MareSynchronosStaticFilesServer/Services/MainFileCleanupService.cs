@@ -1,5 +1,5 @@
 ﻿using ByteSizeLib;
-using LZ4;
+using K4os.Compression.LZ4.Legacy;
 using MareSynchronosShared.Data;
 using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Models;
@@ -270,7 +270,7 @@ public class MainFileCleanupService : IHostedService
             {
                 try
                 {
-                    var length = LZ4Codec.Unwrap(File.ReadAllBytes(file.FullName)).LongLength;
+                    var length = LZ4Wrapper.Unwrap(File.ReadAllBytes(file.FullName)).LongLength;
                     _logger.LogInformation("Setting Raw File Size of " + fileCache.Hash + " to " + length);
                     fileCache.RawSize = length;
                     if (fileCounter % 1000 == 0)

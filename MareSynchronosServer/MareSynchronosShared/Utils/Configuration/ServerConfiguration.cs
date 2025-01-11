@@ -24,7 +24,12 @@ public class ServerConfiguration : MareConfigurationBase
 
     [RemoteConfiguration]
     public int PurgeUnusedAccountsPeriodInDays { get; set; } = 14;
-    public string GeoIPDbCityFile { get; set; } = string.Empty;
+
+    [RemoteConfiguration]
+    public int MaxCharaDataByUser { get; set; } = 10;
+
+    [RemoteConfiguration]
+    public int MaxCharaDataByUserVanity { get; set; } = 50;
 
     public override string ToString()
     {
@@ -38,7 +43,6 @@ public class ServerConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(MaxGroupUserCount)} => {MaxGroupUserCount}");
         sb.AppendLine($"{nameof(PurgeUnusedAccounts)} => {PurgeUnusedAccounts}");
         sb.AppendLine($"{nameof(PurgeUnusedAccountsPeriodInDays)} => {PurgeUnusedAccountsPeriodInDays}");
-        sb.AppendLine($"{nameof(GeoIPDbCityFile)} => {GeoIPDbCityFile}");
         return sb.ToString();
     }
 }

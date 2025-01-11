@@ -3,6 +3,7 @@ using System;
 using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MareSynchronosServer.Migrations
 {
     [DbContext(typeof(MareDbContext))]
-    partial class MareDbContextModelSnapshot : ModelSnapshot
+    [Migration("20241226112428_CharaData")]
+    partial class CharaData
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -131,10 +134,6 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("text")
                         .HasColumnName("glamourer_data");
 
-                    b.Property<string>("ManipulationData")
-                        .HasColumnType("text")
-                        .HasColumnName("manipulation_data");
-
                     b.Property<int>("ShareType")
                         .HasColumnType("integer")
                         .HasColumnName("share_type");
@@ -187,10 +186,6 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("text")
                         .HasColumnName("parent_id");
 
-                    b.Property<string>("ParentUploaderUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("parent_uploader_uid");
-
                     b.Property<string>("GamePath")
                         .HasColumnType("text")
                         .HasColumnName("game_path");
@@ -199,7 +194,11 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("file_cache_hash");
 
-                    b.HasKey("ParentId", "ParentUploaderUID", "GamePath")
+                    b.Property<string>("ParentUploaderUID")
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("parent_uploader_uid");
+
+                    b.HasKey("ParentId", "GamePath")
                         .HasName("pk_chara_data_files");
 
                     b.HasIndex("FileCacheHash")
@@ -208,34 +207,10 @@ namespace MareSynchronosServer.Migrations
                     b.HasIndex("ParentId")
                         .HasDatabaseName("ix_chara_data_files_parent_id");
 
+                    b.HasIndex("ParentId", "ParentUploaderUID")
+                        .HasDatabaseName("ix_chara_data_files_parent_id_parent_uploader_uid");
+
                     b.ToTable("chara_data_files", (string)null);
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.CharaDataFileSwap", b =>
-                {
-                    b.Property<string>("ParentId")
-                        .HasColumnType("text")
-                        .HasColumnName("parent_id");
-
-                    b.Property<string>("ParentUploaderUID")
-                        .HasColumnType("character varying(10)")
-                        .HasColumnName("parent_uploader_uid");
-
-                    b.Property<string>("GamePath")
-                        .HasColumnType("text")
-                        .HasColumnName("game_path");
-
-                    b.Property<string>("FilePath")
-                        .HasColumnType("text")
-                        .HasColumnName("file_path");
-
-                    b.HasKey("ParentId", "ParentUploaderUID", "GamePath")
-                        .HasName("pk_chara_data_file_swaps");
-
-                    b.HasIndex("ParentId")
-                        .HasDatabaseName("ix_chara_data_file_swaps_parent_id");
-
-                    b.ToTable("chara_data_file_swaps", (string)null);
                 });
 
             modelBuilder.Entity("MareSynchronosShared.Models.CharaDataOriginalFile", b =>
@@ -248,15 +223,11 @@ namespace MareSynchronosServer.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("parent_uploader_uid");
 
-                    b.Property<string>("GamePath")
-                        .HasColumnType("text")
-                        .HasColumnName("game_path");
-
                     b.Property<string>("Hash")
                         .HasColumnType("text")
                         .HasColumnName("hash");
 
-                    b.HasKey("ParentId", "ParentUploaderUID", "GamePath")
+                    b.HasKey("ParentId", "ParentUploaderUID", "Hash")
                         .HasName("pk_chara_data_orig_files");
 
                     b.HasIndex("ParentId")
@@ -823,29 +794,14 @@ namespace MareSynchronosServer.Migrations
                     b.HasOne("MareSynchronosShared.Models.FileCache", "FileCache")
                         .WithMany()
                         .HasForeignKey("FileCacheHash")
-                        .OnDelete(DeleteBehavior.Cascade)
                         .HasConstraintName("fk_chara_data_files_files_file_cache_hash");
 
                     b.HasOne("MareSynchronosShared.Models.CharaData", "Parent")
                         .WithMany("Files")
                         .HasForeignKey("ParentId", "ParentUploaderUID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_chara_data_files_chara_data_parent_id_parent_uploader_uid");
 
                     b.Navigation("FileCache");
-
-                    b.Navigation("Parent");
-                });
-
-            modelBuilder.Entity("MareSynchronosShared.Models.CharaDataFileSwap", b =>
-                {
-                    b.HasOne("MareSynchronosShared.Models.CharaData", "Parent")
-                        .WithMany("FileSwaps")
-                        .HasForeignKey("ParentId", "ParentUploaderUID")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_chara_data_file_swaps_chara_data_parent_id_parent_uploader_");
 
                     b.Navigation("Parent");
                 });
@@ -1055,8 +1011,6 @@ namespace MareSynchronosServer.Migrations
             modelBuilder.Entity("MareSynchronosShared.Models.CharaData", b =>
                 {
                     b.Navigation("AllowedIndividiuals");
-
-                    b.Navigation("FileSwaps");
 
                     b.Navigation("Files");
 
