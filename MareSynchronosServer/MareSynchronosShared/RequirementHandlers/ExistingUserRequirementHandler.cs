@@ -8,9 +8,9 @@ namespace MareSynchronosShared.RequirementHandlers;
 public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserRequirement>
 {
     private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
-    private readonly ILogger<UserRequirementHandler> _logger;
+    private readonly ILogger<ExistingUserRequirementHandler> _logger;
 
-    public ExistingUserRequirementHandler(IDbContextFactory<MareDbContext> dbContext, ILogger<UserRequirementHandler> logger)
+    public ExistingUserRequirementHandler(IDbContextFactory<MareDbContext> dbContext, ILogger<ExistingUserRequirementHandler> logger)
     {
         _dbContextFactory = dbContext;
         _logger = logger;

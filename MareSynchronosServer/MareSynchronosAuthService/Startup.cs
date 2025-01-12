@@ -94,7 +94,7 @@ public class Startup
 
     private static void ConfigureAuthorization(IServiceCollection services)
     {
-        services.AddTransient<IAuthorizationHandler, UserRequirementHandler>();
+        services.AddTransient<IAuthorizationHandler, RedisDbUserRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ValidTokenRequirementHandler>();
         services.AddTransient<IAuthorizationHandler, ExistingUserRequirementHandler>();
 
