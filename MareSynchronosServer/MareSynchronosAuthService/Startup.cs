@@ -170,11 +170,10 @@ public class Startup
         }));
     }
 
-    private static void ConfigureRedis(IServiceCollection services, IConfigurationSection mareConfig)
+    private void ConfigureRedis(IServiceCollection services, IConfigurationSection mareConfig)
     {
         // configure redis for SignalR
         var redisConnection = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
-
         var options = ConfigurationOptions.Parse(redisConnection);
 
         var endpoint = options.EndPoints[0];
@@ -205,6 +204,8 @@ public class Startup
             PoolSize = mareConfig.GetValue(nameof(ServerConfiguration.RedisPool), 50),
             SyncTimeout = options.SyncTimeout,
         };
+
+        _logger.LogInformation("Setting up Redis to connect to {host}:{port}", address, port);
 
         services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
     }
