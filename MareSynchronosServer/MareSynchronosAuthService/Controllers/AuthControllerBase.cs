@@ -8,7 +8,7 @@ using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using StackExchange.Redis.Extensions.Core.Abstractions;
+using StackExchange.Redis;
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -23,14 +23,14 @@ public abstract class AuthControllerBase : Controller
     protected readonly IConfigurationService<AuthServiceConfiguration> Configuration;
     protected readonly IDbContextFactory<MareDbContext> MareDbContextFactory;
     protected readonly SecretKeyAuthenticatorService SecretKeyAuthenticatorService;
-    private readonly IRedisDatabase _redis;
+    private readonly IDatabase _redis;
     private readonly GeoIPService _geoIPProvider;
 
     protected AuthControllerBase(ILogger logger,
     IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContextFactory,
     SecretKeyAuthenticatorService secretKeyAuthenticatorService,
     IConfigurationService<AuthServiceConfiguration> configuration,
-    IRedisDatabase redisDb, GeoIPService geoIPProvider)
+    IDatabase redisDb, GeoIPService geoIPProvider)
     {
         Logger = logger;
         HttpAccessor = accessor;
@@ -72,7 +72,7 @@ public abstract class AuthControllerBase : Controller
             return Unauthorized("Your Mare account is banned from using the service.");
         }
 
-        var existingIdent = await _redis.GetAsync<string>("UID:" + authResult.Uid);
+        var existingIdent = await _redis.StringGetAsync("UID:" + authResult.Uid);
         if (!string.IsNullOrEmpty(existingIdent))
         {
             Logger.LogWarning("Authenticate:DUPLICATE:{id}:{ident}", authResult.Uid, charaIdent);

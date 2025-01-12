@@ -8,7 +8,7 @@ using MareSynchronosShared.Utils.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using StackExchange.Redis.Extensions.Core.Abstractions;
+using StackExchange.Redis;
 
 namespace MareSynchronosAuthService.Controllers;
 
@@ -19,7 +19,7 @@ public class JwtController : AuthControllerBase
         IHttpContextAccessor accessor, IDbContextFactory<MareDbContext> mareDbContextFactory,
         SecretKeyAuthenticatorService secretKeyAuthenticatorService,
         IConfigurationService<AuthServiceConfiguration> configuration,
-        IRedisDatabase redisDb, GeoIPService geoIPProvider)
+        IDatabase redisDb, GeoIPService geoIPProvider)
             : base(logger, accessor, mareDbContextFactory, secretKeyAuthenticatorService,
                 configuration, redisDb, geoIPProvider)
     {

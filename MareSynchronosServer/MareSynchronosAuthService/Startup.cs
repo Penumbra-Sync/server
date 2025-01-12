@@ -17,6 +17,7 @@ using MareSynchronosShared.Data;
 using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using MareSynchronosShared.Utils.Configuration;
+using StackExchange.Redis.Extensions.Core.Abstractions;
 
 namespace MareSynchronosAuthService;
 
@@ -179,8 +180,10 @@ public class Startup
         var endpoint = options.EndPoints[0];
         string address = "";
         int port = 0;
+        
         if (endpoint is DnsEndPoint dnsEndPoint) { address = dnsEndPoint.Host; port = dnsEndPoint.Port; }
         if (endpoint is IPEndPoint ipEndPoint) { address = ipEndPoint.Address.ToString(); port = ipEndPoint.Port; }
+        /*
         var redisConfiguration = new RedisConfiguration()
         {
             AbortOnConnectFail = true,
@@ -203,11 +206,13 @@ public class Startup
             MaxValueLength = 1024,
             PoolSize = mareConfig.GetValue(nameof(ServerConfiguration.RedisPool), 50),
             SyncTimeout = options.SyncTimeout,
-        };
+        };*/
+
+        var muxer = ConnectionMultiplexer.Connect(options);
+        var db = muxer.GetDatabase();
+        services.AddSingleton<IDatabase>(db);
 
         _logger.LogInformation("Setting up Redis to connect to {host}:{port}", address, port);
-
-        services.AddStackExchangeRedisExtensions<SystemTextJsonSerializer>(redisConfiguration);
     }
     private void ConfigureConfigServices(IServiceCollection services)
     {
