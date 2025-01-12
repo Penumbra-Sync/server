@@ -234,6 +234,9 @@ public partial class MareHub
             }
         }
 
+        var sharedData = await DbContext.CharaDataAllowances.Where(u => u.AllowedGroup != null && u.AllowedGroupGID == dto.GID && u.ParentUploaderUID == userUid).ToListAsync().ConfigureAwait(false);
+        DbContext.CharaDataAllowances.RemoveRange(sharedData);
+
         await DbContext.SaveChangesAsync().ConfigureAwait(false);
 
         _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));

@@ -284,20 +284,20 @@ public partial class MareHub
         {
             var individualGroups = charaData.AllowedIndividiuals.Where(k => k.AllowedUser == null).ToList();
             var allowedGroups = updateDto.AllowedGroups.ToList();
-            foreach (var user in updateDto.AllowedGroups)
+            foreach (var group in updateDto.AllowedGroups)
             {
-                if (charaData.AllowedIndividiuals.Any(k => k.AllowedGroup != null && (string.Equals(k.AllowedGroup.GID, user, StringComparison.Ordinal) || string.Equals(k.AllowedGroup.Alias, user, StringComparison.Ordinal))))
+                if (charaData.AllowedIndividiuals.Any(k => k.AllowedGroup != null && (string.Equals(k.AllowedGroup.GID, group, StringComparison.Ordinal) || string.Equals(k.AllowedGroup.Alias, group, StringComparison.Ordinal))))
                 {
                     continue;
                 }
                 else
                 {
-                    var dbUser = await DbContext.Groups.SingleOrDefaultAsync(u => u.GID == user || u.Alias == user).ConfigureAwait(false);
-                    if (dbUser != null)
+                    var groupUser = await DbContext.GroupPairs.Include(u => u.Group).SingleOrDefaultAsync(u => (u.Group.GID == group || u.Group.Alias == group) && u.GroupUserUID == UserUID).ConfigureAwait(false);
+                    if (groupUser != null)
                     {
                         charaData.AllowedIndividiuals.Add(new CharaDataAllowance()
                         {
-                            AllowedGroup = dbUser,
+                            AllowedGroup = groupUser.Group,
                             Parent = charaData
                         });
                     }
