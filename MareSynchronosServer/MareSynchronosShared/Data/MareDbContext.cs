@@ -136,7 +136,10 @@ public class MareDbContext : DbContext
         mb.Entity<CharaDataOriginalFile>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.GamePath });
         mb.Entity<CharaDataOriginalFile>().HasIndex(c => c.ParentId);
         mb.Entity<CharaDataAllowance>().ToTable("chara_data_allowance");
-        mb.Entity<CharaDataAllowance>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.AllowedUserUID });
+        mb.Entity<CharaDataAllowance>().HasKey(c => new { c.ParentId, c.ParentUploaderUID, c.Id });
+        mb.Entity<CharaDataAllowance>().Property(p => p.Id).ValueGeneratedOnAdd();
         mb.Entity<CharaDataAllowance>().HasIndex(c => c.ParentId);
+        mb.Entity<CharaDataAllowance>().HasOne(u => u.AllowedGroup).WithMany().HasForeignKey(u => u.AllowedGroupGID).OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<CharaDataAllowance>().HasOne(u => u.AllowedUser).WithMany().HasForeignKey(u => u.AllowedUserUID).OnDelete(DeleteBehavior.Cascade);
     }
 }

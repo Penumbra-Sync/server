@@ -40,11 +40,15 @@ public class CharaData
 
 public class CharaDataAllowance
 {
+    [Key]
+    public long Id { get; set; }
     public virtual CharaData Parent { get; set; }
     public string ParentId { get; set; }
     public string ParentUploaderUID { get; set; }
-    public virtual User AllowedUser { get; set; }
-    public string AllowedUserUID { get; set; }
+    public virtual User? AllowedUser { get; set; }
+    public string? AllowedUserUID { get; set; }
+    public virtual Group? AllowedGroup { get; set; }
+    public string? AllowedGroupGID { get; set; }
 }
 
 public class CharaDataOriginalFile
