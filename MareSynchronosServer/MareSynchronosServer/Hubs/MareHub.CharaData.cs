@@ -131,9 +131,13 @@ public partial class MareHub
 
         var allPairs = await GetAllPairInfo(UserUID).ConfigureAwait(false);
         List<CharaData> sharedCharaData = [];
-        var groups = await DbContext.GroupPairs.Where(u => u.GroupUserUID == UserUID).Select(k => k.GroupGID).ToListAsync()
+        var groups = await DbContext.GroupPairs
+            .Where(u => u.GroupUserUID == UserUID)
+            .Select(k => k.GroupGID)
+            .ToListAsync()
             .ConfigureAwait(false);
-        foreach (var pair in allPairs.Where(p => !p.Value.OwnPermissions.IsPaused && !p.Value.OtherPermissions.IsPaused))
+
+        foreach (var pair in allPairs.Where(p => (!p.Value.OwnPermissions?.IsPaused ?? false) && (!p.Value.OtherPermissions?.IsPaused ?? false)))
         {
             var allSharedDataByPair = await DbContext.CharaData
                 .Include(u => u.Files)
@@ -166,7 +170,9 @@ public partial class MareHub
                 .Include(u => u.AllowedIndividiuals)
                 .Include(u => u.Poses)
                 .Include(u => u.Uploader)
-                .Where(p => p.UploaderUID != UserUID && p.ShareType == CharaDataShare.Shared && (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || ownGroups.Contains(u.AllowedGroupGID))))
+                .Where(p => p.UploaderUID != UserUID 
+                    && p.ShareType == CharaDataShare.Shared 
+                    && (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || u.AllowedGroupGID != null && ownGroups.Contains(u.AllowedGroupGID))))
                 .AsSplitQuery()
                 .AsNoTracking()
                 .ToListAsync()
