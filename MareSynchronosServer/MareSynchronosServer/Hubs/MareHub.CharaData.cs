@@ -137,26 +137,25 @@ public partial class MareHub
             .ToListAsync()
             .ConfigureAwait(false);
 
-        foreach (var pair in allPairs.Where(p => (!p.Value.OwnPermissions?.IsPaused ?? false) && (!p.Value.OtherPermissions?.IsPaused ?? false)))
-        {
-            var allSharedDataByPair = await DbContext.CharaData
-                .Include(u => u.Files)
-                .Include(u => u.OriginalFiles)
-                .Include(u => u.AllowedIndividiuals)
-                .Include(u => u.Poses)
-                .Include(u => u.Uploader)
-                .Where(p => p.ShareType == CharaDataShare.Shared && p.UploaderUID == pair.Key)
-                .AsSplitQuery()
-                .AsNoTracking()
-                .ToListAsync()
-                .ConfigureAwait(false);
+        var validPairs = allPairs.Where(p => (!p.Value.OwnPermissions?.IsPaused ?? false) && (!p.Value.OtherPermissions?.IsPaused ?? false)).Select(k => k.Key);
 
-            foreach (var charaData in allSharedDataByPair)
+        var allSharedDataByPair = await DbContext.CharaData
+            .Include(u => u.Files)
+            .Include(u => u.OriginalFiles)
+            .Include(u => u.AllowedIndividiuals)
+            .Include(u => u.Poses)
+            .Include(u => u.Uploader)
+            .Where(p => p.ShareType == CharaDataShare.Shared && validPairs.Contains(p.UploaderUID))
+            .AsSplitQuery()
+            .AsNoTracking()
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        foreach (var charaData in allSharedDataByPair)
+        {
+            if (await CheckCharaDataAllowance(charaData, groups).ConfigureAwait(false))
             {
-                if (await CheckCharaDataAllowance(charaData, groups).ConfigureAwait(false))
-                {
-                    sharedCharaData.Add(charaData);
-                }
+                sharedCharaData.Add(charaData);
             }
         }
 
