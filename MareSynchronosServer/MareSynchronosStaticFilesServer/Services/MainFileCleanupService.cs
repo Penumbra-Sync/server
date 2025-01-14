@@ -32,8 +32,6 @@ public class MainFileCleanupService : IHostedService
     {
         _logger.LogInformation("Cleanup Service started");
 
-        InitializeGauges();
-
         _cleanupCts = new();
 
         _ = Task.Run(() => CleanUpTask(_cleanupCts.Token)).ConfigureAwait(false);
@@ -150,6 +148,8 @@ public class MainFileCleanupService : IHostedService
 
     private async Task CleanUpTask(CancellationToken ct)
     {
+        InitializeGauges();
+
         while (!ct.IsCancellationRequested)
         {
             var cleanupCheckMinutes = _configuration.GetValueOrDefault(nameof(StaticFilesServerConfiguration.CleanupCheckInMinutes), 15);
