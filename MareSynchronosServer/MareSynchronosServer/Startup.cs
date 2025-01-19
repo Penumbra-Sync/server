@@ -103,9 +103,10 @@ public class Startup
             services.AddHostedService(provider => provider.GetService<UserCleanupService>());
             services.AddSingleton<CharaDataCleanupService>();
             services.AddHostedService(provider => provider.GetService<CharaDataCleanupService>());
-            services.AddSingleton<GPoseLobbyDistributionService>();
-            services.AddHostedService(provider => provider.GetService<GPoseLobbyDistributionService>());
         }
+
+        services.AddSingleton<GPoseLobbyDistributionService>();
+        services.AddHostedService(provider => provider.GetService<GPoseLobbyDistributionService>());
     }
 
     private static void ConfigureSignalR(IServiceCollection services, IConfigurationSection mareConfig)
