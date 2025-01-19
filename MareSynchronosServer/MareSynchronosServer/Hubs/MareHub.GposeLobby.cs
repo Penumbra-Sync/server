@@ -1,6 +1,7 @@
 ﻿using MareSynchronos.API.Data;
 using MareSynchronos.API.Dto.CharaData;
 using MareSynchronosServer.Utils;
+using MareSynchronosShared.Metrics;
 using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -23,6 +24,10 @@ public partial class MareHub
 
     private async Task AddUserToLobby(string lobbyId, List<string> priorUsers)
     {
+        _mareMetrics.IncGauge(MetricsAPI.GaugeGposeLobbyUsers);
+        if (priorUsers.Count == 0)
+            _mareMetrics.IncGauge(MetricsAPI.GaugeGposeLobbies);
+
         await _redis.AddAsync(GposeLobbyUser, lobbyId).ConfigureAwait(false);
         await _redis.AddAsync($"GposeLobby:{lobbyId}", priorUsers.Concat([UserUID])).ConfigureAwait(false);
     }
@@ -31,9 +36,12 @@ public partial class MareHub
     {
         await _redis.RemoveAsync(GposeLobbyUser).ConfigureAwait(false);
 
+        _mareMetrics.DecGauge(MetricsAPI.GaugeGposeLobbyUsers);
+
         if (priorUsers.Count == 1)
         {
             await _redis.RemoveAsync($"GposeLobby:{lobbyId}").ConfigureAwait(false);
+            _mareMetrics.DecGauge(MetricsAPI.GaugeGposeLobbies);
         }
         else
         {
@@ -76,7 +84,7 @@ public partial class MareHub
         _logger.LogCallInfo();
         var existingLobbyId = await GetUserGposeLobby().ConfigureAwait(false);
         if (!string.IsNullOrEmpty(existingLobbyId))
-            return [];
+            await GposeLobbyLeave().ConfigureAwait(false);
 
         var lobbyUsers = await GetUsersInLobby(lobbyId).ConfigureAwait(false);
         if (!lobbyUsers.Any())

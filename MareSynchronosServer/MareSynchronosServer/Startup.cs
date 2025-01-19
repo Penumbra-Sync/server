@@ -297,6 +297,8 @@ public class Startup
             MetricsAPI.GaugeAuthenticationCacheEntries,
             MetricsAPI.GaugeUserPairCacheEntries,
             MetricsAPI.GaugeUserPairCacheUsers,
+            MetricsAPI.GaugeGposeLobbies,
+            MetricsAPI.GaugeGposeLobbyUsers
         }));
     }
 

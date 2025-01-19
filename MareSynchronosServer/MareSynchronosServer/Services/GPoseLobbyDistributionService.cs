@@ -34,6 +34,8 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
             return;
         }
 
+        _runtimeCts.Cancel();
+        _runtimeCts.Dispose();
         _lobbyPoseDataModificationSemaphore.Dispose();
         _lobbyWorldDataModificationSemaphore.Dispose();
 
