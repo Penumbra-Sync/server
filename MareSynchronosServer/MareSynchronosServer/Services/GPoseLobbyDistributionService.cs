@@ -45,23 +45,43 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
     public async Task PushWorldData(string lobby, string user, WorldData worldData)
     {
         await _lobbyWorldDataModificationSemaphore.WaitAsync().ConfigureAwait(false);
-        if (!_lobbyWorldData.TryGetValue(lobby, out var worldDataDict))
+        try
         {
-            _lobbyWorldData[lobby] = worldDataDict = new(StringComparer.Ordinal);
+            if (!_lobbyWorldData.TryGetValue(lobby, out var worldDataDict))
+            {
+                _lobbyWorldData[lobby] = worldDataDict = new(StringComparer.Ordinal);
+            }
+            worldDataDict[user] = worldData;
         }
-        worldDataDict[user] = worldData;
-        _lobbyWorldDataModificationSemaphore.Release();
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Pushing World Data for Lobby {lobby} by User {user}", lobby, user);
+        }
+        finally
+        {
+            _lobbyWorldDataModificationSemaphore.Release();
+        }
     }
 
     public async Task PushPoseData(string lobby, string user, PoseData poseData)
     {
         await _lobbyPoseDataModificationSemaphore.WaitAsync().ConfigureAwait(false);
-        if (!_lobbyPoseData.TryGetValue(lobby, out var poseDataDict))
+        try
         {
-            _lobbyPoseData[lobby] = poseDataDict = new(StringComparer.Ordinal);
+            if (!_lobbyPoseData.TryGetValue(lobby, out var poseDataDict))
+            {
+                _lobbyPoseData[lobby] = poseDataDict = new(StringComparer.Ordinal);
+            }
+            poseDataDict[user] = poseData;
         }
-        poseDataDict[user] = poseData;
-        _lobbyPoseDataModificationSemaphore.Release();
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Pushing World Data for Lobby {lobby} by User {user}", lobby, user);
+        }
+        finally
+        {
+            _lobbyPoseDataModificationSemaphore.Release();
+        }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -76,7 +96,14 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
     {
         while (!token.IsCancellationRequested)
         {
-            await DistributeWorldData(token).ConfigureAwait(false);
+            try
+            {
+                await DistributeWorldData(token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during World Data Distribution");
+            }
             await Task.Delay(TimeSpan.FromSeconds(1), token).ConfigureAwait(false);
         }
     }
@@ -85,7 +112,14 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
     {
         while (!token.IsCancellationRequested)
         {
-            await DistributePoseData(token).ConfigureAwait(false);
+            try
+            {
+                await DistributePoseData(token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during Pose Data Distribution");
+            }
             await Task.Delay(TimeSpan.FromSeconds(10), token).ConfigureAwait(false);
         }
     }
@@ -93,24 +127,46 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
     private async Task DistributeWorldData(CancellationToken token)
     {
         await _lobbyWorldDataModificationSemaphore.WaitAsync(token).ConfigureAwait(false);
-        var clone = _lobbyWorldData.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal);
-        _lobbyWorldData.Clear();
-        _lobbyWorldDataModificationSemaphore.Release();
+        Dictionary<string, Dictionary<string, WorldData>> clone = [];
+        try
+        {
+            clone = _lobbyWorldData.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal);
+            _lobbyWorldData.Clear();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Distributing World Data Clone generation");
+            _lobbyWorldData.Clear();
+            return;
+        }
+        finally
+        {
+            _lobbyWorldDataModificationSemaphore.Release();
+        }
+
         foreach (var lobbyId in clone)
         {
             token.ThrowIfCancellationRequested();
 
-            if (!lobbyId.Value.Values.Any())
-                continue;
-
-            var gposeLobbyUsers = await _redisDb.GetAsync<List<string>>($"GposeLobby:{lobbyId.Key}").ConfigureAwait(false);
-            if (gposeLobbyUsers == null)
-                continue;
-
-            foreach (var data in lobbyId.Value)
+            try
             {
-                await _hubContext.Clients.Users(gposeLobbyUsers.Where(k => !string.Equals(k, data.Key, StringComparison.Ordinal)))
-                    .Client_GposeLobbyPushWorldData(new(data.Key), data.Value).ConfigureAwait(false);
+                if (!lobbyId.Value.Values.Any())
+                    continue;
+
+                var gposeLobbyUsers = await _redisDb.GetAsync<List<string>>($"GposeLobby:{lobbyId.Key}").ConfigureAwait(false);
+                if (gposeLobbyUsers == null)
+                    continue;
+
+                foreach (var data in lobbyId.Value)
+                {
+                    await _hubContext.Clients.Users(gposeLobbyUsers.Where(k => !string.Equals(k, data.Key, StringComparison.Ordinal)))
+                        .Client_GposeLobbyPushWorldData(new(data.Key), data.Value).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during World Data Distribution for Lobby {lobby}", lobbyId.Key);
+                continue;
             }
         }
     }
@@ -118,25 +174,46 @@ public sealed class GPoseLobbyDistributionService : IHostedService, IDisposable
     private async Task DistributePoseData(CancellationToken token)
     {
         await _lobbyPoseDataModificationSemaphore.WaitAsync(token).ConfigureAwait(false);
-        var clone = _lobbyPoseData.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal);
-        _lobbyPoseData.Clear();
-        _lobbyPoseDataModificationSemaphore.Release();
+        Dictionary<string, Dictionary<string, PoseData>> clone = [];
+        try
+        {
+            clone = _lobbyPoseData.ToDictionary(k => k.Key, k => k.Value, StringComparer.Ordinal);
+            _lobbyPoseData.Clear();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during Distributing Pose Data Clone generation");
+            _lobbyPoseData.Clear();
+            return;
+        }
+        finally
+        {
+            _lobbyPoseDataModificationSemaphore.Release();
+        }
 
         foreach (var lobbyId in clone)
         {
             token.ThrowIfCancellationRequested();
 
-            if (!lobbyId.Value.Values.Any())
-                continue;
-
-            var gposeLobbyUsers = await _redisDb.GetAsync<List<string>>($"GposeLobby:{lobbyId.Key}").ConfigureAwait(false);
-            if (gposeLobbyUsers == null)
-                continue;
-
-            foreach (var data in lobbyId.Value)
+            try
             {
-                await _hubContext.Clients.Users(gposeLobbyUsers.Where(k => !string.Equals(k, data.Key, StringComparison.Ordinal)))
-                    .Client_GposeLobbyPushPoseData(new(data.Key), data.Value).ConfigureAwait(false);
+                if (!lobbyId.Value.Values.Any())
+                    continue;
+
+                var gposeLobbyUsers = await _redisDb.GetAsync<List<string>>($"GposeLobby:{lobbyId.Key}").ConfigureAwait(false);
+                if (gposeLobbyUsers == null)
+                    continue;
+
+                foreach (var data in lobbyId.Value)
+                {
+                    await _hubContext.Clients.Users(gposeLobbyUsers.Where(k => !string.Equals(k, data.Key, StringComparison.Ordinal)))
+                        .Client_GposeLobbyPushPoseData(new(data.Key), data.Value).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during Pose Data Distribution for Lobby {lobby}", lobbyId.Key);
+                continue;
             }
         }
     }
