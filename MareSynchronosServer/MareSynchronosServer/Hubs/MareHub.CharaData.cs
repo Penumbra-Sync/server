@@ -134,10 +134,11 @@ public partial class MareHub
         var groups = await DbContext.GroupPairs
             .Where(u => u.GroupUserUID == UserUID)
             .Select(k => k.GroupGID)
+            .AsNoTracking()
             .ToListAsync()
             .ConfigureAwait(false);
 
-        var validPairs = allPairs.Where(p => (!p.Value.OwnPermissions?.IsPaused ?? false) && (!p.Value.OtherPermissions?.IsPaused ?? false)).Select(k => k.Key);
+        var validPairs = await GetAllPairedUnpausedUsers().ConfigureAwait(false);
 
         var allSharedDataByPair = await DbContext.CharaData
             .Include(u => u.Files)
@@ -153,12 +154,13 @@ public partial class MareHub
             .ToListAsync()
             .ConfigureAwait(false);
 
+
         foreach (var charaData in allSharedDataByPair)
         {
-            if (await CheckCharaDataAllowance(charaData, groups).ConfigureAwait(false))
-            {
-                sharedCharaData.Add(charaData);
-            }
+            //if (await CheckCharaDataAllowance(charaData, groups).ConfigureAwait(false))
+            //{
+            sharedCharaData.Add(charaData);
+            //}
         }
 
         _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", sharedCharaData.Count));
