@@ -145,7 +145,9 @@ public partial class MareHub
             .Include(u => u.AllowedIndividiuals)
             .Include(u => u.Poses)
             .Include(u => u.Uploader)
-            .Where(p => p.ShareType == CharaDataShare.Shared && validPairs.Contains(p.UploaderUID))
+            .Where(p => p.UploaderUID != UserUID && p.ShareType == CharaDataShare.Shared)
+            .Where(p => (validPairs.Contains(p.UploaderUID)
+                    || (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || (u.AllowedGroupGID != null && groups.Contains(u.AllowedGroupGID))))))
             .AsSplitQuery()
             .AsNoTracking()
             .ToListAsync()
@@ -157,32 +159,6 @@ public partial class MareHub
             {
                 sharedCharaData.Add(charaData);
             }
-        }
-
-        var ownGroups = await DbContext.GroupPairs.Where(u => u.GroupUserUID == UserUID)
-            .Select(k => k.GroupGID)
-            .ToListAsync()
-            .ConfigureAwait(false);
-
-        var charaDataDirectlyShared = await DbContext.CharaData.Include(u => u.Files)
-                .Include(u => u.OriginalFiles)
-                .Include(u => u.AllowedIndividiuals)
-                .Include(u => u.Poses)
-                .Include(u => u.Uploader)
-                .Where(p => p.UploaderUID != UserUID
-                    && p.ShareType == CharaDataShare.Shared
-                    && (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || (u.AllowedGroupGID != null && ownGroups.Contains(u.AllowedGroupGID)))))
-                .AsSplitQuery()
-                .AsNoTracking()
-                .ToListAsync()
-                .ConfigureAwait(false);
-
-        foreach (var data in charaDataDirectlyShared)
-        {
-            if (sharedCharaData.Exists(d => string.Equals(d.Id, data.Id, StringComparison.Ordinal)
-                && string.Equals(d.UploaderUID, d.UploaderUID, StringComparison.Ordinal)))
-                continue;
-            sharedCharaData.Add(data);
         }
 
         _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", sharedCharaData.Count));
