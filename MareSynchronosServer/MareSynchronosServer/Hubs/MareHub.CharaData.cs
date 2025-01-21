@@ -157,10 +157,7 @@ public partial class MareHub
 
         foreach (var charaData in allSharedDataByPair)
         {
-            //if (await CheckCharaDataAllowance(charaData, groups).ConfigureAwait(false))
-            //{
             sharedCharaData.Add(charaData);
-            //}
         }
 
         _logger.LogCallInfo(MareHubLogger.Args("SUCCESS", sharedCharaData.Count));
