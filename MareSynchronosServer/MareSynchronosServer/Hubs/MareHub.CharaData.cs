@@ -149,9 +149,9 @@ public partial class MareHub
             .Include(u => u.Uploader)
             .Where(p => p.UploaderUID != UserUID && p.ShareType == CharaDataShare.Shared)
             .Where(p =>
-                (individualPairs.Contains(p.UploaderUID) && p.AccessType == CharaDataAccess.Individuals
+                (individualPairs.Contains(p.UploaderUID) && p.AccessType == CharaDataAccess.Individuals)
                 || (allPairs.Contains(p.UploaderUID) && p.AccessType == CharaDataAccess.AllPairs)
-                || (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || (u.AllowedGroupGID != null && groups.Contains(u.AllowedGroupGID))))))
+                || (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || (u.AllowedGroupGID != null && groups.Contains(u.AllowedGroupGID)))))
             .AsSplitQuery()
             .AsNoTracking()
             .ToListAsync()
