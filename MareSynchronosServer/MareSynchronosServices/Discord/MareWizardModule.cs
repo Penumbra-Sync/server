@@ -59,17 +59,33 @@ public partial class MareWizardModule : InteractionModuleBase
             _ => "unknown",
         };
 
+        Emoji nthButtonEmoji = correctButton switch
+        {
+            1 => new Emoji("⬅️"),
+            2 => new Emoji("🤖"),
+            3 => new Emoji("‼️"),
+            4 => new Emoji("✉️"),
+            _ => "unknown",
+        };
+
         eb.WithTitle("Mare Bot Services Captcha");
         eb.WithDescription("You are seeing this embed because you interact with this bot for the first time since the bot has been restarted." + Environment.NewLine + Environment.NewLine
-            + "This bot __requires__ embeds for its function. To proceed, please verify you have embeds enabled." + Environment.NewLine + Environment.NewLine
-            + $"To verify you have embeds enabled __press on the **{nthButtonText}** ({correctButton}) button.__");
+            + "This bot __requires__ embeds for its function. To proceed, please verify you have embeds enabled." + Environment.NewLine
+            + $"## To verify you have embeds enabled __press on the **{nthButtonText}** button ({nthButtonEmoji}).__");
         eb.WithColor(Color.LightOrange);
 
+        int incorrectButtonHighlight = 1;
+        do
+        {
+            incorrectButtonHighlight = rnd.Next(4) + 1;
+        }
+        while (incorrectButtonHighlight == correctButton);
+
         ComponentBuilder cb = new();
-        cb.WithButton("This", correctButton == 1 ? "wizard-home:false" : "wizard-captcha-fail:1", emote: new Emoji("⬅️"));
-        cb.WithButton("Bot", correctButton == 2 ? "wizard-home:false" : "wizard-captcha-fail:2", emote: new Emoji("🤖"));
-        cb.WithButton("Requires", correctButton == 3 ? "wizard-home:false" : "wizard-captcha-fail:3", emote: new Emoji("‼️"));
-        cb.WithButton("Embeds", correctButton == 4 ? "wizard-home:false" : "wizard-captcha-fail:4", emote: new Emoji("✉️"));
+        cb.WithButton("This", correctButton == 1 ? "wizard-home:false" : "wizard-captcha-fail:1", emote: new Emoji("⬅️"), style: incorrectButtonHighlight == 1 ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        cb.WithButton("Bot", correctButton == 2 ? "wizard-home:false" : "wizard-captcha-fail:2", emote: new Emoji("🤖"), style: incorrectButtonHighlight == 2 ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        cb.WithButton("Requires", correctButton == 3 ? "wizard-home:false" : "wizard-captcha-fail:3", emote: new Emoji("‼️"), style: incorrectButtonHighlight == 3 ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        cb.WithButton("Embeds", correctButton == 4 ? "wizard-home:false" : "wizard-captcha-fail:4", emote: new Emoji("✉️"), style: incorrectButtonHighlight == 4 ? ButtonStyle.Primary : ButtonStyle.Secondary);
 
         await InitOrUpdateInteraction(init, eb, cb).ConfigureAwait(false);
     }
