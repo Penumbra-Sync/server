@@ -77,10 +77,9 @@ public class FileStatisticsService : IHostedService
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDay, 0);
             _metrics.SetGaugeTo(MetricsAPI.GaugeFilesUniquePastDaySize, 0);
 
-            var now = DateTime.UtcNow;
-            TimeOnly currentTime = new(now.Hour, now.Minute, now.Second);
-            TimeOnly futureTime = new(0, 0, 0);
-            var span = futureTime - currentTime;
+            var now = DateTime.UtcNow;                                                                                                                                                      
+            DateTime midnight = new(now.Date, new(0, 0, 0));                                                                                                                                
+            var span = midnight.AddDays(1) - now;
 
             await Task.Delay(span, _resetCancellationTokenSource.Token).ConfigureAwait(false);
         }
