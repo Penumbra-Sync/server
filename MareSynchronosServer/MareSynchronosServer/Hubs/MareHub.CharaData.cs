@@ -125,6 +125,55 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
+    public async Task<CharaDataFullDto?> CharaDataAttemptRestore(string id)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(id));
+        var charaData = await DbContext.CharaData
+            .Include(u => u.Files)
+            .Include(u => u.FileSwaps)
+            .Include(u => u.OriginalFiles)
+            .Include(u => u.AllowedIndividiuals)
+            .ThenInclude(u => u.AllowedUser)
+            .Include(u => u.AllowedIndividiuals)
+            .ThenInclude(u => u.AllowedGroup)
+            .Include(u => u.Poses)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(s => s.Id == id && s.UploaderUID == UserUID)
+            .ConfigureAwait(false);
+        if (charaData == null)
+            return null;
+
+        var currentHashes = charaData.Files.Select(f => f.FileCacheHash).ToList();
+        var missingFiles = charaData.OriginalFiles.Where(c => !currentHashes.Contains(c.Hash, StringComparer.Ordinal)).ToList();
+
+        // now let's see what's on the db still
+        var existingDbFiles = await DbContext.Files
+            .Where(f => missingFiles.Select(k => k.Hash).Distinct().Contains(f.Hash))
+            .ToListAsync()
+            .ConfigureAwait(false);
+
+        // now shove it all back into the db
+        foreach (var dbFile in existingDbFiles)
+        {
+            var missingFileEntry = missingFiles.First(f => string.Equals(f.Hash, dbFile.Hash, StringComparison.Ordinal));
+            charaData.Files.Add(new CharaDataFile()
+            {
+                FileCache = dbFile,
+                GamePath = missingFileEntry.GamePath,
+                Parent = charaData
+            });
+            missingFiles.Remove(missingFileEntry);
+        }
+
+        if (existingDbFiles.Any())
+        {
+            await DbContext.SaveChangesAsync().ConfigureAwait(false);
+        }
+
+        return GetCharaDataFullDto(charaData);
+    }
+
+    [Authorize(Policy = "Identified")]
     public async Task<List<CharaDataMetaInfoDto>> CharaDataGetShared()
     {
         _logger.LogCallInfo();
