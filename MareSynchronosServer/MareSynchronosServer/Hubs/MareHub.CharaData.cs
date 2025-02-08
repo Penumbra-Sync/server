@@ -199,7 +199,7 @@ public partial class MareHub
             .Where(p => p.UploaderUID != UserUID && p.ShareType == CharaDataShare.Shared)
             .Where(p =>
                 (individualPairs.Contains(p.UploaderUID) && p.AccessType == CharaDataAccess.ClosePairs)
-                || (allPairs.Contains(p.UploaderUID) && p.AccessType == CharaDataAccess.AllPairs)
+                || (allPairs.Contains(p.UploaderUID) && (p.AccessType == CharaDataAccess.AllPairs || p.AccessType == CharaDataAccess.Public))
                 || (p.AllowedIndividiuals.Any(u => u.AllowedUserUID == UserUID || (u.AllowedGroupGID != null && groups.Contains(u.AllowedGroupGID)))))
             .AsSplitQuery()
             .AsNoTracking()
