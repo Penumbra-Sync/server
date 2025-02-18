@@ -133,13 +133,13 @@ public partial class MareWizardModule
                 eb.WithTitle($"Registration successful, your UID: {uid}");
                 eb.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
                                              + Environment.NewLine + Environment.NewLine
-                                             + $"**{key}**"
+                                             + "**__NOTE: Secret keys are considered legacy. Using the suggested OAuth2 authentication in Mare, you do not need to use this Secret Key.__**"
                                              + Environment.NewLine + Environment.NewLine
-                                             + "Enter this key in Mare Synchronos and hit save to connect to the service."
+                                             + $"||**`{key}`**||"
+                                             + Environment.NewLine + Environment.NewLine
+                                             + "If you want to continue using legacy authentication, enter this key in Mare Synchronos and hit save to connect to the service."
                                              + Environment.NewLine
                                              + "__NOTE: The Secret Key only contains the letters ABCDEF and numbers 0 - 9.__"
-                                             + Environment.NewLine
-                                             + " __NOTE: Secret keys are considered legacy. Using the suggested OAuth2 authentication, you do not need to use this Secret Key.__"
                                              + Environment.NewLine
                                              + "You should connect as soon as possible to not get caught by the automatic cleanup process."
                                              + Environment.NewLine
@@ -159,9 +159,9 @@ public partial class MareWizardModule
                     + Environment.NewLine + Environment.NewLine
                     + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**"
                     + Environment.NewLine + Environment.NewLine
-                    + "## You __need__ to enter following the code this bot provided onto your lodestone in the character profile:"
+                    + "## You __need__ to enter following the code this bot provided onto your Lodestone in the character profile:"
                     + Environment.NewLine + Environment.NewLine
-                    + "**" + verificationCode + "**");
+                    + "**`" + verificationCode + "`**");
                 cb.WithButton("Cancel", "wizard-register", emote: new Emoji("❌"));
                 cb.WithButton("Retry", "wizard-register-verify:" + verificationCode, ButtonStyle.Primary, emote: new Emoji("🔁"));
             }
@@ -209,7 +209,7 @@ public partial class MareWizardModule
                               + Environment.NewLine
                               + "__NOTE: If the link does not lead you to your character edit profile page, you need to log in and set up your privacy settings!__"
                               + Environment.NewLine + Environment.NewLine
-                              + $"**{lodestoneAuth}**"
+                              + $"**`{lodestoneAuth}`**"
                               + Environment.NewLine + Environment.NewLine
                               + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
                               + Environment.NewLine + Environment.NewLine

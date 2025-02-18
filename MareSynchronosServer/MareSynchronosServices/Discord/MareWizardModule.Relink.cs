@@ -124,9 +124,11 @@ public partial class MareWizardModule
                 eb.WithTitle($"Relink successful, your UID is again: {uid}");
                 eb.WithDescription("This is your private secret key. Do not share this private secret key with anyone. **If you lose it, it is irrevocably lost.**"
                                              + Environment.NewLine + Environment.NewLine
-                                             + $"**{key}**"
+                                             + $"||**`{key}`**||"
                                              + Environment.NewLine + Environment.NewLine
                                              + "Enter this key in Mare Synchronos and hit save to connect to the service."
+                                             + Environment.NewLine + Environment.NewLine
+                                             + "NOTE: If you are using OAuth2, you do not require to use this secret key."
                                              + Environment.NewLine
                                              + "Have fun.");
                 AddHome(cb);
@@ -140,8 +142,8 @@ public partial class MareWizardModule
                 eb.WithDescription("The bot was not able to find the required verification code on your Lodestone profile." + Environment.NewLine + Environment.NewLine
                     + "Please restart your relink process, make sure to save your profile _twice_ for it to be properly saved." + Environment.NewLine + Environment.NewLine
                     + "**Make sure your profile is set to public (All Users) for your character. The bot cannot read profiles with privacy settings set to \"logged in\" or \"private\".**" + Environment.NewLine + Environment.NewLine
-                    + "The code the bot is looking for is**" + Environment.NewLine + Environment.NewLine
-                    + "**" + verificationCode + "**");
+                    + "The code the bot is looking for is" + Environment.NewLine + Environment.NewLine
+                    + "**`" + verificationCode + "`**");
                 cb.WithButton("Cancel", "wizard-relink", emote: new Emoji("❌"));
                 cb.WithButton("Retry", "wizard-relink-verify:" + verificationCode + "," + uid, ButtonStyle.Primary, emote: new Emoji("🔁"));
             }
@@ -192,7 +194,7 @@ public partial class MareWizardModule
         embed.WithTitle("Authorize your character for relinking");
         embed.WithDescription("Add following key to your character profile at https://na.finalfantasyxiv.com/lodestone/my/setting/profile/"
                               + Environment.NewLine + Environment.NewLine
-                              + $"**{lodestoneAuth}**"
+                              + $"**`{lodestoneAuth}`**"
                               + Environment.NewLine + Environment.NewLine
                               + $"**! THIS IS NOT THE KEY YOU HAVE TO ENTER IN MARE !**"
                               + Environment.NewLine
