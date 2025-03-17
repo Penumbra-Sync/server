@@ -312,7 +312,7 @@ public partial class MareWizardModule : InteractionModuleBase
 
     private async Task<string> GenerateLodestoneAuth(ulong discordid, string hashedLodestoneId, MareDbContext dbContext)
     {
-        var auth = StringUtils.GenerateRandomString(32);
+        var auth = StringUtils.GenerateRandomString(12, "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz");
         LodeStoneAuth lsAuth = new LodeStoneAuth()
         {
             DiscordId = discordid,
