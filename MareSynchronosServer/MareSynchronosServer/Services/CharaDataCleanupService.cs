@@ -3,11 +3,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MareSynchronosServer.Services;
 
-public class CharaDataCleanupService : IHostedService
+public class CharaDataCleanupService : BackgroundService
 {
     private readonly ILogger<CharaDataCleanupService> _logger;
     private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
-    private readonly CancellationTokenSource _cleanupCts = new();
 
     public CharaDataCleanupService(ILogger<CharaDataCleanupService> logger, IDbContextFactory<MareDbContext> dbContextFactory)
     {
@@ -15,13 +14,13 @@ public class CharaDataCleanupService : IHostedService
         _dbContextFactory = dbContextFactory;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        _ = Cleanup(cancellationToken);
-        return Task.CompletedTask;
+        await base.StartAsync(cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation("Chara Data Cleanup Service started");
     }
 
-    private async Task Cleanup(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken ct)
     {
         _logger.LogInformation("CharaData Cleanup Service started");
         while (!ct.IsCancellationRequested)
@@ -39,12 +38,5 @@ public class CharaDataCleanupService : IHostedService
 
             await Task.Delay(TimeSpan.FromHours(12), ct).ConfigureAwait(false);
         }
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken)
-    {
-        _cleanupCts?.Cancel();
-        _cleanupCts?.Dispose();
-        return Task.CompletedTask;
     }
 }

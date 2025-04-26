@@ -100,8 +100,6 @@ public class UserCleanupService : IHostedService
                     await SharedDbFunctions.PurgeUser(_logger, user, dbContext, maxGroupsByUser).ConfigureAwait(false);
                 }
             }
-
-            _logger.LogInformation("Cleaning up unauthorized users");
         }
         catch (Exception ex)
         {

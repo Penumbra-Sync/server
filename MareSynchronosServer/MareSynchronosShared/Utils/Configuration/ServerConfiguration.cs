@@ -30,6 +30,7 @@ public class ServerConfiguration : MareConfigurationBase
 
     [RemoteConfiguration]
     public int MaxCharaDataByUserVanity { get; set; } = 50;
+    public bool RunPermissionCleanupOnStartup { get; set; } = true;
 
     public override string ToString()
     {
@@ -43,6 +44,7 @@ public class ServerConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(MaxGroupUserCount)} => {MaxGroupUserCount}");
         sb.AppendLine($"{nameof(PurgeUnusedAccounts)} => {PurgeUnusedAccounts}");
         sb.AppendLine($"{nameof(PurgeUnusedAccountsPeriodInDays)} => {PurgeUnusedAccountsPeriodInDays}");
+        sb.AppendLine($"{nameof(RunPermissionCleanupOnStartup)} => {RunPermissionCleanupOnStartup}");
         return sb.ToString();
     }
 }
