@@ -66,7 +66,7 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
                     var completionPcnt = userNoInc / (double)users.Count;
                     var completionInt = (int)(completionPcnt * 100);
 
-                    if (!completionDebugPrint.TryGetValue(completionInt, out bool posted) || !posted)
+                    if (completionInt > 0 && (!completionDebugPrint.TryGetValue(completionInt, out bool posted) || !posted))
                     {
                         completionDebugPrint[completionInt] = true;
                         var elapsed = st.Elapsed;
