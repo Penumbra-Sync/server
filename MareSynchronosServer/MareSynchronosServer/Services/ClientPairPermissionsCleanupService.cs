@@ -5,6 +5,7 @@ using MareSynchronosShared.Services;
 using MareSynchronosShared.Utils.Configuration;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 
 namespace MareSynchronosServer.Services;
@@ -29,6 +30,7 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
         ConcurrentDictionary<int, List<UserPermissionSet>> toRemovePermsParallel = [];
         int parallelProcessed = 0;
         int userNo = 0;
+        int lastUserNo = 0;
 
         using var db = await _dbContextFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         _logger.LogInformation("Building All Pairs");
@@ -57,7 +59,7 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
                     using var db2 = await _dbContextFactory.CreateDbContextAsync(token).ConfigureAwait(false);
 
                     var user = users[i];
-                    if (!allPairs.Remove(user, out var personalPairs))
+                    if (!allPairs.TryGetValue(user, out var personalPairs))
                         personalPairs = [];
 
                     toRemovePermsParallel[i] = await UserPermissionCleanup(i, users.Count, user, db2, personalPairs).ConfigureAwait(false);
@@ -83,15 +85,30 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
 
             removedEntries += parallelProcessed;
 
-            _logger.LogInformation("Removing {newDeleted} entities and writing to database", removedEntries - priorRemovedEntries);
-            db.Permissions.RemoveRange(toRemovePermsParallel.Values.SelectMany(v => v).ToList());
-            await db.SaveChangesAsync(ct).ConfigureAwait(false);
+            try
+            {
+                parallelProcessed = 0;
 
-            _logger.LogInformation("Removed {newDeleted} entities, settling...", removedEntries - priorRemovedEntries);
-            priorRemovedEntries = removedEntries;
+                _logger.LogInformation("Removing {newDeleted} entities and writing to database", removedEntries - priorRemovedEntries);
+                db.Permissions.RemoveRange(toRemovePermsParallel.Values.SelectMany(v => v).ToList());
+                await db.SaveChangesAsync(ct).ConfigureAwait(false);
 
-            parallelProcessed = 0;
-            toRemovePermsParallel.Clear();
+                _logger.LogInformation("Removed {newDeleted} entities, settling...", removedEntries - priorRemovedEntries);
+                priorRemovedEntries = removedEntries;
+                lastUserNo = userNo;
+            }
+            catch (DBConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency Exception during User Permissions Cleanup, restarting at {last}", lastUserNo);
+                userNo = lastUserNo;
+                removedEntries = priorRemovedEntries;
+                continue;
+            }
+            finally
+            {
+                toRemovePermsParallel.Clear();
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
         }
 
@@ -141,6 +158,11 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
             {
                 _logger.LogInformation("Starting Permissions Cleanup");
                 await AllUsersPermissionsCleanup(ct).ConfigureAwait(false);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency Exception during User Permissions Cleanup");
+                continue;
             }
             catch (Exception ex)
             {
