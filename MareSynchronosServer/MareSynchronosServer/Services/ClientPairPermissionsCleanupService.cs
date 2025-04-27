@@ -28,14 +28,13 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
         long removedEntries = 0;
         long priorRemovedEntries = 0;
         ConcurrentDictionary<int, List<UserPermissionSet>> toRemovePermsParallel = [];
+        ConcurrentDictionary<int, bool> completionDebugPrint = [];
         int parallelProcessed = 0;
         int userNo = 0;
         int lastUserNo = 0;
 
         using var db = await _dbContextFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         _logger.LogInformation("Building All Pairs");
-        var allPairs = await GetAllPairs(db, ct).ConfigureAwait(false);
-        _logger.LogInformation("Found a total distinct of {count} pairs", allPairs.Values.Sum(v => v.Count));
 
         _logger.LogInformation("Collecting Users");
         var users = (await db.Users.Select(k => k.UID).AsNoTracking().ToListAsync(ct).ConfigureAwait(false)).Order(StringComparer.Ordinal).ToList();
@@ -59,19 +58,26 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
                     using var db2 = await _dbContextFactory.CreateDbContextAsync(token).ConfigureAwait(false);
 
                     var user = users[i];
-                    if (!allPairs.TryGetValue(user, out var personalPairs))
-                        personalPairs = [];
+                    var personalPairs = await GetAllPairsForUser(user, db2, ct).ConfigureAwait(false);
 
                     toRemovePermsParallel[i] = await UserPermissionCleanup(i, users.Count, user, db2, personalPairs).ConfigureAwait(false);
                     var processedAdd = Interlocked.Add(ref parallelProcessed, toRemovePermsParallel[i].Count);
 
-                    if (userNoInc % 250 == 0)
+                    var completionPcnt = userNoInc / (double)users.Count;
+                    var completionInt = (int)(completionPcnt * 100);
+
+                    if (!completionDebugPrint.TryGetValue(completionInt, out bool posted) || !posted)
                     {
+                        completionDebugPrint[completionInt] = true;
                         var elapsed = st.Elapsed;
-                        var completion = userNoInc / (double)users.Count;
-                        var estimatedTimeLeft = (elapsed / completion) - elapsed;
+                        var estimatedTimeLeft = (elapsed / completionPcnt) - elapsed;
                         _logger.LogInformation("Progress: {no}/{total} ({pct:P2}), removed so far: {removed}, planned next chunk: {planned}, estimated time left: {time}",
-                            userNoInc, users.Count, completion, removedEntries, processedAdd, estimatedTimeLeft);
+                            userNoInc, users.Count, completionPcnt, removedEntries, processedAdd, estimatedTimeLeft);
+                        if (userNoInc / (double)users.Count - lastUserNo / (double)users.Count > 0.05)
+                        {
+                            // 5% processed without writing, might as well save at this point
+                            await loopCts.CancelAsync().ConfigureAwait(false);
+                        }
                     }
 
                     if (processedAdd > MaxProcessingPerChunk)
@@ -108,8 +114,6 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
             {
                 toRemovePermsParallel.Clear();
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
         }
 
         st.Stop();
@@ -129,20 +133,19 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
         return await perms.ToListAsync().ConfigureAwait(false);
     }
 
-    private async Task<ConcurrentDictionary<string, List<string>>> GetAllPairs(MareDbContext dbContext, CancellationToken ct)
+    private async Task<List<string>> GetAllPairsForUser(string uid, MareDbContext dbContext, CancellationToken ct)
     {
-        var entries = await dbContext.ClientPairs.AsNoTracking().Select(k => new { Self = k.UserUID, Other = k.OtherUserUID })
+        var entries = await dbContext.ClientPairs.AsNoTracking().Where(k => k.UserUID == uid).Select(k => k.OtherUserUID)
             .Concat(
-                dbContext.GroupPairs.AsNoTracking()
+                dbContext.GroupPairs.Where(k => k.GroupUserUID == uid).AsNoTracking()
                 .Join(dbContext.GroupPairs.AsNoTracking(),
                     a => a.GroupGID,
                     b => b.GroupGID,
-                    (a, b) => new { Self = a.GroupUserUID, Other = b.GroupUserUID })
-                .Where(a => a.Self != a.Other))
+                    (a, b) => b.GroupUserUID)
+                .Where(a => a != uid))
             .ToListAsync(ct).ConfigureAwait(false);
 
-        return new(entries.GroupBy(k => k.Self, StringComparer.Ordinal)
-            .ToDictionary(k => k.Key, k => k.Any() ? k.Select(k => k.Other).Distinct(StringComparer.Ordinal).ToList() : [], StringComparer.Ordinal), StringComparer.Ordinal);
+        return entries.Distinct(StringComparer.Ordinal).ToList();
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
