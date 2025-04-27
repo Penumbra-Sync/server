@@ -23,7 +23,7 @@ public class ClientPairPermissionsCleanupService(ILogger<ClientPairPermissionsCl
     private async Task AllUsersPermissionsCleanup(CancellationToken ct)
     {
         const int MaxParallelism = 8;
-        const int MaxProcessingPerChunk = 500000;
+        const int MaxProcessingPerChunk = 1000000;
 
         long removedEntries = 0;
         long priorRemovedEntries = 0;
