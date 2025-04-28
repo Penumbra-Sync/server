@@ -51,6 +51,11 @@ public sealed class ConcurrencyFilter : IHubFilter, IDisposable
     public async ValueTask<object> InvokeMethodAsync(
     HubInvocationContext invocationContext, Func<HubInvocationContext, ValueTask<object>> next)
     {
+        if (string.Equals(invocationContext.HubMethodName, nameof(MareHub.CheckClientHealth), StringComparison.Ordinal))
+        {
+            return await next(invocationContext).ConfigureAwait(false);
+        }
+
         await _limiter.WaitAsync(invocationContext.Context.ConnectionAborted).ConfigureAwait(false);
 
         try
