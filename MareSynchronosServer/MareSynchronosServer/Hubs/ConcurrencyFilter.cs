@@ -10,7 +10,7 @@ public sealed class ConcurrencyFilter : IHubFilter, IDisposable
     private SemaphoreSlim _limiter;
     private int _setLimit = 0;
     private readonly IConfigurationService<ServerConfiguration> _config;
-    private readonly CancellationTokenSource _cancellationToken;
+    private readonly CancellationTokenSource _cts = new();
 
     private bool _disposed;
 
@@ -23,7 +23,7 @@ public sealed class ConcurrencyFilter : IHubFilter, IDisposable
 
         _ = Task.Run(async () =>
         {
-            var token = _cancellationToken.Token;
+            var token = _cts.Token;
             while (!token.IsCancellationRequested)
             {
                 mareMetrics.SetGaugeTo(MetricsAPI.GaugeHubConcurrency, _limiter?.CurrentCount ?? 0);
@@ -71,7 +71,7 @@ public sealed class ConcurrencyFilter : IHubFilter, IDisposable
         }
 
         _disposed = true;
-        _cancellationToken.Cancel();
+        _cts.Cancel();
         _config.ConfigChangedEvent -= OnConfigChange;
     }
 }
