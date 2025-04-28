@@ -31,6 +31,7 @@ public class ServerConfiguration : MareConfigurationBase
     [RemoteConfiguration]
     public int MaxCharaDataByUserVanity { get; set; } = 50;
     public bool RunPermissionCleanupOnStartup { get; set; } = true;
+    public int HubExecutionConcurrencyFilter { get; set; } = 50;
 
     public override string ToString()
     {
@@ -45,6 +46,7 @@ public class ServerConfiguration : MareConfigurationBase
         sb.AppendLine($"{nameof(PurgeUnusedAccounts)} => {PurgeUnusedAccounts}");
         sb.AppendLine($"{nameof(PurgeUnusedAccountsPeriodInDays)} => {PurgeUnusedAccountsPeriodInDays}");
         sb.AppendLine($"{nameof(RunPermissionCleanupOnStartup)} => {RunPermissionCleanupOnStartup}");
+        sb.AppendLine($"{nameof(HubExecutionConcurrencyFilter)} => {HubExecutionConcurrencyFilter}");
         return sb.ToString();
     }
 }

@@ -48,4 +48,5 @@ public class MetricsAPI
     public const string CounterUserPairCacheUpdatedEntries = "mare_pairscache_updated_entries";
     public const string GaugeGposeLobbies = "mare_gpose_lobbies";
     public const string GaugeGposeLobbyUsers = "mare_gpose_lobby_users";
+    public const string GaugeHubConcurrency = "mare_free_concurrent_hub_calls";
 }
