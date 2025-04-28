@@ -26,7 +26,7 @@ public sealed class ConcurrencyFilter : IHubFilter, IDisposable
             var token = _cancellationToken.Token;
             while (!token.IsCancellationRequested)
             {
-                mareMetrics.SetGaugeTo(MetricsAPI.GaugeHubConcurrency, _limiter.CurrentCount);
+                mareMetrics.SetGaugeTo(MetricsAPI.GaugeHubConcurrency, _limiter?.CurrentCount ?? 0);
                 await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
             }
         });
