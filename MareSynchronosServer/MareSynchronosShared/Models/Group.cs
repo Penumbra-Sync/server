@@ -11,6 +11,7 @@ public class Group
     public User Owner { get; set; }
     [MaxLength(50)]
     public string Alias { get; set; }
+    public string Description { get; set; }
     public bool InvitesEnabled { get; set; }
     public string HashedPassword { get; set; }
     public bool PreferDisableSounds { get; set; }
