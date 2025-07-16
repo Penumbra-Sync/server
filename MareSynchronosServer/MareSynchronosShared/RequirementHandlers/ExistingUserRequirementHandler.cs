@@ -3,12 +3,15 @@ using MareSynchronosShared.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace MareSynchronosShared.RequirementHandlers;
 public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserRequirement>
 {
     private readonly IDbContextFactory<MareDbContext> _dbContextFactory;
     private readonly ILogger<ExistingUserRequirementHandler> _logger;
+    private readonly static ConcurrentDictionary<string, (bool Exists, DateTime LastCheck)> _existingUserDict = [];
+    private readonly static ConcurrentDictionary<ulong, (bool Exists, DateTime LastCheck)> _existingDiscordDict = [];
 
     public ExistingUserRequirementHandler(IDbContextFactory<MareDbContext> dbContext, ILogger<ExistingUserRequirementHandler> logger)
     {
@@ -18,21 +21,59 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
 
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, ExistingUserRequirement requirement)
     {
-        var uid = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value;
-        if (uid == null) context.Fail();
+        try
+        {
+            var uid = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value;
+            if (uid == null)
+            {
+                context.Fail();
+                return;
+            }
 
-        var discordIdString = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, MareClaimTypes.DiscordId, StringComparison.Ordinal))?.Value;
-        if (discordIdString == null) context.Fail();
+            var discordIdString = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, MareClaimTypes.DiscordId, StringComparison.Ordinal))?.Value;
+            if (discordIdString == null)
+            {
+                context.Fail();
+                return;
+            }
+            if (!ulong.TryParse(discordIdString, out ulong discordId))
+            {
+                context.Fail();
+                return;
+            }
 
-        using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
-        var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
-        if (user == null) context.Fail();
+            using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
 
-        if (!ulong.TryParse(discordIdString, out ulong discordId)) context.Fail();
+            if (!_existingUserDict.TryGetValue(uid, out (bool Exists, DateTime LastCheck) existingUser)
+                || DateTime.UtcNow.Subtract(existingUser.LastCheck).TotalHours > 1)
+            {
+                var userExists = await dbContext.Users.SingleOrDefaultAsync(context => context.UID == uid).ConfigureAwait(false) != null;
+                _existingUserDict[uid] = existingUser = (userExists, DateTime.UtcNow);
+            }
+            if (!existingUser.Exists)
+            {
+                context.Fail();
+                return;
+            }
 
-        var discordUser = await dbContext.LodeStoneAuth.AsNoTracking().SingleOrDefaultAsync(b => b.DiscordId == discordId).ConfigureAwait(false);
-        if (discordUser == null) context.Fail();
+            if (!_existingDiscordDict.TryGetValue(discordId, out (bool Exists, DateTime LastCheck) existingDiscordUser)
+                || DateTime.UtcNow.Subtract(existingDiscordUser.LastCheck).TotalHours > 1)
+            {
+                var discordUserExists = await dbContext.LodeStoneAuth.AsNoTracking().SingleOrDefaultAsync(b => b.DiscordId == discordId).ConfigureAwait(false) != null;
+                _existingDiscordDict[discordId] = existingDiscordUser = (discordUserExists, DateTime.UtcNow);
+            }
 
-        context.Succeed(requirement);
+            if (!existingDiscordUser.Exists)
+            {
+                context.Fail();
+                return;
+            }
+
+            context.Succeed(requirement);
+        }
+        catch (Exception e)
+        {
+            _logger.LogWarning(e, "ExistingUserRequirementHandler failed");
+        }
     }
 }
