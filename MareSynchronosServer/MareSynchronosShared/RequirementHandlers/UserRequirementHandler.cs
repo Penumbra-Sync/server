@@ -26,19 +26,34 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
     {
         var uid = context.User.Claims.SingleOrDefault(g => string.Equals(g.Type, MareClaimTypes.Uid, StringComparison.Ordinal))?.Value;
 
-        if (uid == null) context.Fail();
+        if (uid == null)
+        {
+            context.Fail();
+            _logger.LogWarning("No user UID found in claims");
+            return;
+        }
 
         if ((requirement.Requirements & UserRequirements.Identified) is UserRequirements.Identified)
         {
             var ident = await _redis.GetAsync<string>("UID:" + uid).ConfigureAwait(false);
-            if (ident == RedisValue.EmptyString) context.Fail();
+            if (ident == RedisValue.EmptyString)
+            {
+                context.Fail();
+                _logger.LogWarning("User {uid} not online", uid);
+                return;
+            }
         }
 
         if ((requirement.Requirements & UserRequirements.Administrator) is UserRequirements.Administrator)
         {
             using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
             var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
-            if (user == null || !user.IsAdmin) context.Fail();
+            if (user == null || !user.IsAdmin)
+            {
+                context.Fail();
+                _logger.LogWarning("Admin request for {uid} unauthenticated", uid);
+                return;
+            }
             _logger.LogInformation("Admin {uid} authenticated", uid);
         }
 
@@ -46,7 +61,12 @@ public class UserRequirementHandler : AuthorizationHandler<UserRequirement, HubI
         {
             using var dbContext = await _dbContextFactory.CreateDbContextAsync().ConfigureAwait(false);
             var user = await dbContext.Users.AsNoTracking().SingleOrDefaultAsync(b => b.UID == uid).ConfigureAwait(false);
-            if (user == null || !user.IsAdmin && !user.IsModerator) context.Fail();
+            if (user == null || !user.IsAdmin && !user.IsModerator)
+            {
+                context.Fail();
+                _logger.LogWarning("Admin/Moderator for {uid} unauthenticated", uid);
+                return;
+            }
             _logger.LogInformation("Admin/Moderator {uid} authenticated", uid);
         }
 
