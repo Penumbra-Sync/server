@@ -27,6 +27,7 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
             if (uid == null)
             {
                 context.Fail();
+                _logger.LogWarning("Failed to find UID in claims");
                 return;
             }
 
@@ -34,10 +35,12 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
             if (discordIdString == null)
             {
                 context.Fail();
+                _logger.LogWarning("Failed to find DiscordId in claims");
                 return;
             }
             if (!ulong.TryParse(discordIdString, out ulong discordId))
             {
+                _logger.LogWarning("Failed to parse DiscordId");
                 context.Fail();
                 return;
             }
@@ -52,6 +55,7 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
             }
             if (!existingUser.Exists)
             {
+                _logger.LogWarning("Failed to find Mare User {User} in DB", uid);
                 context.Fail();
                 return;
             }
@@ -65,6 +69,7 @@ public class ExistingUserRequirementHandler : AuthorizationHandler<ExistingUserR
 
             if (!existingDiscordUser.Exists)
             {
+                _logger.LogWarning("Failed to find Discord User {User} in DB", discordId);
                 context.Fail();
                 return;
             }
