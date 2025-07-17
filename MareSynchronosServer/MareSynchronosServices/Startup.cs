@@ -55,7 +55,7 @@ public class Startup
         var redis = mareConfig.GetValue(nameof(ServerConfiguration.RedisConnectionString), string.Empty);
         var options = ConfigurationOptions.Parse(redis);
         options.ClientName = "Mare";
-        options.ChannelPrefix = "UserData";
+        options.ChannelPrefix = RedisChannel.Literal("UserData");
         ConnectionMultiplexer connectionMultiplexer = ConnectionMultiplexer.Connect(options);
         services.AddSingleton<IConnectionMultiplexer>(connectionMultiplexer);
 
