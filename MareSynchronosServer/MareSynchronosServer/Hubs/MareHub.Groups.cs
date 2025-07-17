@@ -109,6 +109,22 @@ public partial class MareHub
     }
 
     [Authorize(Policy = "Identified")]
+    public async Task<bool> GroupChangeDescription(GroupDto dto, string? newGroupDescriptionBase64utf8)
+    {
+        _logger.LogCallInfo(MareHubLogger.Args(dto));
+
+        var (isOwner, group) = await TryValidateOwner(dto.Group.GID).ConfigureAwait(false);
+        if (!isOwner) return false;
+
+        _logger.LogCallInfo(MareHubLogger.Args(dto, "Success"));
+
+        group.Description = newGroupDescriptionBase64utf8;
+        await DbContext.SaveChangesAsync().ConfigureAwait(false);
+
+        return true;
+    }
+
+    [Authorize(Policy = "Identified")]
     public async Task GroupClear(GroupDto dto)
     {
         _logger.LogCallInfo(MareHubLogger.Args(dto));
