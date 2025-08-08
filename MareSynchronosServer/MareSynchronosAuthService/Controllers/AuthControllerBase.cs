@@ -46,7 +46,7 @@ public abstract class AuthControllerBase : Controller
         if (await IsIdentBanned(dbContext, charaIdent))
         {
             Logger.LogWarning("Authenticate:IDENTBAN:{id}:{ident}", authResult.Uid, charaIdent);
-            return Unauthorized("Your XIV service account is banned from using the service.");
+            return Unauthorized("Your character is banned from using the service.");
         }
 
         if (!authResult.Success && !authResult.TempBan)
@@ -57,7 +57,7 @@ public abstract class AuthControllerBase : Controller
         if (!authResult.Success && authResult.TempBan)
         {
             Logger.LogWarning("Authenticate:TEMPBAN:{id}:{ident}", authResult.Uid ?? "NOUID", charaIdent);
-            return Unauthorized("Due to an excessive amount of failed authentication attempts you are temporarily banned. Check your Secret Key configuration and try connecting again in 5 minutes.");
+            return Unauthorized("Due to an excessive amount of failed authentication attempts you are temporarily locked out. Check your Secret Key configuration and try connecting again in 5 minutes.");
         }
 
         if (authResult.Permaban || authResult.MarkedForBan)
